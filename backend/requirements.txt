@@ -1,0 +1,11 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart
+azure-ai-documentintelligence>=1.0
+langgraph>=0.2
+langchain-core>=0.3
+python-docx
+Pillow
+aiofiles
+pydantic-settings
+python-dotenv
