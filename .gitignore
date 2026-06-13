@@ -81,7 +81,6 @@ logs/
 BOA/
 downloads/
 *.pdf
-*.docx
 
 # ── Jupyter ───────────────────────────────────────────────────
 .ipynb_checkpoints/
