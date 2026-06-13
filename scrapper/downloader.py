@@ -25,8 +25,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional
-from urllib.parse import urlparse, parse_qs, urljoin
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import aiofiles
 import aiohttp
@@ -40,7 +39,7 @@ from tqdm.asyncio import tqdm
 BASE_URL = "https://www.rosario.gob.ar"
 
 # Can be overridden via environment variable (useful in Colab/Azure)
-SCRAPPER_DIR = Path(os.environ.get("SCRAPPER_DIR", str(Path(__file__).parent / "Scrapper")))
+SCRAPPER_DIR = Path(os.environ.get("SCRAPPER_DIR", str(Path(__file__).parent / "scrapper")))
 CHECKPOINT_FILE = Path(__file__).parent / "checkpoint.json"
 
 CSV_CONFIG = {
@@ -142,7 +141,7 @@ log = logging.getLogger(__name__)
 # URL utilities
 # ──────────────────────────────────────────────────────────────
 
-def normalize_url(url: str) -> Optional[str]:
+def normalize_url(url: str) -> str | None:
     """
     Normalizes malformed URLs found in some CSVs:
     - 'www.foo.com/path'   → 'http://www.foo.com/path'
@@ -155,7 +154,7 @@ def normalize_url(url: str) -> Optional[str]:
         return None
 
     # Strip erroneous leading slash before the domain
-    if url.startswith("/www.") or url.startswith("/ssl."):
+    if url.startswith(("/www.", "/ssl.")):
         url = url[1:]
 
     # Add scheme if missing
@@ -170,7 +169,7 @@ def normalize_url(url: str) -> Optional[str]:
     return url
 
 
-def extract_pdf_url_from_html(html: str, page_url: str) -> Optional[str]:
+def extract_pdf_url_from_html(html: str, page_url: str) -> str | None:
     """
     Searches for the PDF URL in the HTML of a Rosario portal page.
     Known patterns:
@@ -232,13 +231,13 @@ SKIP_PREFIX = "SKIP:"
 
 def load_checkpoint() -> set:
     if CHECKPOINT_FILE.exists():
-        with open(CHECKPOINT_FILE, "r") as f:
+        with Path(CHECKPOINT_FILE).open(encoding="utf-8") as f:
             return set(json.load(f))
     return set()
 
 
-def save_checkpoint(done: set):
-    with open(CHECKPOINT_FILE, "w") as f:
+def save_checkpoint(done: set) -> None:
+    with Path(CHECKPOINT_FILE).open("w", encoding="utf-8") as f:
         json.dump(list(done), f)
 
 
@@ -251,7 +250,7 @@ def is_pending(key: str, done: set) -> bool:
 # PDF URL resolution
 # ──────────────────────────────────────────────────────────────
 
-def build_normativa_pdf_url(page_url: str) -> Optional[str]:
+def build_normativa_pdf_url(page_url: str) -> str | None:
     """
     For URLs of the form visualExterna.do?idNormativa=X, builds the download
     URL directly: /normativa/verArchivo?tipo=pdf&id=X&modo=attachment
@@ -269,7 +268,7 @@ async def resolve_pdf_url(
     page_url: str,
     link_type: str,
     delay: float,
-) -> Optional[str]:
+) -> str | None:
     """
     Returns the downloadable PDF URL.
 
@@ -392,7 +391,7 @@ def sanitize(text: str) -> str:
     return re.sub(r'[\\/*?:"<>|]', "_", text).strip()
 
 
-def build_task_list(output_dir: Path) -> List[dict]:
+def build_task_list(output_dir: Path) -> list[dict]:
     tasks = []
     for csv_file, cfg in CSV_CONFIG.items():
         csv_path = SCRAPPER_DIR / csv_file
@@ -401,7 +400,7 @@ def build_task_list(output_dir: Path) -> List[dict]:
             continue
 
         folder = output_dir / cfg["folder"]
-        with open(csv_path, newline="", encoding="utf-8") as f:
+        with Path(csv_path).open(newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 link = row.get(cfg["link_col"], "").strip().strip('"')
@@ -414,7 +413,7 @@ def build_task_list(output_dir: Path) -> List[dict]:
 
                 # Detect special link types from the URL content
                 link_type = cfg["link_type"]
-                if "boletin.do?accion=ver2" in link or "boletin.do" in link and "ver2" in link:
+                if "boletin.do?accion=ver2" in link or ("boletin.do" in link and "ver2" in link):
                     link_type = "boletin_html"
                 elif "/mr/normativa/" in link:
                     link_type = "html_to_pdf"
@@ -438,9 +437,9 @@ def build_task_list(output_dir: Path) -> List[dict]:
 
 async def expand_boletin_tasks(
     session: aiohttp.ClientSession,
-    boletin_tasks: List[dict],
+    boletin_tasks: list[dict],
     delay: float,
-) -> List[dict]:
+) -> list[dict]:
     """
     For each HTML boletin (boletin.do?accion=ver2), scrapes the page,
     extracts the internal PDF IDs via ver(id) in the JS, and returns
@@ -466,7 +465,7 @@ async def expand_boletin_tasks(
             log.warning("Error expanding boletin %s: %s", url, exc)
             continue
 
-        pdf_ids = re.findall(r'\bver\((\d+)\)', html)
+        pdf_ids = re.findall(r"\bver\((\d+)\)", html)
         if not pdf_ids:
             log.info("Boletin with no internal PDFs: %s", url)
             continue
@@ -504,7 +503,7 @@ async def html_to_pdf_file(
     try:
         import weasyprint
     except ImportError:
-        log.error("weasyprint not installed. Run: pip install weasyprint")
+        log.exception("weasyprint not installed. Run: pip install weasyprint")
         return False
 
     url = normalize_url(page_url)
@@ -531,7 +530,7 @@ async def html_to_pdf_file(
     # Run in an executor to avoid blocking the event loop
     loop = asyncio.get_event_loop()
     try:
-        def _convert():
+        def _convert() -> None:
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             weasyprint.HTML(string=html, base_url=final_url).write_pdf(str(dest_path))
 
@@ -546,7 +545,7 @@ async def html_to_pdf_file(
 # Orchestrator
 # ──────────────────────────────────────────────────────────────
 
-async def run(output_dir: Path, concurrency: int, delay: float):
+async def run(output_dir: Path, concurrency: int, delay: float) -> None:
     tasks = build_task_list(output_dir)
     done = load_checkpoint()
 
@@ -591,7 +590,7 @@ async def run(output_dir: Path, concurrency: int, delay: float):
         ]
 
         skipped = sum(1 for t in tasks if (SKIP_PREFIX + t["key"]) in done)
-        ok_prev  = sum(1 for t in tasks if t["key"] in done)
+        ok_prev = sum(1 for t in tasks if t["key"] in done)
         log.info(
             "Total: %d | Previously OK: %d | Skipped: %d | Pending: %d",
             len(tasks), ok_prev, skipped, len(pending),
@@ -600,7 +599,7 @@ async def run(output_dir: Path, concurrency: int, delay: float):
         # ── Phase 3: download / convert ──
         semaphore = asyncio.Semaphore(concurrency)
 
-        async def process(task: dict):
+        async def process(task: dict) -> None:
             async with semaphore:
                 outcome = None
 
@@ -650,7 +649,7 @@ async def run(output_dir: Path, concurrency: int, delay: float):
 # Entry point
 # ──────────────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="Bulk downloader — Municipalidad de Rosario")
