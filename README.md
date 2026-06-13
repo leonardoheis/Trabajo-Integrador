@@ -1,74 +1,83 @@
-# Trabajo Integrador - Clasificación de Documentos Municipales
+# Document Scraper — Municipalidad de Rosario
 
-Este repositorio contiene el código fuente y la documentación para el Trabajo Integrador. El proyecto consta de un pipeline completo para la ingesta, clasificación inteligente y gestión de documentos, enfocado principalmente en el procesamiento de normativas de la Municipalidad de Rosario.
+This repository contains the scraper and bulk downloader for municipal documents from the open-data portal of the Municipalidad de Rosario (Argentina).
 
-## 🏗 Arquitectura del Proyecto
+The scraper collects metadata from the portal and downloads tens of thousands of PDF documents organized by category.
 
-El proyecto está estructurado en varios componentes clave:
+## Downloaded Documents
 
-### 1. Ingesta de Datos (`downloader.py` y `Scrapper/`)
-Un script asíncrono y robusto en Python diseñado para descargar y organizar decenas de miles de documentos PDF a partir del portal de datos abiertos de la Municipalidad de Rosario.
-- **Carpeta `Scrapper/`**: Contiene archivos CSV (`boletines.csv`, `decretos.csv`, `ordenanzas.csv`, etc.) con los metadatos y enlaces de origen.
-- **Técnicas**: Utiliza `aiohttp` para descargas concurrentes, `BeautifulSoup` para el scraping de enlaces internos y `weasyprint` para renderizar páginas HTML complejas como PDFs.
-- **Resiliencia**: Cuenta con un sistema de *checkpoint* (`checkpoint.json`) que permite reanudar descargas interrumpidas.
+The scraped documents are available on Google Drive:
 
-### 2. Backend API (`backend/`)
-Una API REST desarrollada con **FastAPI** encargada de la lógica de negocio y clasificación de los documentos.
-- **Tecnologías Core**: Python, FastAPI, LangGraph, Azure AI Document Intelligence.
-- **Funcionalidad**: 
-  - Expone endpoints para la subida de documentos (`/api/v1/upload`).
-  - Clasifica automáticamente los archivos subidos utilizando IA y los enruta a carpetas categorizadas (`invoices`, `contracts`, `reports`, `review`, etc.).
-  - Integra un orquestador LangGraph para manejar flujos complejos de decisión y procesamiento de documentos.
+[https://drive.google.com/drive/folders/1_IPfa4m1mmz6wFPOLtEf3T4xYknJap7B?usp=drive_link](https://drive.google.com/drive/folders/1_IPfa4m1mmz6wFPOLtEf3T4xYknJap7B?usp=drive_link)
 
-### 3. Frontend de Usuario (`frontend/`)
-Una aplicación web de una sola página (SPA) desarrollada con **React** y construida con **Vite**.
-- **Tecnologías Core**: React 18, TypeScript, Tailwind CSS, React Router, Axios.
-- **Funcionalidad**: Interfaz intuitiva y moderna que permite a los usuarios finales subir archivos, monitorear el progreso de la clasificación (jobs) y revisar la auditoría del procesamiento.
+## Repository Structure
 
-### 4. Despliegue y Orquestación (`docker-compose.yml`, `azure_deploy/`, `DEPLOY.md`)
-- **Docker Compose**: Proporciona un entorno de desarrollo unificado (`docker-compose.yml`) que levanta de manera coordinada el frontend, el backend y los volúmenes para almacenar la salida.
-- **Cloud (Azure/Colab)**: Scripts y guías detalladas en [DEPLOY.md](DEPLOY.md) para escalar la descarga y procesamiento usando Azure Container Instances, Blob Storage o Google Colab.
-
----
-
-## 🚀 Guía de Inicio Rápido
-
-### Requisitos Previos
-- [Docker](https://docs.docker.com/get-docker/) y Docker Compose.
-- Opcional (para desarrollo local sin Docker): Python 3.10+, Node.js 18+.
-
-### Levantar el Entorno con Docker
-
-La forma más rápida de ejecutar el proyecto completo es mediante Docker Compose:
-
-```bash
-# Construir e iniciar los servicios en segundo plano
-docker-compose up --build -d
+```
+/
+├── Scrapper/               CSV files with document metadata and source links
+│   ├── boletines.csv
+│   ├── compendios_de_boletines.csv
+│   ├── convenios.csv
+│   ├── declaraciones_concejo_municipal.csv
+│   ├── decreto_ordenanzas.csv
+│   ├── decretos.csv
+│   ├── decretos_concejo_municipal.csv
+│   ├── ordenanzas.csv
+│   ├── resoluciones.csv
+│   └── resoluciones_concejo_municipal.csv
+├── downloader.py           Async bulk downloader (local disk output)
+└── colab_downloader.ipynb  Google Colab notebook version
 ```
 
-Una vez que los contenedores estén en ejecución:
-- 🌐 **Frontend (Interfaz Gráfica)**: [http://localhost:5173](http://localhost:5173)
-- ⚙️ **Backend (API Swagger UI)**: [http://localhost:8000/docs](http://localhost:8000/docs)
+## Document Categories
 
-El sistema soporta *Hot-Reload* tanto en el backend como en el frontend gracias a los volúmenes mapeados en el `docker-compose.yml`.
+| Folder | Description |
+|--------|-------------|
+| `boletines` | Municipal bulletins |
+| `compendios_de_boletines` | Bulletin compendiums |
+| `convenios` | Agreements |
+| `declaraciones_concejo_municipal` | Municipal council declarations |
+| `decreto_ordenanzas` | Decree-ordinances |
+| `decretos` | Decrees |
+| `decretos_concejo_municipal` | Municipal council decrees |
+| `ordenanzas` | Ordinances |
+| `resoluciones` | Resolutions |
+| `resoluciones_concejo_municipal` | Municipal council resolutions |
 
----
+## Running the Downloader
 
-## 🗄 Uso del Descargador Masivo
+### Install dependencies
 
-Si deseas poblar tu entorno con el corpus documental de la Municipalidad de Rosario:
+```bash
+pip install aiohttp aiofiles tqdm beautifulsoup4 lxml weasyprint
+```
 
-1. Crea un entorno virtual e instala las dependencias:
-   ```bash
-   pip install aiohttp aiofiles tqdm beautifulsoup4 lxml weasyprint
-   ```
+### Run
 
-2. Ejecuta el script principal:
-   ```bash
-   python downloader.py --output ./downloads --concurrency 5 --delay 0.5
-   ```
-   *Nota: Se recomienda mantener la concurrencia baja (`5`) y un delay prudente (`0.5s`) para evitar ser bloqueado por los servidores del municipio.*
+```bash
+python downloader.py --output ./downloads --concurrency 5 --delay 0.5
+```
 
-3. **Colab Notebook**: Alternativamente, puedes importar y ejecutar el archivo `colab_downloader.ipynb` directamente en Google Colab para utilizar recursos en la nube.
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--output` | `./downloads` | Destination folder for PDFs |
+| `--concurrency` | `5` | Parallel downloads — keep low to avoid being rate-limited |
+| `--delay` | `0.5` | Seconds between requests |
 
-Para estrategias de despliegue avanzadas en Azure, consulta detalladamente el documento de despliegue: [DEPLOY.md](DEPLOY.md).
+The downloader creates a `checkpoint.json` file to resume interrupted runs. Re-run the same command and it will skip already-downloaded files.
+
+### Google Colab
+
+Open `colab_downloader.ipynb` directly in Google Colab to run the downloader using cloud resources without any local setup.
+
+## How It Works
+
+The downloader reads each CSV in `Scrapper/`, resolves the PDF URL for each row (handling several URL patterns used by the portal), and downloads the file with retry logic and rate limiting. A checkpoint file tracks progress so interrupted runs can be resumed without re-downloading completed files.
+
+Supported link resolution strategies:
+
+- **direct_pdf** — URL already points to the PDF
+- **normativa** — extracts the document ID from `visualExterna.do?idNormativa=X` and builds the direct download URL
+- **boletin_html** — scrapes the bulletin index page to find internal PDF IDs
+- **html_to_pdf** — downloads a Plone HTML page and renders it to PDF via `weasyprint`
+- **scrape_page** — generic scraping for compendium pages

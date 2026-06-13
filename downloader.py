@@ -1,20 +1,20 @@
 """
-Descargador masivo de documentos - Municipalidad de Rosario
-Descarga PDFs desde los CSVs de datos abiertos y los organiza por categoría.
+Bulk document downloader — Municipalidad de Rosario
+Downloads PDFs from open-data CSVs and organizes them by category.
 
-Uso:
+Usage:
     pip install aiohttp aiofiles tqdm beautifulsoup4 lxml weasyprint
     python downloader.py [--output ./downloads] [--concurrency 5] [--delay 0.5]
 
-Variables de entorno:
-    SCRAPPER_DIR  — ruta a la carpeta con los CSVs (default: ./Scrapper)
+Environment variables:
+    SCRAPPER_DIR  — path to the folder containing CSVs (default: ./Scrapper)
 
-Tipos de link manejados:
-    direct_pdf   — URL ya apunta al PDF (boletines nuevos)
-    boletin_html — página HTML con índice de PDFs internos (boletines IDs 2-218)
-    normativa    — visualExterna.do?idNormativa=X → verArchivo directo
-    html_to_pdf  — página Plone /mr/normativa/ → se convierte con weasyprint
-    scrape_page  — scraping genérico (compendios)
+Supported link types:
+    direct_pdf   — URL already points to the PDF (newer boletines)
+    boletin_html — HTML page with an index of internal PDFs (boletines IDs 2-218)
+    normativa    — visualExterna.do?idNormativa=X → direct verArchivo URL
+    html_to_pdf  — Plone /mr/normativa/ page → converted with weasyprint
+    scrape_page  — generic scraping (compendios)
 """
 
 import asyncio
@@ -34,12 +34,12 @@ from bs4 import BeautifulSoup
 from tqdm.asyncio import tqdm
 
 # ──────────────────────────────────────────────────────────────
-# Configuración
+# Configuration
 # ──────────────────────────────────────────────────────────────
 
 BASE_URL = "https://www.rosario.gob.ar"
 
-# Permite sobreescribir desde entorno (útil en Colab/Azure)
+# Can be overridden via environment variable (useful in Colab/Azure)
 SCRAPPER_DIR = Path(os.environ.get("SCRAPPER_DIR", str(Path(__file__).parent / "Scrapper")))
 CHECKPOINT_FILE = Path(__file__).parent / "checkpoint.json"
 
@@ -47,21 +47,21 @@ CSV_CONFIG = {
     "boletines.csv": {
         "folder": "boletines",
         "link_col": "LINK",
-        "link_type": "direct_pdf",   # URL ya apunta al PDF directamente
+        "link_type": "direct_pdf",   # URL already points directly to the PDF
         "name_cols": ["NUMERO", "ANIO"],
         "name_fmt": "boletin_{NUMERO}_{ANIO}.pdf",
     },
     "compendios_de_boletines.csv": {
         "folder": "compendios_de_boletines",
         "link_col": "LINK",
-        "link_type": "scrape_page",  # página con iframe/embed del PDF
+        "link_type": "scrape_page",  # page with iframe/embed of the PDF
         "name_cols": ["COMPENDIO", "PERIODO"],
         "name_fmt": "{COMPENDIO}_{PERIODO}.pdf",
     },
     "convenios.csv": {
         "folder": "convenios",
         "link_col": "TEXTO_VIGENTE_NORMA",
-        "link_type": "normativa",    # visualExterna.do → scraping para PDF real
+        "link_type": "normativa",    # visualExterna.do → scraping for real PDF
         "name_cols": ["NUMERO", "ANIO"],
         "name_fmt": "convenio_{NUMERO}_{ANIO}.pdf",
     },
@@ -116,7 +116,7 @@ CSV_CONFIG = {
     },
 }
 
-# User-Agent de navegador real para evitar bloqueos
+# Real browser User-Agent to avoid being blocked
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -139,26 +139,26 @@ log = logging.getLogger(__name__)
 
 
 # ──────────────────────────────────────────────────────────────
-# Utilidades de URL
+# URL utilities
 # ──────────────────────────────────────────────────────────────
 
 def normalize_url(url: str) -> Optional[str]:
     """
-    Normaliza URLs malformadas que aparecen en algunos CSVs:
+    Normalizes malformed URLs found in some CSVs:
     - 'www.foo.com/path'   → 'http://www.foo.com/path'
     - '/www.foo.com/path'  → 'http://www.foo.com/path'
     - 'ssl.foo.com/path'   → 'https://ssl.foo.com/path'
-    Devuelve None si la URL está vacía o es inválida.
+    Returns None if the URL is empty or invalid.
     """
     url = url.strip()
     if not url:
         return None
 
-    # Quitar slash inicial erróneo antes del dominio
+    # Strip erroneous leading slash before the domain
     if url.startswith("/www.") or url.startswith("/ssl."):
         url = url[1:]
 
-    # Agregar scheme si falta
+    # Add scheme if missing
     if not url.startswith("http"):
         scheme = "https" if url.startswith("ssl.") else "http"
         url = f"{scheme}://{url}"
@@ -172,11 +172,11 @@ def normalize_url(url: str) -> Optional[str]:
 
 def extract_pdf_url_from_html(html: str, page_url: str) -> Optional[str]:
     """
-    Busca la URL del PDF en el HTML de una página del portal de Rosario.
-    Patrones conocidos:
-      1. /normativa/verArchivo?tipo=pdf&id=XXX  (portal nuevo — el más común)
-      2. getPdf en href/src/embed/object
-      3. href/src terminado en .pdf
+    Searches for the PDF URL in the HTML of a Rosario portal page.
+    Known patterns:
+      1. /normativa/verArchivo?tipo=pdf&id=XXX  (new portal — most common)
+      2. getPdf in href/src/embed/object
+      3. href/src ending in .pdf
     """
     soup = BeautifulSoup(html, "lxml")
 
@@ -210,7 +210,7 @@ def extract_pdf_url_from_html(html: str, page_url: str) -> Optional[str]:
             if isinstance(val, str) and is_pdf_url(val):
                 return resolve(val)
 
-    # Buscar en el HTML crudo (scripts, data-attributes, onclick, etc.)
+    # Search in raw HTML (scripts, data-attributes, onclick, etc.)
     for pattern in [r'["\']([^"\']*verArchivo[^"\']*)["\']',
                     r'["\']([^"\']*getPdf[^"\']*)["\']']:
         matches = re.findall(pattern, html)
@@ -223,9 +223,9 @@ def extract_pdf_url_from_html(html: str, page_url: str) -> Optional[str]:
 # ──────────────────────────────────────────────────────────────
 # Checkpoint
 # ──────────────────────────────────────────────────────────────
-# El set guarda dos tipos de entradas:
-#   "ruta/al/archivo.pdf"     → descargado exitosamente
-#   "SKIP:ruta/al/archivo.pdf" → fallo permanente, no reintentar
+# The set stores two entry types:
+#   "path/to/file.pdf"      → successfully downloaded
+#   "SKIP:path/to/file.pdf" → permanent failure, do not retry
 
 SKIP_PREFIX = "SKIP:"
 
@@ -243,19 +243,19 @@ def save_checkpoint(done: set):
 
 
 def is_pending(key: str, done: set) -> bool:
-    """True si el item todavía debe procesarse (ni OK ni fallo permanente)."""
+    """True if the item still needs to be processed (neither OK nor permanent failure)."""
     return key not in done and (SKIP_PREFIX + key) not in done
 
 
 # ──────────────────────────────────────────────────────────────
-# Resolución de URL del PDF
+# PDF URL resolution
 # ──────────────────────────────────────────────────────────────
 
 def build_normativa_pdf_url(page_url: str) -> Optional[str]:
     """
-    Para URLs del tipo visualExterna.do?idNormativa=X construye directamente
-    la URL de descarga: /normativa/verArchivo?tipo=pdf&id=X&modo=attachment
-    Evita un request HTTP extra para el 95% de los documentos.
+    For URLs of the form visualExterna.do?idNormativa=X, builds the download
+    URL directly: /normativa/verArchivo?tipo=pdf&id=X&modo=attachment
+    Avoids an extra HTTP request for ~95% of documents.
     """
     qs = parse_qs(urlparse(page_url).query)
     nid = qs.get("idNormativa", [None])[0]
@@ -271,16 +271,16 @@ async def resolve_pdf_url(
     delay: float,
 ) -> Optional[str]:
     """
-    Devuelve la URL descargable del PDF.
+    Returns the downloadable PDF URL.
 
-    - direct_pdf : ya es el PDF (boletines).
-    - normativa  : si tiene idNormativa → construye URL directa sin HTTP.
-                   Si no (URLs antiguas /mr/normativa/) → scraping de la página.
+    - direct_pdf : already is the PDF (boletines).
+    - normativa  : if it has idNormativa → builds direct URL without HTTP.
+                   Otherwise (old /mr/normativa/ URLs) → scrapes the page.
     - scrape_page: scraping (compendios).
     """
     url = normalize_url(page_url)
     if not url:
-        log.warning("URL inválida, se omite: %r", page_url)
+        log.warning("Invalid URL, skipping: %r", page_url)
         return None
 
     if link_type == "direct_pdf":
@@ -290,9 +290,9 @@ async def resolve_pdf_url(
         direct = build_normativa_pdf_url(url)
         if direct:
             return direct
-        # URL sin idNormativa que no fue detectada como html_to_pdf → scraping
+        # URL without idNormativa not detected as html_to_pdf → fallback to scraping
 
-    # Scraping de la página (compendios y casos raros)
+    # Page scraping (compendios and edge cases)
     await asyncio.sleep(delay)
     try:
         async with session.get(
@@ -302,37 +302,37 @@ async def resolve_pdf_url(
             allow_redirects=True,
         ) as resp:
             if resp.status == 404:
-                log.info("Página no encontrada (404): %s", url)
+                log.info("Page not found (404): %s", url)
                 return "PERMANENT"
             if resp.status != 200:
-                log.warning("HTTP %d al resolver: %s", resp.status, url)
+                log.warning("HTTP %d while resolving: %s", resp.status, url)
                 return None  # transient
 
-            # Si el servidor ya devuelve el PDF directamente (p.ej. compendios)
+            # Server already returns PDF directly (e.g. compendios)
             ct = resp.headers.get("Content-Type", "")
             if "pdf" in ct.lower():
                 return str(resp.url)
 
             html = await resp.text(errors="replace")
             final_url = str(resp.url)
-            # Re-check tras redirect: si terminó en visualExterna.do
+            # Re-check after redirect: if it ended up at visualExterna.do
             direct = build_normativa_pdf_url(final_url)
             if direct:
                 return direct
     except Exception as exc:
-        log.warning("Error al acceder a %s: %s", url, exc)
+        log.warning("Error accessing %s: %s", url, exc)
         return None  # transient
 
     pdf_url = extract_pdf_url_from_html(html, final_url)
     if pdf_url:
         return normalize_url(pdf_url)
 
-    log.info("Sin PDF en la página (se omitirá en próximas ejecuciones): %s", url)
+    log.info("No PDF found on page (will be skipped on future runs): %s", url)
     return "PERMANENT"
 
 
 # ──────────────────────────────────────────────────────────────
-# Descarga individual
+# Individual download
 # ──────────────────────────────────────────────────────────────
 
 async def download_file(
@@ -352,23 +352,23 @@ async def download_file(
                 allow_redirects=True,
             ) as resp:
                 if resp.status == 404:
-                    log.warning("404 (documento no disponible): %s", pdf_url)
+                    log.warning("404 (document not available): %s", pdf_url)
                     return False
                 if resp.status != 200:
-                    log.warning("HTTP %d en intento %d/%d: %s", resp.status, attempt, retries, pdf_url)
+                    log.warning("HTTP %d on attempt %d/%d: %s", resp.status, attempt, retries, pdf_url)
                     await asyncio.sleep(2 ** attempt)
                     continue
 
                 data = await resp.read()
 
-                # Verificar que realmente es un PDF
+                # Verify it is actually a PDF
                 if not data or b"%PDF" not in data[:10]:
                     ct = resp.headers.get("Content-Type", "")
                     log.warning(
-                        "Sin PDF válido (Content-Type: %s, bytes: %d) — se omitirá: %s",
+                        "No valid PDF (Content-Type: %s, bytes: %d) — will be skipped: %s",
                         ct, len(data), pdf_url,
                     )
-                    # Fallo permanente: el servidor respondió 200 pero no hay PDF
+                    # Permanent failure: server responded 200 but content is not a PDF
                     return "PERMANENT"
 
                 dest_path.parent.mkdir(parents=True, exist_ok=True)
@@ -377,15 +377,15 @@ async def download_file(
                 return True
 
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-            log.warning("Error en intento %d/%d (%s): %s", attempt, retries, pdf_url, exc)
+            log.warning("Error on attempt %d/%d (%s): %s", attempt, retries, pdf_url, exc)
             await asyncio.sleep(2 ** attempt)
 
-    log.error("Fallo de red definitivo (se reintentará próxima vez): %s", pdf_url)
-    return False  # transient: no agregar al checkpoint
+    log.error("Permanent network failure (will retry next run): %s", pdf_url)
+    return False  # transient: do not add to checkpoint
 
 
 # ──────────────────────────────────────────────────────────────
-# Lectura de CSVs
+# CSV reading
 # ──────────────────────────────────────────────────────────────
 
 def sanitize(text: str) -> str:
@@ -397,7 +397,7 @@ def build_task_list(output_dir: Path) -> List[dict]:
     for csv_file, cfg in CSV_CONFIG.items():
         csv_path = SCRAPPER_DIR / csv_file
         if not csv_path.exists():
-            log.warning("CSV no encontrado: %s", csv_path)
+            log.warning("CSV not found: %s", csv_path)
             continue
 
         folder = output_dir / cfg["folder"]
@@ -412,7 +412,7 @@ def build_task_list(output_dir: Path) -> List[dict]:
                 filename = cfg["name_fmt"].format(**name_parts)
                 dest = folder / filename
 
-                # Detectar tipos especiales por el contenido de la URL
+                # Detect special link types from the URL content
                 link_type = cfg["link_type"]
                 if "boletin.do?accion=ver2" in link or "boletin.do" in link and "ver2" in link:
                     link_type = "boletin_html"
@@ -424,7 +424,7 @@ def build_task_list(output_dir: Path) -> List[dict]:
                     "page_url": link,
                     "link_type": link_type,
                     "dest": dest,
-                    # datos extra para nombrar sub-archivos en boletin_html
+                    # extra data for naming sub-files in boletin_html
                     "folder": folder,
                     "name_base": filename.replace(".pdf", ""),
                 })
@@ -433,7 +433,7 @@ def build_task_list(output_dir: Path) -> List[dict]:
 
 
 # ──────────────────────────────────────────────────────────────
-# Tipo 1: expansión de boletines HTML en tareas individuales
+# Type 1: expand HTML boletines into individual tasks
 # ──────────────────────────────────────────────────────────────
 
 async def expand_boletin_tasks(
@@ -442,9 +442,9 @@ async def expand_boletin_tasks(
     delay: float,
 ) -> List[dict]:
     """
-    Para cada boletín HTML (boletin.do?accion=ver2), scrapeea la página,
-    extrae los IDs de los PDFs internos vía ver(id) en el JS, y devuelve
-    una tarea individual por cada PDF encontrado.
+    For each HTML boletin (boletin.do?accion=ver2), scrapes the page,
+    extracts the internal PDF IDs via ver(id) in the JS, and returns
+    one individual task per PDF found.
     """
     expanded = []
     for task in boletin_tasks:
@@ -459,19 +459,19 @@ async def expand_boletin_tasks(
                 allow_redirects=True,
             ) as resp:
                 if resp.status != 200:
-                    log.warning("HTTP %d al expandir boletín: %s", resp.status, url)
+                    log.warning("HTTP %d expanding boletin: %s", resp.status, url)
                     continue
                 html = await resp.text(errors="replace")
         except Exception as exc:
-            log.warning("Error al expandir boletín %s: %s", url, exc)
+            log.warning("Error expanding boletin %s: %s", url, exc)
             continue
 
         pdf_ids = re.findall(r'\bver\((\d+)\)', html)
         if not pdf_ids:
-            log.info("Boletín sin PDFs internos: %s", url)
+            log.info("Boletin with no internal PDFs: %s", url)
             continue
 
-        log.info("Boletín %s → %d PDFs internos", task["page_url"], len(pdf_ids))
+        log.info("Boletin %s → %d internal PDFs", task["page_url"], len(pdf_ids))
         for pdf_id in pdf_ids:
             pdf_url = f"{BASE_URL}/normativa/verArchivo?tipo=pdf&id={pdf_id}&modo=attachment"
             dest = task["folder"] / f"{task['name_base']}_doc_{pdf_id}.pdf"
@@ -488,7 +488,7 @@ async def expand_boletin_tasks(
 
 
 # ──────────────────────────────────────────────────────────────
-# Tipo 2: conversión HTML → PDF con weasyprint (páginas Plone)
+# Type 2: HTML → PDF conversion with weasyprint (Plone pages)
 # ──────────────────────────────────────────────────────────────
 
 async def html_to_pdf_file(
@@ -498,13 +498,13 @@ async def html_to_pdf_file(
     delay: float,
 ) -> str:
     """
-    Descarga el HTML de una página Plone y lo convierte a PDF con weasyprint.
-    Devuelve True, "PERMANENT" o False (mismo contrato que download_file).
+    Downloads the HTML of a Plone page and converts it to PDF with weasyprint.
+    Returns True, "PERMANENT", or False (same contract as download_file).
     """
     try:
         import weasyprint
     except ImportError:
-        log.error("weasyprint no instalado. Correr: pip install weasyprint")
+        log.error("weasyprint not installed. Run: pip install weasyprint")
         return False
 
     url = normalize_url(page_url)
@@ -525,10 +525,10 @@ async def html_to_pdf_file(
             html = await resp.text(errors="replace")
             final_url = str(resp.url)
     except Exception as exc:
-        log.warning("Error al obtener HTML de %s: %s", url, exc)
+        log.warning("Error fetching HTML from %s: %s", url, exc)
         return False
 
-    # Convertir en un executor para no bloquear el event loop
+    # Run in an executor to avoid blocking the event loop
     loop = asyncio.get_event_loop()
     try:
         def _convert():
@@ -538,21 +538,20 @@ async def html_to_pdf_file(
         await loop.run_in_executor(None, _convert)
         return True
     except Exception as exc:
-        log.warning("weasyprint falló para %s: %s", url, exc)
+        log.warning("weasyprint failed for %s: %s", url, exc)
         return "PERMANENT"
 
 
 # ──────────────────────────────────────────────────────────────
-# Orquestador
+# Orchestrator
 # ──────────────────────────────────────────────────────────────
 
 async def run(output_dir: Path, concurrency: int, delay: float):
     tasks = build_task_list(output_dir)
     done = load_checkpoint()
 
-    # Migración: desbloquear tareas que antes se marcaron SKIP pero ahora
-    # tienen un handler específico (boletin_html, html_to_pdf).
-    # Ocurre cuando se corre por primera vez con el código actualizado.
+    # Migration: unblock tasks previously marked SKIP that now have a specific
+    # handler (boletin_html, html_to_pdf). Happens on first run with updated code.
     newly_supported = {"boletin_html", "html_to_pdf"}
     keys_to_unblock = {
         SKIP_PREFIX + t["key"]
@@ -562,30 +561,30 @@ async def run(output_dir: Path, concurrency: int, delay: float):
     if removed:
         done -= keys_to_unblock
         save_checkpoint(done)
-        log.info("Migración: %d entradas SKIP desbloqueadas para nuevo procesamiento", removed)
+        log.info("Migration: %d SKIP entries unblocked for reprocessing", removed)
 
     connector = aiohttp.TCPConnector(limit=concurrency, ssl=False)
     stats = {"ok": 0, "permanent": 0, "transient": 0}
 
     async with aiohttp.ClientSession(connector=connector) as session:
 
-        # ── Fase 1: expandir boletines HTML en tareas individuales ──
+        # ── Phase 1: expand HTML boletines into individual tasks ──
         boletin_html_tasks = [
             t for t in tasks
             if t["link_type"] == "boletin_html" and is_pending(t["key"], done)
         ]
         if boletin_html_tasks:
-            log.info("Expandiendo %d boletines HTML...", len(boletin_html_tasks))
+            log.info("Expanding %d HTML boletines...", len(boletin_html_tasks))
             expanded = await expand_boletin_tasks(session, boletin_html_tasks, delay)
-            log.info("→ %d PDFs internos encontrados en boletines", len(expanded))
-            # Marcar los boletines-contenedor como procesados (no son archivos en sí)
+            log.info("→ %d internal PDFs found in boletines", len(expanded))
+            # Mark container boletines as processed (they are not files themselves)
             for t in boletin_html_tasks:
                 done.add(SKIP_PREFIX + t["key"])
-            # Agregar las tareas expandidas al conjunto total
+            # Add expanded tasks to the full set
             tasks = [t for t in tasks if t["link_type"] != "boletin_html"] + expanded
             save_checkpoint(done)
 
-        # ── Fase 2: filtrar pendientes ──
+        # ── Phase 2: filter pending tasks ──
         pending = [
             t for t in tasks
             if is_pending(t["key"], done) and not Path(t["key"]).exists()
@@ -594,11 +593,11 @@ async def run(output_dir: Path, concurrency: int, delay: float):
         skipped = sum(1 for t in tasks if (SKIP_PREFIX + t["key"]) in done)
         ok_prev  = sum(1 for t in tasks if t["key"] in done)
         log.info(
-            "Total: %d | OK previos: %d | Omitidos: %d | Pendientes: %d",
+            "Total: %d | Previously OK: %d | Skipped: %d | Pending: %d",
             len(tasks), ok_prev, skipped, len(pending),
         )
 
-        # ── Fase 3: descargar / convertir ──
+        # ── Phase 3: download / convert ──
         semaphore = asyncio.Semaphore(concurrency)
 
         async def process(task: dict):
@@ -627,7 +626,7 @@ async def run(output_dir: Path, concurrency: int, delay: float):
                     done.add(task["key"])
                     if stats["ok"] % 50 == 0:
                         save_checkpoint(done)
-                        log.info("Checkpoint: %d OK hasta ahora", stats["ok"])
+                        log.info("Checkpoint: %d OK so far", stats["ok"])
                 elif outcome == "PERMANENT":
                     stats["permanent"] += 1
                     done.add(SKIP_PREFIX + task["key"])
@@ -636,37 +635,37 @@ async def run(output_dir: Path, concurrency: int, delay: float):
 
         await tqdm.gather(
             *[process(t) for t in pending],
-            desc="Descargando",
+            desc="Downloading",
             total=len(pending),
         )
 
     save_checkpoint(done)
     log.info(
-        "Completado. OK: %d | Sin PDF/permanente: %d | Error red (reintentable): %d",
+        "Done. OK: %d | No PDF/permanent: %d | Network error (retryable): %d",
         stats["ok"], stats["permanent"], stats["transient"],
     )
 
 
 # ──────────────────────────────────────────────────────────────
-# Punto de entrada
+# Entry point
 # ──────────────────────────────────────────────────────────────
 
 def main():
     import argparse
 
-    parser = argparse.ArgumentParser(description="Descargador Municipalidad de Rosario")
+    parser = argparse.ArgumentParser(description="Bulk downloader — Municipalidad de Rosario")
     parser.add_argument("--output", default="./downloads")
     parser.add_argument("--concurrency", type=int, default=5,
-                        help="Descargas paralelas (default: 5 — no aumentar mucho para no ser bloqueado)")
+                        help="Parallel downloads (default: 5 — keep low to avoid being blocked)")
     parser.add_argument("--delay", type=float, default=0.5,
-                        help="Segundos de pausa entre requests (default: 0.5)")
+                        help="Seconds to wait between requests (default: 0.5)")
     args = parser.parse_args()
 
     output_dir = Path(args.output).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     log.info("SCRAPPER_DIR: %s", SCRAPPER_DIR)
-    log.info("Output: %s | Concurrencia: %d | Delay: %.1fs",
+    log.info("Output: %s | Concurrency: %d | Delay: %.1fs",
              output_dir, args.concurrency, args.delay)
 
     asyncio.run(run(output_dir, args.concurrency, args.delay))
