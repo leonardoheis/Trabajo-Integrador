@@ -91,18 +91,28 @@ A `checkpoint.json` file tracks progress; re-running skips already-downloaded fi
 
 ## Code revision
 
-Run all hooks before considering any change done:
+**Run after every modification:**
 
 ```bash
-pre-commit run --all-files
+uv run poe check
 ```
 
-Individual tools:
+This is the single verification gate. It runs in order:
+
+| Step | Command | What it checks |
+|------|---------|---------------|
+| `lint` | `ruff check . && ruff format --check .` | Style and lint rules |
+| `typecheck` | `mypy src && nbqa mypy notebooks` | Type correctness |
+| `nbtest` | `pytest --nbmake notebooks` | Notebooks execute without error |
+
+Individual tools (when you need to run one step in isolation):
 
 ```bash
-uv run ruff format .              # format
-uv run ruff check .               # lint (auto-fix enabled in pyproject.toml)
-uv run mypy src/                  # type-check the package
+uv run poe lint        # lint + format check only
+uv run poe typecheck   # mypy only
+uv run poe test        # pytest tests/ only
+uv run poe fmt         # auto-format (ruff format .)
+uv run poe precommit   # full pre-commit run on all files
 ```
 
 Hooks enforced on every commit (see `.pre-commit-config.yaml`):
