@@ -16,6 +16,7 @@ dependencies = [
 dev = [
     "ruff",
     "pytest",
+    "pytest-cov",
     "nbmake",
     "nbqa",
     "mypy",
@@ -23,7 +24,7 @@ dev = [
     "httpx>=0.28.1",
     "uv==0.8.9",
     "poethepoet==0.37.0",
-    "joblib-stubs==1.5.0.1.20250510",    
+    "joblib-stubs==1.5.0.1.20250510",
 ]
 lint = [
     "pre-commit==4.3.0",
@@ -106,6 +107,10 @@ disallow_untyped_decorators = true
 
 warn_unused_configs = true
 check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["google.*"]
+ignore_missing_imports = true
 
 #########################
 # Bandit
@@ -303,7 +308,7 @@ testpaths = ["tests"]
 lint = { shell = "ruff check . && ruff format --check ." }
 fmt = "ruff format ."
 typecheck = { shell = "mypy src && nbqa mypy notebooks" }
-nbtest = { cmd = "pytest --nbmake notebooks", env = { USE_MOCK_LLM = "true" } }
+nbtest = { cmd = "pytest --nbmake notebooks --ignore=notebooks/colab_downloader.ipynb", env = { USE_MOCK_LLM = "true" } }
 test = "pytest tests"
 check = ["lint", "typecheck", "nbtest"]
 serve = "uvicorn semantic_ai_agent.api.app:app --reload --port 8000"
