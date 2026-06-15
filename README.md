@@ -1,38 +1,76 @@
-# Document Scraper — Municipalidad de Rosario
+# Classiflow
 
-This repository contains the scraper and bulk downloader for municipal documents from the open-data portal of the Municipalidad de Rosario (Argentina).
+A multi-agent document classification system for Municipalidad de Rosario (Argentina).
 
-The scraper collects metadata from the portal and downloads tens of thousands of PDF documents organized by category.
+Classiflow ingests municipal documents from multiple sources, extracts and enriches their content, classifies them using LLM agents with confidence scoring, and exposes the results through a chat interface and a web UI.
 
-## Downloaded Documents
+## Architecture
 
-The scraped documents are available on Google Drive:
-
-[https://drive.google.com/drive/folders/1_IPfa4m1mmz6wFPOLtEf3T4xYknJap7B?usp=drive_link](https://drive.google.com/drive/folders/1_IPfa4m1mmz6wFPOLtEf3T4xYknJap7B?usp=drive_link)
+```
+Sources (inputs)
+  ├── Municipal dataset (CSV + PDFs)
+  ├── Web scraping
+  └── Manual upload (PDF · DOCX · img)
+          │
+          ▼
+  ┌─────────────────────────────────────────────┐
+  │                 Orchestrator                │
+  │                                             │
+  │  Ingestion ──► Text extraction              │
+  │                     │                       │
+  │              Refinement and enrichment      │
+  │                     │                       │
+  │  ┌──────────────────────────────────────┐   │
+  │  │  Ingestion agent                     │   │
+  │  │  receives · validates · detects lang │   │
+  │  │                                      │   │
+  │  │  Classification agent                │   │
+  │  │  document type · confidence score    │   │
+  │  │                                      │   │
+  │  │  Confidence gate                     │   │
+  │  │  auto · review · escalation          │   │
+  │  │                                      │   │
+  │  │  Routing agent                       │   │
+  │  │  directory · audit log               │   │
+  │  └──────────────────────────────────────┘   │
+  └─────────────────────────────────────────────┘
+          │
+          ├── Knowledge base (chunks · vectors · sources)
+          │         │
+          │   Chat agent (query · retrieve · respond with sources)
+          │
+          ├── Outputs
+          │     ├── Classified documents
+          │     ├── Review queue (low confidence)
+          │     └── Audit log (every decision)
+          │
+          └── Web interface
+                upload · agent visualization · classification · chat
+```
 
 ## Repository Structure
 
 ```
 /
-├── Scrapper/               CSV files with document metadata and source links
-│   ├── boletines.csv
-│   ├── compendios_de_boletines.csv
-│   ├── convenios.csv
-│   ├── declaraciones_concejo_municipal.csv
-│   ├── decreto_ordenanzas.csv
-│   ├── decretos.csv
-│   ├── decretos_concejo_municipal.csv
-│   ├── ordenanzas.csv
-│   ├── resoluciones.csv
-│   └── resoluciones_concejo_municipal.csv
-├── downloader.py           Async bulk downloader (local disk output)
-└── colab_downloader.ipynb  Google Colab notebook version
+├── .claude/                        Claude Code project settings
+├── documents/                      Reference documents and architecture diagrams
+├── notebooks/                      Jupyter notebooks
+│   └── colab_downloader.ipynb      Bulk download via Google Colab
+├── scrapper/                       Phase 1 — ingestion scripts and CSV metadata
+│   ├── downloader.py               Async bulk downloader
+│   └── *.csv                       One CSV per document category (10 types)
+├── src/
+│   └── classiflow/                 Main Python package
+├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
+└── uv.lock                         Locked dependency graph
 ```
 
 ## Document Categories
 
-| Folder | Description |
-|--------|-------------|
+The dataset covers 10 categories of municipal documents from Rosario's open-data portal:
+
+| Category | Description |
+|----------|-------------|
 | `boletines` | Municipal bulletins |
 | `compendios_de_boletines` | Bulletin compendiums |
 | `convenios` | Agreements |
@@ -44,40 +82,36 @@ The scraped documents are available on Google Drive:
 | `resoluciones` | Resolutions |
 | `resoluciones_concejo_municipal` | Municipal council resolutions |
 
-## Running the Downloader
+The ingested documents (Phase 1 output) are available on [Google Drive](https://drive.google.com/drive/folders/1_IPfa4m1mmz6wFPOLtEf3T4xYknJap7B?usp=drive_link).
 
-### Install dependencies
+## Setup
 
 ```bash
-pip install aiohttp aiofiles tqdm beautifulsoup4 lxml weasyprint
+uv sync --dev
 ```
 
-### Run
+Always use `uv sync` — do not use `pip install`.
+
+## Running the Downloader (Phase 1)
 
 ```bash
-python downloader.py --output ./downloads --concurrency 5 --delay 0.5
+uv run python scrapper/downloader.py --output ./downloads --concurrency 5 --delay 0.5
 ```
 
 | Argument | Default | Description |
 |----------|---------|-------------|
 | `--output` | `./downloads` | Destination folder for PDFs |
-| `--concurrency` | `5` | Parallel downloads — keep low to avoid being rate-limited |
+| `--concurrency` | `5` | Parallel downloads — keep ≤ 5 to avoid rate-limiting |
 | `--delay` | `0.5` | Seconds between requests |
 
-The downloader creates a `checkpoint.json` file to resume interrupted runs. Re-run the same command and it will skip already-downloaded files.
+A `checkpoint.json` file tracks progress; re-running skips already-downloaded files.
 
-### Google Colab
+Alternatively, open `notebooks/colab_downloader.ipynb` in Google Colab to run the downloader using cloud resources without any local setup.
 
-Open `colab_downloader.ipynb` directly in Google Colab to run the downloader using cloud resources without any local setup.
+## Development
 
-## How It Works
-
-The downloader reads each CSV in `Scrapper/`, resolves the PDF URL for each row (handling several URL patterns used by the portal), and downloads the file with retry logic and rate limiting. A checkpoint file tracks progress so interrupted runs can be resumed without re-downloading completed files.
-
-Supported link resolution strategies:
-
-- **direct_pdf** — URL already points to the PDF
-- **normativa** — extracts the document ID from `visualExterna.do?idNormativa=X` and builds the direct download URL
-- **boletin_html** — scrapes the bulletin index page to find internal PDF IDs
-- **html_to_pdf** — downloads a Plone HTML page and renders it to PDF via `weasyprint`
-- **scrape_page** — generic scraping for compendium pages
+```bash
+uv run poe check   # lint + type check + notebook tests (run after every change)
+uv run poe fmt     # auto-format
+uv run poe test    # unit tests only
+```
