@@ -60,6 +60,7 @@ packages = ["src/classiflow"]
 line-length = 100
 target-version = "py310"
 extend-include = ["*.ipynb"]
+exclude = [".claude", "tasks"]
 fix = true
 preview = true
 unsafe-fixes = true
@@ -294,15 +295,13 @@ patch_tags = ["fix"]
 addopts = [
     "-r=A",
     "--doctest-modules",
-    "--junitxml=pytest-report.xml",
-    "--cov=.",
-    "--cov-branch",
-    "--cov-report=xml",
-    "--cov-report=html",
-    "--cov-report=term-missing:skip-covered",
     "-vvv",
 ]
 testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.coverage.run]
+omit = ["notebooks/conftest.py"]
 
 [tool.poe.tasks]
 lint = { shell = "ruff check . && ruff format --check ." }
@@ -310,7 +309,8 @@ fmt = "ruff format ."
 typecheck = { shell = "mypy src && nbqa mypy notebooks" }
 nbtest = { cmd = "pytest --nbmake notebooks --ignore=notebooks/colab_downloader.ipynb", env = { USE_MOCK_LLM = "true" } }
 test = "pytest tests"
-check = ["lint", "typecheck", "nbtest"]
+coverage = { shell = "pytest tests -v --override-ini=addopts= --log-level=CRITICAL --cov=. --cov-branch --cov-report=xml --cov-report=html --cov-report=term-missing:skip-covered --junitxml=pytest-report.xml" }
+check = ["lint", "typecheck", "nbtest", "coverage"]
 serve = "uvicorn semantic_ai_agent.api.app:app --reload --port 8000"
 precommit = "uv run pre-commit run --all-files --verbose"
 precommit-update = "uv run pre-commit run --hook-stage manual pre-commit-update"
