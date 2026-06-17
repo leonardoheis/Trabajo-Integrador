@@ -141,7 +141,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("downloader.log", encoding="utf-8"),
+        logging.FileHandler("scrapper/downloader.log", encoding="utf-8"),
         logging.StreamHandler(sys.stdout),
     ],
 )
