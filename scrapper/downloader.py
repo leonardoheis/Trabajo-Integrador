@@ -3,11 +3,11 @@ Bulk document downloader — Municipalidad de Rosario
 Downloads PDFs from open-data CSVs and organizes them by category.
 
 Usage:
-    pip install aiohttp aiofiles tqdm beautifulsoup4 lxml weasyprint
-    python downloader.py [--output ./downloads] [--concurrency 5] [--delay 0.5]
+    uv sync --dev
+    uv run python scrapper/downloader.py [--output ./downloads] [--concurrency 5] [--delay 0.5]
 
 Environment variables:
-    SCRAPPER_DIR  — path to the folder containing CSVs (default: ./Scrapper)
+    SCRAPPER_DIR  — path to the folder containing CSVs (default: directory of this file)
 
 Supported link types:
     direct_pdf   — URL already points to the PDF (newer boletines)
@@ -37,7 +37,6 @@ if TYPE_CHECKING:
 
 import aiofiles
 import aiohttp
-import weasyprint
 from bs4 import BeautifulSoup
 from tqdm.asyncio import tqdm
 
@@ -51,7 +50,7 @@ HTTP_OK = 200
 HTTP_NOT_FOUND = 404
 
 # Can be overridden via environment variable (useful in Colab/Azure)
-SCRAPPER_DIR = Path(os.environ.get("SCRAPPER_DIR", str(Path(__file__).parent / "scrapper")))
+SCRAPPER_DIR = Path(os.environ.get("SCRAPPER_DIR", str(Path(__file__).parent)))
 CHECKPOINT_FILE = Path(__file__).parent / "checkpoint.json"
 
 CSV_CONFIG = {
@@ -142,7 +141,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("downloader.log", encoding="utf-8"),
+        logging.FileHandler("scrapper/downloader.log", encoding="utf-8"),
         logging.StreamHandler(sys.stdout),
     ],
 )
@@ -447,7 +446,7 @@ async def _fetch_download_data(
     ) as resp:
         if resp.status == HTTP_NOT_FOUND:
             log.warning("404 (document not available): %s", pdf_url)
-            return False, None
+            return "PERMANENT", None
         if resp.status != HTTP_OK:
             log.warning("HTTP %d on attempt %d/%d: %s", resp.status, attempt, retries, pdf_url)
             return "RETRY", None
@@ -557,16 +556,19 @@ async def expand_boletin_tasks(
     session: aiohttp.ClientSession,
     boletin_tasks: list[dict],
     delay: float,
-) -> list[dict]:
+) -> tuple[list[dict], set[str]]:
     """
     For each HTML boletin (boletin.do?accion=ver2), scrapes the page,
     extracts the internal PDF IDs via ver(id) in the JS, and returns
     one individual task per PDF found.
 
     Returns:
-        List of download task dicts, one per internal PDF discovered across all boletines.
+        2-tuple of (expanded sub-tasks, set of parent task keys that produced at least one
+        sub-task). Keys absent from the set had a transient failure or empty page and should
+        not be permanently skipped — they will be retried on the next run.
     """
-    expanded = []
+    expanded: list[dict] = []
+    expanded_keys: set[str] = set()
     for task in boletin_tasks:
         url = normalize_url(task["page_url"])
         if not url:
@@ -593,6 +595,7 @@ async def expand_boletin_tasks(
             continue
 
         log.info("Boletin %s → %d internal PDFs", task["page_url"], len(pdf_ids))
+        expanded_keys.add(task["key"])
         for pdf_id in pdf_ids:
             pdf_url = f"{BASE_URL}/normativa/verArchivo?tipo=pdf&id={pdf_id}&modo=attachment"
             dest = task["folder"] / f"{task['name_base']}_doc_{pdf_id}.pdf"
@@ -605,7 +608,7 @@ async def expand_boletin_tasks(
                 "name_base": task["name_base"],
             })
 
-    return expanded
+    return expanded, expanded_keys
 
 
 # ──────────────────────────────────────────────────────────────
@@ -649,10 +652,12 @@ async def html_to_pdf_file(
         return False
 
     # Run in an executor to avoid blocking the event loop
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
 
         def _convert() -> None:
+            import weasyprint  # noqa: PLC0415
+
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             weasyprint.HTML(string=html, base_url=final_url).write_pdf(str(dest_path))
 
@@ -674,7 +679,7 @@ def _apply_migration(tasks: list[dict], done: set) -> None:
 
     Mutates *done* in place and persists the checkpoint when entries are removed.
     """
-    newly_supported = {"boletin_html", "html_to_pdf"}
+    newly_supported = {"html_to_pdf"}
     keys_to_unblock = {SKIP_PREFIX + t["key"] for t in tasks if t["link_type"] in newly_supported}
     removed = len(done & keys_to_unblock)
     if removed:
@@ -700,24 +705,20 @@ async def _expand_boletines(
     if not boletin_html_tasks:
         return tasks
     log.info("Expanding %d HTML boletines...", len(boletin_html_tasks))
-    expanded = await expand_boletin_tasks(session, boletin_html_tasks, delay)
+    expanded, expanded_keys = await expand_boletin_tasks(session, boletin_html_tasks, delay)
     log.info("→ %d internal PDFs found in boletines", len(expanded))
-    done.update(SKIP_PREFIX + t["key"] for t in boletin_html_tasks)
+    done.update(SKIP_PREFIX + t["key"] for t in boletin_html_tasks if t["key"] in expanded_keys)
     save_checkpoint(done)
     return [t for t in tasks if t["link_type"] != "boletin_html"] + expanded
 
 
-async def _filter_pending(tasks: list[dict], done: set) -> list[dict]:
+def _filter_pending(tasks: list[dict], done: set) -> list[dict]:
     """Phase 2: return tasks that are pending and not already present on disk.
 
     Returns:
         Subset of *tasks* that still need to be downloaded or converted.
     """
-    return [
-        t
-        for t in tasks
-        if is_pending(t["key"], done) and not await asyncio.to_thread(os.path.exists, t["key"])
-    ]
+    return [t for t in tasks if is_pending(t["key"], done) and not Path(t["key"]).exists()]
 
 
 def _log_progress(tasks: list[dict], pending: list[dict], done: set) -> None:
@@ -770,6 +771,8 @@ async def _process_task(
         elif outcome == "PERMANENT":
             stats["permanent"] += 1
             done.add(SKIP_PREFIX + task["key"])
+            if stats["permanent"] % 50 == 0:
+                save_checkpoint(done)
         else:
             stats["transient"] += 1
 
@@ -784,12 +787,12 @@ async def run(output_dir: Path, concurrency: int, delay: float) -> None:
     done = load_checkpoint()
     _apply_migration(tasks, done)
 
-    connector = aiohttp.TCPConnector(limit=concurrency, ssl=False)
+    connector = aiohttp.TCPConnector(limit=concurrency)
     stats: dict[str, int] = {"ok": 0, "permanent": 0, "transient": 0}
 
     async with aiohttp.ClientSession(connector=connector) as session:
         tasks = await _expand_boletines(session, tasks, done, delay)
-        pending = await _filter_pending(tasks, done)
+        pending = _filter_pending(tasks, done)
         _log_progress(tasks, pending, done)
 
         ctx = _DownloadCtx(session=session, semaphore=asyncio.Semaphore(concurrency), delay=delay)
