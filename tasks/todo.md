@@ -129,7 +129,7 @@ uv run poe test tests/shared/test_repositories.py
 ---
 
 ### T04 · JWT utilities
-**Branch:** `feat/jwt` · **Deps:** T01 · **Status:** `[-]` *(skipped for now)*
+**Branch:** `feat/jwt` · **Deps:** T01 · **Status:** `[ ]`
 
 - [ ] `shared/auth/jwt.py`: `encode_token(email)` → JWT string
 - [ ] `decode_token(token)` → payload dict or raises `AuthError`
