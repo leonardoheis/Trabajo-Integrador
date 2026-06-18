@@ -1,39 +1,446 @@
-# Ingesta Pipeline — Task List
+# Classiflow — Task List
 
-Branch: `feat/ingesta-pipeline`
-Spec: `ingesta_pipeline.md` (uploaded)
-Full plan: `tasks/plan.md`
+> One task = one worktree branch = one PR.
+> Full task details are in [plan.md](plan.md).
+> Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[-]` skipped for now · `[!]` blocked
 
-## Phase 1: Foundation
+---
 
-- [ ] **Task 1** — Package skeleton + dependencies (`pyproject.toml`, `uv sync`, empty `__init__.py` files, stub YAMLs)
+## Parallel Execution Map
 
-**Checkpoint A:** `uv run poe check` passes on empty modules
+```
+BATCH 0  ──────────────────────────────────────────────── sequential
+  T01  Package skeleton + dependencies
 
-## Phase 2: Deterministic Agents
+BATCH 1  ──────────────────────────────────────────────── parallel (all need T01)
+  T02  Database models + Alembic
+  T04  JWT utilities                     [-] skipped for now
+  T18  GitHub Actions CI                 [-] skipped for now
 
-- [ ] **Task 2** — Agent 1: File Reception (`agent1_file_reception.py` + `test_agent1.py`)
-- [ ] **Task 3** — Config YAMLs + Agent 2 rule-based path (no SLM, `NotImplementedError` stub)
+BATCH 2  ──────────────────────────────────────────────── sequential (needs T02)
+  T03  Repository implementations
 
-**Checkpoint B:** `uv run poe test` passes for agents 1 and 2
+BATCH 3  ──────────────────────────────────────────────── sequential (needs T03)
+  T07  Shared domain + AuditService + EventBroadcaster
 
-## Phase 3: LLM Integration
+BATCH 4  ──────────────────────────────────────────────── parallel
+  T05  Google OAuth + whitelist          (needs T03 + T04)
+  T08  Ingesta domain models             (needs T07)
 
-- [ ] **Task 4** — LLM Provider singleton (`llm_provider.py`, `MockLlm`, cache test)
-- [ ] **Task 5** — Agent 2 SLM path + `prompts/format_validation.py` (LangChain chain)
-- [ ] **Task 6** — Agent 3 Content Validation (`agent3_content_validation.py` + `prompts/content_validation.py`)
+BATCH 5  ──────────────────────────────────────────────── sequential (needs T04 + T05)
+  T06  JWT auth middleware
 
-**Checkpoint C:** Agents 1–3 pass end-to-end with `MockLlm`
+BATCH 6  ──────────────────────────────────────────────── sequential (needs T08)
+  T09  Agent 1 — File Reception
 
-## Phase 4: Duplicate Control
+BATCH 7  ──────────────────────────────────────────────── sequential (needs T09)
+  T10  Agent 2 — Format Validation (rule-based)
 
-- [ ] **Task 7** — Agent 4: Duplicate Control (SHA-256 + FAISS semantic near-duplicate)
+BATCH 8  ──────────────────────────────────────────────── parallel
+  T11  LLM Provider singleton            (needs T01)
+  T14  Agent 4 — Duplicate Control       (needs T03 + T07 + T08)
 
-**Checkpoint D:** All agent tests green
+BATCH 9  ──────────────────────────────────────────────── parallel
+  T12  Agent 2 — SLM escalation path     (needs T10 + T11)
+  T13  Agent 3 — Content Validation      (needs T07 + T08 + T11)
 
-## Phase 5: Orchestration
+BATCH 10  ─────────────────────────────────────────────── sequential (needs T09+T12+T13+T14)
+  T15  Coordinator — LangGraph
 
-- [ ] **Task 8** — Coordinator: LangGraph state machine (`coordinator.py` + integration tests)
-- [ ] **Task 9** — Watcher daemon (`watcher.py`, `--dry-run` flag)
+BATCH 11  ─────────────────────────────────────────────── parallel (needs T01)
+  T16  FastAPI app + health route
 
-**Checkpoint E:** End-to-end dry-run with a sample PDF fixture
+BATCH 12  ─────────────────────────────────────────────── sequential (needs T06+T15+T16)
+  T17  Pipeline endpoints + SSE stream
+
+BATCH 13  ─────────────────────────────────────────────── sequential (needs T17)
+  T19  Docker build + push CI
+```
+
+---
+
+## Task Cards
+
+---
+
+### T01 · Package skeleton + dependencies
+**Branch:** `feat/skeleton` · **Deps:** none · **Status:** `[ ]`
+
+- [ ] All `src/classiflow/` subdirs exist with `__init__.py` (api, shared, ingesta + children)
+- [ ] `config/` with three stub YAMLs (`allowed_formats`, `content_validation`, `duplicate_control`)
+- [ ] `alembic/` initialized (`alembic init`)
+- [ ] `tests/ingesta/` and `tests/api/routes/` with `__init__.py`
+- [ ] All deps in `pyproject.toml` (see plan Phase 1 list)
+- [ ] `uv sync --dev` succeeds, `uv.lock` updated
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+python -c "from classiflow.api import app; from classiflow.ingesta import agents"
+```
+
+---
+
+### T02 · Database models + Alembic migration
+**Branch:** `feat/database-models` · **Deps:** T01 · **Status:** `[ ]`
+
+- [ ] `shared/database/base.py`: async engine factory + `get_session()` FastAPI dependency
+- [ ] `shared/database/models.py`: `AllowedUser`, `AuditRecord`, `HashRecord`, `Job` ORM models
+- [ ] `settings.py` has `DATABASE_URL` defaulting to `sqlite+aiosqlite:///./classiflow.db`
+- [ ] `alembic upgrade head` creates all four tables on a fresh SQLite file
+- [ ] Switching `DATABASE_URL` to `postgresql+asyncpg://...` requires zero code changes
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+alembic upgrade head
+python -c "import sqlite3; c=sqlite3.connect('classiflow.db'); print(c.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall())"
+```
+
+---
+
+### T03 · Repository implementations
+**Branch:** `feat/repositories` · **Deps:** T02 · **Status:** `[ ]`
+
+- [ ] `IHashRepository`, `IAuditRepository`, `IUserRepository` as `Protocol` classes
+- [ ] `SqlHashRepository`, `SqlAuditRepository`, `SqlUserRepository` — SQLAlchemy async
+- [ ] `InMemoryHashRepository`, `InMemoryAuditRepository`, `InMemoryUserRepository` — tests only
+- [ ] mypy confirms each concrete class satisfies its protocol
+- [ ] Unit tests against in-memory SQLite (no mocks)
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/shared/test_repositories.py
+```
+
+---
+
+### T04 · JWT utilities
+**Branch:** `feat/jwt` · **Deps:** T01 · **Status:** `[-]` *(skipped for now)*
+
+- [ ] `shared/auth/jwt.py`: `encode_token(email)` → JWT string
+- [ ] `decode_token(token)` → payload dict or raises `AuthError`
+- [ ] `settings.py` has `JWT_SECRET_KEY`, `JWT_EXPIRE_MINUTES`
+- [ ] Tests: valid token, expired token, tampered signature
+- [ ] No secrets hardcoded
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/api/test_auth.py
+```
+
+---
+
+### T05 · Google OAuth flow + whitelist check
+**Branch:** `feat/oauth` · **Deps:** T03 · T04 · **Status:** `[ ]`
+
+- [ ] `shared/auth/oauth.py`: `get_authorization_url()` and `exchange_code(code, user_repo)`
+- [ ] `GET /auth/login` redirects to Google with `scope=email profile`
+- [ ] `GET /auth/callback?code=X` exchanges code, checks `allowed_users`, returns JWT
+- [ ] HTTP 403 if email not in whitelist or is blocked
+- [ ] Tests use `httpx.MockTransport` — no real Google call
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/api/routes/test_auth.py
+```
+
+---
+
+### T06 · JWT auth middleware
+**Branch:** `feat/auth-middleware` · **Deps:** T04 · T05 · **Status:** `[ ]`
+
+- [ ] `api/middleware/auth.py`: `require_auth` FastAPI dependency returning `User`
+- [ ] `CurrentUser = Annotated[User, Depends(require_auth)]` in `dependencies.py`
+- [ ] HTTP 401 on missing header, invalid token, or expired token
+- [ ] `/health` and `/auth/*` explicitly public
+- [ ] Tests: 401 missing, 401 expired, 200 valid
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/api/
+```
+
+---
+
+### T07 · Shared domain + AuditService + EventBroadcaster
+**Branch:** `feat/shared-infra` · **Deps:** T03 · **Status:** `[ ]`
+
+- [ ] `shared/domain/job.py`: `AgentEvent(BaseModel)`, `JobStatus(str, Enum)`, `AgentEvent.to_sse()` method
+- [ ] `shared/domain/user.py`: `User(BaseModel)`, `AuthToken(BaseModel)` — no `@dataclass`
+- [ ] `shared/audit/service.py`: `AuditService.record(event)` → persists via `IAuditRepository` + loguru line
+- [ ] `shared/events/broadcaster.py`: `emit()`, `subscribe()` async generator, `close()` with cleanup
+- [ ] `close()` called in `finally` on SSE disconnect (no queue leak)
+- [ ] Tests: emit→subscribe round-trip, early disconnect, audit persistence
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/shared/
+```
+
+---
+
+### T08 · Ingesta domain models
+**Branch:** `feat/ingesta-domain` · **Deps:** T07 · **Status:** `[ ]`
+
+- [ ] `ingesta/domain/results.py`: `FileReceptionResult`, `FormatValidationResult`, `ContentValidationResult`, `DuplicateControlResult` — all `BaseModel`, no `@dataclass`
+- [ ] `ingesta/domain/state.py`: `JobState` TypedDict with all coordinator fields
+- [ ] No logic, no IO — pure typed data
+- [ ] mypy strict, no `Any`
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+python -c "from classiflow.ingesta.domain.results import FileReceptionResult; FileReceptionResult(passed=True, sha256='abc', detected_mime='application/pdf', file_size_bytes=0, rejection_reason='')"
+```
+
+---
+
+### T09 · Agent 1 — File Reception
+**Branch:** `feat/agent1` · **Deps:** T07 · T08 · **Status:** `[ ]`
+
+- [ ] `FileReceptionResult(passed=False)` for: missing file, empty file, size > limit
+- [ ] `FileReceptionResult(passed=True)` with correct `sha256` + `detected_mime` for valid PDF
+- [ ] Emits `agent_started` then `agent_passed`/`agent_failed` via broadcaster
+- [ ] Calls `AuditService.record()` with `duration_ms` + `detail` on every run
+- [ ] Constructor: `__init__(self, audit: AuditService, broadcaster: EventBroadcaster)`
+- [ ] Tests use `InMemory*` — no DB, no filesystem side effects
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/ingesta/test_agent1.py
+```
+
+---
+
+### T10 · Agent 2 — Format Validation (rule-based)
+**Branch:** `feat/agent2-rules` · **Deps:** T07 · T08 · T09 · **Status:** `[ ]`
+
+- [ ] `_rule_based_check()` → `ACCEPT` for `.pdf` (magic bytes `%PDF`)
+- [ ] `_rule_based_check()` → `REJECT` for `.html` (disabled in config)
+- [ ] `_rule_based_check()` → `MANUAL_REVIEW` for unknown MIME
+- [ ] `_rule_based_check()` → `None` (gray zone) for MIME/extension mismatch
+- [ ] `_slm_check()` raises `NotImplementedError` (stub until T12)
+- [ ] Emits events + records audit on every execution
+- [ ] Tests cover all four branches
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/ingesta/test_agent2.py -k "rule"
+```
+
+---
+
+### T11 · LLM Provider singleton
+**Branch:** `feat/llm-provider` · **Deps:** T01 · **Status:** `[ ]`
+
+- [ ] `get_llm()` and `get_llm_langchain()` both `@lru_cache(maxsize=1)`, fully typed
+- [ ] Two calls to `get_llm()` return the same instance (tested)
+- [ ] `MockLlm` substitutes anywhere `Llama` is expected; returns fixed JSON
+- [ ] `llama_cpp` import guarded: `TYPE_CHECKING` + runtime `try/except` with clear error
+- [ ] `MockLlm` exposed as a pytest fixture in `tests/ingesta/conftest.py`
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/ingesta/test_llm_provider.py
+```
+
+---
+
+### T12 · Agent 2 — SLM escalation path
+**Branch:** `feat/agent2-slm` · **Deps:** T10 · T11 · **Status:** `[ ]`
+
+- [ ] `ingesta/prompts/format_validation.py`: `FormatDecision(BaseModel)`, `build_format_chain(llm)` → LCEL chain
+- [ ] `_slm_check()` replaces `NotImplementedError`, returns `FormatValidationResult(used_slm=True)`
+- [ ] Gray-zone end-to-end: `run()` → `_slm_check()` → emits event → records audit
+- [ ] Tests use `MockLlm`; no real model
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/ingesta/test_agent2.py
+```
+
+---
+
+### T13 · Agent 3 — Content Validation
+**Branch:** `feat/agent3` · **Deps:** T07 · T08 · T11 · **Status:** `[ ]`
+
+- [ ] `config/content_validation.yaml` has `min_chars` and `allowed_languages`
+- [ ] `passed=False` for text shorter than `MIN_CHARS`
+- [ ] `passed=False, needs_agent_review=True` for non-Spanish text
+- [ ] `passed=True` for valid Spanish text sample
+- [ ] `LegitimacyDecision(BaseModel)` matches spec schema
+- [ ] `_slm_legitimacy_check()` calls `build_content_chain(llm)` → parsed result
+- [ ] Emits events + records audit on every run
+- [ ] Tests cover all paths using `MockLlm`
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/ingesta/test_agent3.py
+```
+
+---
+
+### T14 · Agent 4 — Duplicate Control
+**Branch:** `feat/agent4` · **Deps:** T03 · T07 · T08 · **Status:** `[ ]`
+
+- [ ] `config/duplicate_control.yaml` has similarity threshold
+- [ ] SHA-256 match → `is_duplicate=True, duplicate_type="exact", similarity_score=1.0`
+- [ ] Cosine > threshold → `duplicate_type="semantic"`
+- [ ] New document → `is_duplicate=False`, hash saved via `IHashRepository`
+- [ ] Constructor: `__init__(self, hash_repo: IHashRepository, audit: AuditService, broadcaster: EventBroadcaster)`
+- [ ] Tests use `InMemoryHashRepository` + small FAISS index
+- [ ] `sentence-transformers` model load lazy (not at import time)
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/ingesta/test_agent4.py
+```
+
+---
+
+### T15 · Coordinator — LangGraph state machine
+**Branch:** `feat/coordinator` · **Deps:** T09 · T12 · T13 · T14 · **Status:** `[ ]`
+
+- [ ] `JobState` TypedDict with all required fields
+- [ ] LangGraph: agent1 → agent2 → agent3 → agent4, conditional edges to `accept`/`reject`/`review`
+- [ ] `handle_accept`, `handle_reject`, `handle_review` call `AuditService.record_routing()`
+- [ ] `pipeline_done` emitted on every terminal state
+- [ ] Integration test: valid PDF → all 4 agents → `accepted`
+- [ ] Integration test: empty file → rejected at agent 1
+- [ ] Uses `MockLlm` + `InMemory*`; no real model or DB
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/ingesta/test_coordinator.py
+```
+
+---
+
+### T16 · FastAPI app + health route
+**Branch:** `feat/api-app` · **Deps:** T01 · **Status:** `[ ]`
+
+- [ ] `api/app.py`: `create_app()` factory mounts all routers and error handlers
+- [ ] `GET /health` → `{"status": "ok"}`, HTTP 200, public
+- [ ] `api/schema.py`: `BaseSchema` with camel-case aliases
+- [ ] `tests/api/conftest.py`: `TestClient` fixture + `auth_headers` fixture (bypasses OAuth)
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/api/routes/test_health.py
+```
+
+---
+
+### T17 · Pipeline endpoints + SSE stream
+**Branch:** `feat/pipeline-endpoints` · **Deps:** T06 · T15 · T16 · **Status:** `[ ]`
+
+- [ ] `POST /pipeline/ingest` returns HTTP 202 + `job_id` within 100 ms
+- [ ] HTTP 401 without valid JWT
+- [ ] Background task starts coordinator without blocking the response
+- [ ] `GET /pipeline/{job_id}/events` streams `agent_started`/`agent_passed`/`agent_failed` per agent
+- [ ] Final SSE event is `pipeline_done`; stream closes after
+- [ ] Client disconnect removes queue (`try/finally` in async generator)
+- [ ] HTTP 404 for unknown `job_id`
+- [ ] Tests assert full SSE sequence using `MockLlm` + small PDF fixture
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+uv run poe check
+uv run poe test tests/api/routes/test_pipeline.py
+uv run uvicorn classiflow.api.app:create_app --factory --reload
+```
+
+---
+
+### T18 · GitHub Actions CI pipeline
+**Branch:** `feat/ci` · **Deps:** T01 · **Status:** `[-]` *(skipped for now)*
+
+- [ ] `.github/workflows/ci.yml` triggers on every push and PR
+- [ ] Jobs: `lint` (ruff), `typecheck` (mypy), `test` (pytest + coverage), `coverage-gate` (≥ 80%)
+- [ ] `lint` and `typecheck` run in parallel
+- [ ] `test` uploads coverage artifact
+- [ ] All jobs green on first push
+
+```bash
+# Verify
+gh run list --limit 5
+gh run view <run-id>
+```
+
+---
+
+### T19 · GitHub Actions Docker build + push
+**Branch:** `feat/docker` · **Deps:** T17 · **Status:** `[ ]`
+
+- [ ] `Dockerfile`: `python:3.12-slim`, `apt-get install libmagic1`, `uv sync --no-dev`, port 8000
+- [ ] Entrypoint: `uvicorn classiflow.api.app:create_app --factory --host 0.0.0.0 --port 8000`
+- [ ] `python-magic` detects MIME correctly inside the container
+- [ ] Container accepts `DATABASE_URL`, `JWT_SECRET_KEY`, `GOOGLE_CLIENT_ID/SECRET` as env vars
+- [ ] `.github/workflows/docker.yml`: build + push on `main`, build only on PRs
+- [ ] `INSTALL.md` documents `libmagic1` for Linux and the Windows dev workaround
+
+```bash
+# Verify
+docker build -t classiflow .
+docker run --env-file .env -p 8000:8000 classiflow
+curl http://localhost:8000/health
+```
+
+---
+
+## Progress
+
+| Task | Description | Status |
+|---|---|---|
+| T01 | Package skeleton + dependencies | `[ ]` |
+| T02 | Database models + Alembic | `[ ]` |
+| T03 | Repository implementations | `[ ]` |
+| T04 | JWT utilities | `[-]` skipped for now |
+| T05 | Google OAuth + whitelist | `[ ]` |
+| T06 | JWT auth middleware | `[ ]` |
+| T07 | Shared domain + AuditService + EventBroadcaster | `[ ]` |
+| T08 | Ingesta domain models | `[ ]` |
+| T09 | Agent 1 — File Reception | `[ ]` |
+| T10 | Agent 2 — Format Validation (rule-based) | `[ ]` |
+| T11 | LLM Provider singleton | `[ ]` |
+| T12 | Agent 2 — SLM escalation path | `[ ]` |
+| T13 | Agent 3 — Content Validation | `[ ]` |
+| T14 | Agent 4 — Duplicate Control | `[ ]` |
+| T15 | Coordinator — LangGraph | `[ ]` |
+| T16 | FastAPI app + health route | `[ ]` |
+| T17 | Pipeline endpoints + SSE stream | `[ ]` |
+| T18 | GitHub Actions CI | `[-]` skipped for now |
+| T19 | Docker build + push | `[ ]` |
+
+**0 / 19 tasks complete · 2 skipped for now (T04 · T18)**
