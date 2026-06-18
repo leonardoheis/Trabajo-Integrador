@@ -64,15 +64,15 @@ BATCH 13  ───────────────────────�
 ---
 
 ### T01 · Package skeleton + dependencies
-**Branch:** `feat/skeleton` · **Deps:** none · **Status:** `[ ]`
+**Branch:** `feat/skeleton` · **Deps:** none · **Status:** `[x]` · **PR:** [#2](https://github.com/lgj2911/Trabajo-Integrador/pull/2)
 
-- [ ] All `src/classiflow/` subdirs exist with `__init__.py` (api, shared, ingesta + children)
-- [ ] `config/` with three stub YAMLs (`allowed_formats`, `content_validation`, `duplicate_control`)
-- [ ] `alembic/` initialized (`alembic init`)
-- [ ] `tests/ingesta/` and `tests/api/routes/` with `__init__.py`
-- [ ] All deps in `pyproject.toml` (see plan Phase 1 list)
-- [ ] `uv sync --dev` succeeds, `uv.lock` updated
-- [ ] `uv run poe check` passes
+- [x] All `src/classiflow/` subdirs exist with `__init__.py` (api, shared, ingesta + children)
+- [x] `config/` with three stub YAMLs (`allowed_formats`, `content_validation`, `duplicate_control`)
+- [x] `alembic/` initialized (`alembic init`)
+- [x] `tests/ingesta/` and `tests/api/routes/` with `__init__.py`
+- [x] All deps in `pyproject.toml` (see plan Phase 1 list)
+- [x] `uv sync --dev` succeeds, `uv.lock` updated
+- [x] `uv run poe check` passes
 
 ```bash
 # Verify
@@ -443,4 +443,4 @@ curl http://localhost:8000/health
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` |
 
-**0 / 19 tasks complete · 2 skipped for now (T04 · T18)**
+**1 / 19 tasks complete · 2 skipped for now (T04 · T18)**
