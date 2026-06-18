@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from classiflow.shared.audit.service import AuditService

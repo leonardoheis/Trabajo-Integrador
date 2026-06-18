@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from loguru import logger
 
 from classiflow.shared.database.repositories.audit import IAuditRepository, make_audit_record
