@@ -88,10 +88,13 @@ python -c "from classiflow.api import app; from classiflow.ingesta import agents
 ### T02 · Database models + Alembic migration
 **Branch:** `feat/database-models` · **Deps:** T01 · **Status:** `[ ]`
 
-- [ ] `shared/database/base.py`: async engine factory + `get_session()` FastAPI dependency
-- [ ] `shared/database/models.py`: `AllowedUser`, `AuditRecord`, `HashRecord`, `Job` ORM models
+- [ ] `shared/database/base.py`: async engine factory + `get_session()` wired as `providers.Resource`
+- [ ] `shared/database/models.py`: six ORM models — `AllowedUser`, `AuditRecord`, `HashRecord`, `Job`, `DocumentStep`, `HumanDecision`
+- [ ] `Job` model has `failed_at_agent`, `rejection_reason`, `review_action_needed` columns
+- [ ] `DocumentStep` model: `step_order`, `agent`, `status`, `passed`, `rejection_reason`, `duration_ms`, `detail` (JSON), `timestamp`; FK → `jobs.job_id`
+- [ ] `HumanDecision` model: `decided_by`, `decision` (`accept`/`reject`/`escalate`), `notes`, `decided_at`; FK → `jobs.job_id`
 - [ ] `settings.py` has `DATABASE_URL` defaulting to `sqlite+aiosqlite:///./classiflow.db`
-- [ ] `alembic upgrade head` creates all four tables on a fresh SQLite file
+- [ ] `alembic upgrade head` creates all six tables on a fresh SQLite file
 - [ ] Switching `DATABASE_URL` to `postgresql+asyncpg://...` requires zero code changes
 - [ ] `uv run poe check` passes
 
@@ -100,6 +103,7 @@ python -c "from classiflow.api import app; from classiflow.ingesta import agents
 uv run poe check
 alembic upgrade head
 python -c "import sqlite3; c=sqlite3.connect('classiflow.db'); print(c.execute(\"SELECT name FROM sqlite_master WHERE type='table'\").fetchall())"
+# → allowed_users, audit_records, hash_records, jobs, document_steps, human_decisions
 ```
 
 ---
@@ -107,9 +111,11 @@ python -c "import sqlite3; c=sqlite3.connect('classiflow.db'); print(c.execute(\
 ### T03 · Repository implementations
 **Branch:** `feat/repositories` · **Deps:** T02 · **Status:** `[ ]`
 
-- [ ] `IHashRepository`, `IAuditRepository`, `IUserRepository` as `Protocol` classes
-- [ ] `SqlHashRepository`, `SqlAuditRepository`, `SqlUserRepository` — SQLAlchemy async
-- [ ] `InMemoryHashRepository`, `InMemoryAuditRepository`, `InMemoryUserRepository` — tests only
+- [ ] `IHashRepository`, `IAuditRepository`, `IUserRepository`, `IDocumentStepsRepository`, `IHumanDecisionRepository` as `Protocol` classes
+- [ ] `SqlHashRepository`, `SqlAuditRepository`, `SqlUserRepository`, `SqlDocumentStepsRepository`, `SqlHumanDecisionRepository` — SQLAlchemy async
+- [ ] `InMemoryHashRepository`, `InMemoryAuditRepository`, `InMemoryUserRepository`, `InMemoryDocumentStepsRepository`, `InMemoryHumanDecisionRepository` — tests only
+- [ ] `IDocumentStepsRepository`: `save_step(step)` and `steps_for_job(job_id) -> list[DocumentStep]`
+- [ ] `IHumanDecisionRepository`: `save(decision)` and `decisions_for_job(job_id) -> list[HumanDecision]`
 - [ ] mypy confirms each concrete class satisfies its protocol
 - [ ] Unit tests against in-memory SQLite (no mocks)
 - [ ] `uv run poe check` passes
@@ -370,17 +376,21 @@ uv run poe test tests/api/routes/test_health.py
 
 ---
 
-### T17 · Pipeline endpoints + SSE stream
+### T17 · Pipeline endpoints + SSE stream + review queue
 **Branch:** `feat/pipeline-endpoints` · **Deps:** T06 · T15 · T16 · **Status:** `[ ]`
 
 - [ ] `POST /pipeline/ingest` returns HTTP 202 + `job_id` within 100 ms
-- [ ] HTTP 401 without valid JWT
+- [ ] HTTP 401 without valid JWT on all routes
 - [ ] Background task starts coordinator without blocking the response
 - [ ] `GET /pipeline/{job_id}/events` streams `agent_started`/`agent_passed`/`agent_failed` per agent
 - [ ] Final SSE event is `pipeline_done`; stream closes after
 - [ ] Client disconnect removes queue (`try/finally` in async generator)
 - [ ] HTTP 404 for unknown `job_id`
+- [ ] `GET /pipeline/review-queue` returns jobs with `status = REVIEW`, each with inline `document_steps`
+- [ ] `POST /pipeline/{job_id}/decision` accepts `{ decision: accept|reject|escalate, notes?: string }`; persists via `IHumanDecisionRepository`; updates `jobs.status`
+- [ ] `POST /pipeline/{job_id}/decision` returns HTTP 404 for unknown job, HTTP 409 if job is not in `REVIEW` state
 - [ ] Tests assert full SSE sequence using `MockLlm` + small PDF fixture
+- [ ] Tests assert review queue contents and decision recording using `InMemory*` repos
 - [ ] `uv run poe check` passes
 
 ```bash

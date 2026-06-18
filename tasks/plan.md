@@ -287,7 +287,9 @@ src/classiflow/
 │   │       ├── __init__.py
 │   │       ├── hash.py                     # IHashRepository (Protocol) + SqlHashRepository
 │   │       ├── audit.py                    # IAuditRepository (Protocol) + SqlAuditRepository
-│   │       └── user.py                     # IUserRepository (Protocol) + SqlUserRepository
+│   │       ├── user.py                     # IUserRepository (Protocol) + SqlUserRepository
+│   │       ├── document_steps.py           # IDocumentStepsRepository + SqlDocumentStepsRepository
+│   │       └── human_decision.py           # IHumanDecisionRepository + SqlHumanDecisionRepository
 │   ├── auth/
 │   │   ├── __init__.py
 │   │   ├── oauth.py                        # Google OAuth flow (authlib)
@@ -474,18 +476,27 @@ Write and apply the initial Alembic migration.
 
 **ORM models:**
 
-| Table | Columns | Purpose |
+| Table | Key columns | Purpose |
 |---|---|---|
 | `allowed_users` | `id`, `email`, `is_active`, `is_blocked`, `created_at` | OAuth whitelist/blacklist |
-| `audit_records` | `id`, `job_id`, `agent`, `event`, `timestamp`, `duration_ms`, `detail` (JSON) | Per-agent audit log |
+| `audit_records` | `id`, `job_id`, `agent`, `event`, `timestamp`, `duration_ms`, `detail` (JSON) | Append-only agent execution log |
 | `hash_records` | `id`, `sha256`, `job_id`, `ingested_at` | Exact duplicate detection |
-| `jobs` | `id`, `job_id`, `status`, `filename`, `created_at`, `updated_at` | Job tracking |
+| `jobs` | `id`, `job_id`, `status`, `filename`, `created_at`, `updated_at`, `failed_at_agent`, `rejection_reason`, `review_action_needed` | Job tracking + fast review query fields |
+| `document_steps` | `id`, `job_id` (FK), `step_order`, `agent`, `status`, `passed`, `rejection_reason`, `duration_ms`, `detail` (JSON), `timestamp` | Ordered per-agent results — full path a document followed |
+| `human_decisions` | `id`, `job_id` (FK), `decided_by`, `decision`, `notes`, `decided_at` | Human reviewer actions on flagged documents |
+
+**`jobs` enrichment rationale:** `failed_at_agent`, `rejection_reason`, and `review_action_needed`
+are summary fields that allow the review queue to be served from a single table scan without
+joining `document_steps`. They are always derived from the agent result that ended the pipeline.
 
 **Acceptance criteria:**
 - [ ] `create_async_engine(settings.DATABASE_URL)` works with both `sqlite+aiosqlite://` and `postgresql+asyncpg://`
 - [ ] `get_session()` is an async context manager; wired into the container as `providers.Resource`
-- [ ] All four ORM models are declared with correct types and constraints
-- [ ] `alembic upgrade head` creates all tables on a fresh SQLite file
+- [ ] All six ORM models declared with correct types and constraints
+- [ ] `jobs` has `failed_at_agent` (VARCHAR nullable), `rejection_reason` (TEXT nullable), `review_action_needed` (VARCHAR nullable)
+- [ ] `document_steps` has `step_order`, `agent`, `status`, `passed`, `rejection_reason`, `duration_ms`, `detail` (JSON), `timestamp`; FK → `jobs.job_id`
+- [ ] `human_decisions` has `decided_by`, `decision` (`accept`/`reject`/`escalate`), `notes` (TEXT nullable), `decided_at`; FK → `jobs.job_id`
+- [ ] `alembic upgrade head` creates all six tables on a fresh SQLite file
 - [ ] Changing `DATABASE_URL` to PostgreSQL requires no code changes (only config)
 - [ ] `uv run poe typecheck` passes
 
@@ -501,13 +512,15 @@ Write and apply the initial Alembic migration.
 
 ### Task 3: Repository implementations
 
-**Description:** Implement the three Protocol interfaces and their SQLAlchemy-backed
+**Description:** Implement the four Protocol interfaces and their SQLAlchemy-backed
 implementations. Also implement the `InMemory*` variants used only by tests.
 
 **Acceptance criteria:**
-- [ ] `IHashRepository`, `IAuditRepository`, `IUserRepository` are `Protocol` classes
-- [ ] `SqlHashRepository`, `SqlAuditRepository`, `SqlUserRepository` implement them via SQLAlchemy
-- [ ] `InMemoryHashRepository`, `InMemoryAuditRepository`, `InMemoryUserRepository` implement them in-memory
+- [ ] `IHashRepository`, `IAuditRepository`, `IUserRepository`, `IHumanDecisionRepository` are `Protocol` classes
+- [ ] `SqlHashRepository`, `SqlAuditRepository`, `SqlUserRepository`, `SqlHumanDecisionRepository` implement them via SQLAlchemy
+- [ ] `InMemoryHashRepository`, `InMemoryAuditRepository`, `InMemoryUserRepository`, `InMemoryHumanDecisionRepository` implement them in-memory
+- [ ] `IDocumentStepsRepository` protocol with `save_step()` and `steps_for_job()` methods
+- [ ] `SqlDocumentStepsRepository` + `InMemoryDocumentStepsRepository` implementations
 - [ ] mypy verifies each concrete class satisfies its protocol (structural check)
 - [ ] Unit tests cover each concrete implementation (SQL via in-memory SQLite, not mocks)
 
@@ -517,6 +530,8 @@ implementations. Also implement the `InMemory*` variants used only by tests.
 - `src/classiflow/shared/database/repositories/hash.py`
 - `src/classiflow/shared/database/repositories/audit.py`
 - `src/classiflow/shared/database/repositories/user.py`
+- `src/classiflow/shared/database/repositories/document_steps.py`
+- `src/classiflow/shared/database/repositories/human_decision.py`
 - `tests/shared/test_repositories.py`
 
 **Estimated scope:** M
@@ -903,13 +918,18 @@ error handlers, `routes/health/endpoints.py`, and the dependency-injector contai
 
 ### Task 17: Pipeline endpoints + SSE stream
 
-**Description:** Implement `POST /pipeline/ingest` and `GET /pipeline/{job_id}/events`.
-Both routes are protected by `require_auth`.
+**Description:** Implement `POST /pipeline/ingest`, `GET /pipeline/{job_id}/events`,
+`GET /pipeline/review-queue`, and `POST /pipeline/{job_id}/decision`.
+All routes are protected by `require_auth`.
 
 - `POST /pipeline/ingest` — accepts multipart file upload, generates `job_id`, starts
   coordinator as an `asyncio` background task, returns HTTP 202 immediately.
 - `GET /pipeline/{job_id}/events` — subscribes to `EventBroadcaster`, streams each
   `AgentEvent` as SSE until `pipeline_done` or client disconnect.
+- `GET /pipeline/review-queue` — returns all jobs with `status = REVIEW`, each including
+  the ordered `document_steps` and the agent that flagged it, so a reviewer has full context.
+- `POST /pipeline/{job_id}/decision` — records a human decision (`accept`/`reject`/`escalate`)
+  via `IHumanDecisionRepository`; updates `jobs.status` accordingly.
 
 **Acceptance criteria:**
 - [ ] `POST /pipeline/ingest` returns HTTP 202 with `job_id` within 100 ms
@@ -918,13 +938,17 @@ Both routes are protected by `require_auth`.
 - [ ] Client disconnect before completion removes the queue (`try/finally` in generator)
 - [ ] Returns HTTP 404 for unknown `job_id`
 - [ ] Returns HTTP 401 without valid JWT
+- [ ] `GET /pipeline/review-queue` returns only jobs with `status = REVIEW`, each with `document_steps` inline
+- [ ] `POST /pipeline/{job_id}/decision` accepts `decision: accept | reject | escalate` + optional `notes`; persists via `IHumanDecisionRepository`; updates `jobs.status`
+- [ ] `POST /pipeline/{job_id}/decision` returns HTTP 404 for unknown job, HTTP 409 if job is not in `REVIEW` state
 - [ ] Tests assert the full SSE event sequence using `MockLlm` + small PDF fixture
+- [ ] Tests assert review queue contents and decision recording using `InMemory*` repos
 
 **Dependencies:** Tasks 6, 7, 15, 16
 
 **Files touched:**
 - `src/classiflow/api/routes/pipeline/endpoints.py`
-- `src/classiflow/api/routes/pipeline/schemas.py`
+- `src/classiflow/api/routes/pipeline/schemas.py`  (add `ReviewQueueItem`, `DecisionRequest`)
 - `src/classiflow/api/dependencies.py`
 - `tests/api/routes/test_pipeline.py`
 
@@ -1039,6 +1063,7 @@ and pushes it to a container registry only on push to `main`.
 | File input to API | Multipart upload (`POST /pipeline/ingest`) |
 | Celery | Not in scope — FastAPI `asyncio` background task is sufficient |
 | Audit persistence | SQLite via `IAuditRepository` (loguru also writes a local file as backup) |
+| Document tracking | `document_steps` (full per-agent path) + summary fields on `jobs` + `human_decisions` for reviewer actions; review queue served from `GET /pipeline/review-queue` |
 | Domain objects | Pydantic `BaseModel` — no `@dataclass` |
 | DI framework | `dependency-injector` `DeclarativeContainer` + `@inject` + `Provide` — not plain `Depends()` |
 | DB in production | PostgreSQL — change `DATABASE_URL` and driver only |
