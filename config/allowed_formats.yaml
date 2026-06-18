@@ -1,0 +1,18 @@
+# Allowed MIME types and extensions for ingestion
+# Agent 1 (File Reception) uses this list.
+allowed_mime_types:
+  - application/pdf
+  - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  - image/jpeg
+  - image/png
+  - image/tiff
+
+allowed_extensions:
+  - .pdf
+  - .docx
+  - .jpg
+  - .jpeg
+  - .png
+  - .tiff
+
+max_file_size_mb: 50
