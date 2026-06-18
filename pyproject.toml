@@ -17,6 +17,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "sse-starlette>=2.1",
     "dependency-injector>=4.41",
+    "pydantic-settings>=2.0",
     # Auth
     "authlib>=1.3",
     "python-jose[cryptography]>=3.3",
@@ -97,13 +98,14 @@ unsafe-fixes = true
 extend-select = ["ALL"]
 
 ignore = [
-    "D",      # pydocstyle
-    "N",      # variable names
-    "CPY",    # copyright notices
+    "D",        # pydocstyle
+    "N",        # variable names
+    "CPY",      # copyright notices
     "S101",
     "ISC001",
     "ANN401",
     "COM812",
+    "ASYNC119", # false positive: standard FastAPI async generator dependency pattern
 ]
 
 [tool.ruff.format]
@@ -124,6 +126,7 @@ line-ending = "auto"
 strict = true
 follow_imports = "normal"
 python_version = "3.10"
+plugins = ["sqlalchemy.ext.mypy.plugin"]
 
 disallow_any_unimported = true
 disallow_any_generics = true
@@ -139,6 +142,10 @@ check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = ["google.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["aiosqlite.*"]
 ignore_missing_imports = true
 
 #########################
