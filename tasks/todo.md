@@ -86,17 +86,17 @@ python -c "from classiflow.api import app; from classiflow.ingesta import agents
 ---
 
 ### T02 · Database models + Alembic migration
-**Branch:** `feat/database-models` · **Deps:** T01 · **Status:** `[ ]`
+**Branch:** `feat/database-models` · **Deps:** T01 · **Status:** `[x]` · **PR:** [#5](https://github.com/lgj2911/Trabajo-Integrador/pull/5)
 
-- [ ] `shared/database/base.py`: async engine factory + `get_session()` wired as `providers.Resource`
-- [ ] `shared/database/models.py`: six ORM models — `AllowedUser`, `AuditRecord`, `HashRecord`, `Job`, `DocumentStep`, `HumanDecision`
-- [ ] `Job` model has `failed_at_agent`, `rejection_reason`, `review_action_needed` columns
-- [ ] `DocumentStep` model: `step_order`, `agent`, `status`, `passed`, `rejection_reason`, `duration_ms`, `detail` (JSON), `timestamp`; FK → `jobs.job_id`
-- [ ] `HumanDecision` model: `decided_by`, `decision` (`accept`/`reject`/`escalate`), `notes`, `decided_at`; FK → `jobs.job_id`
-- [ ] `settings.py` has `DATABASE_URL` defaulting to `sqlite+aiosqlite:///./classiflow.db`
-- [ ] `alembic upgrade head` creates all six tables on a fresh SQLite file
-- [ ] Switching `DATABASE_URL` to `postgresql+asyncpg://...` requires zero code changes
-- [ ] `uv run poe check` passes
+- [x] `shared/database/base.py`: async engine factory + `get_session()` async generator
+- [x] `shared/database/models.py`: six ORM models — `AllowedUser`, `AuditRecord`, `HashRecord`, `Job`, `DocumentStep`, `HumanDecision`
+- [x] `Job` model has `failed_at_agent`, `rejection_reason`, `review_action_needed` columns
+- [x] `DocumentStep` model: `step_order`, `agent`, `status`, `passed`, `rejection_reason`, `duration_ms`, `detail` (JSON), `timestamp`; FK → `jobs.job_id`
+- [x] `HumanDecision` model: `decided_by`, `decision` (`accept`/`reject`/`escalate`), `notes`, `decided_at`; FK → `jobs.job_id`
+- [x] `settings.py` has `DATABASE_URL` defaulting to `sqlite+aiosqlite:///./classiflow.db`
+- [x] `alembic upgrade head` creates all six tables on a fresh SQLite file
+- [x] Switching `DATABASE_URL` to `postgresql+asyncpg://...` requires zero code changes
+- [x] `uv run poe check` passes (86 tests, mypy clean)
 
 ```bash
 # Verify
