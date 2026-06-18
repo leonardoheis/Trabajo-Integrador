@@ -144,6 +144,16 @@ Client                       API (FastAPI)                Background Task
   install `python-magic-bin` manually (not in `pyproject.toml`).
 - **Config in `config/`** at project root — editable without reinstalling the package.
 
+### Dependency Injection
+- **`dependency-injector`** (`DeclarativeContainer` + `@inject` + `Provide`) — explicit container
+  that wires all services and repositories. Endpoint functions declare typed aliases in
+  `api/dependencies.py`; no manual object construction inside routes.
+- **`Container`** (production) wires `Sql*` repositories to the async DB session.
+- **`TestContainer`** overrides every `Sql*` provider with its `InMemory*` variant — tests get
+  full service logic with zero DB or network setup, no mocking.
+- **`configure_container()`** called once at application startup (`@lru_cache` ensures a single
+  instance per process); wired to `api.routes` package so `@inject` resolves automatically.
+
 ### CI/CD
 - **GitHub Actions** — lint → typecheck → test → Docker build on every push.
 - Coverage gate: fail if below 80%.
@@ -182,7 +192,8 @@ class InMemoryHashRepository:
 ```
 
 Agents and services receive the protocol type as a constructor parameter.
-Tests inject `InMemory*` instances. Production injects `Sql*` instances via FastAPI DI.
+Tests inject `InMemory*` instances via `TestContainer`. Production injects `Sql*` instances
+via `Container` (dependency-injector `DeclarativeContainer`).
 
 ---
 
@@ -235,8 +246,8 @@ src/classiflow/
 │
 ├── api/                                    # FastAPI application
 │   ├── __init__.py
-│   ├── app.py                              # FastAPI factory
-│   ├── dependencies.py                     # Annotated DI aliases
+│   ├── app.py                              # FastAPI factory + configure_container()
+│   ├── dependencies.py                     # Annotated aliases: Depends(Provide[Container.*])
 │   ├── schema.py                           # BaseSchema (Pydantic + CamelCase aliases)
 │   ├── middleware/
 │   │   ├── __init__.py
@@ -260,6 +271,11 @@ src/classiflow/
 │           ├── endpoints.py                # POST /pipeline/ingest  (protected)
 │           │                               # GET  /pipeline/{job_id}/events  (protected, SSE)
 │           └── schemas.py                  # IngestResponse, AgentEventSchema
+│
+├── injections/                             # dependency-injector containers
+│   ├── __init__.py                         # configure_container() with @lru_cache
+│   ├── production.py                       # Container(DeclarativeContainer) — wires Sql* repos + services
+│   └── test.py                             # TestContainer — overrides with InMemory* repos
 │
 ├── shared/                                 # Cross-cutting concerns — all stages use these
 │   ├── __init__.py
@@ -403,6 +419,7 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 python-multipart>=0.0.9      # multipart file upload
 sse-starlette>=2.1           # SSE helper
+dependency-injector>=4.41    # DeclarativeContainer + @inject + Provide
 
 # Auth
 authlib>=1.3                 # Google OAuth 2.0
@@ -466,7 +483,7 @@ Write and apply the initial Alembic migration.
 
 **Acceptance criteria:**
 - [ ] `create_async_engine(settings.DATABASE_URL)` works with both `sqlite+aiosqlite://` and `postgresql+asyncpg://`
-- [ ] `get_session()` is an async context manager usable as a FastAPI dependency
+- [ ] `get_session()` is an async context manager; wired into the container as `providers.Resource`
 - [ ] All four ORM models are declared with correct types and constraints
 - [ ] `alembic upgrade head` creates all tables on a fresh SQLite file
 - [ ] Changing `DATABASE_URL` to PostgreSQL requires no code changes (only config)
@@ -565,13 +582,15 @@ expiry come from `settings`.
 
 **Description:** Implement `api/middleware/auth.py` as a FastAPI dependency (not Starlette
 middleware) so it can be applied per-router. Protected routes declare
-`CurrentUser = Annotated[User, Depends(require_auth)]`.
+`CurrentUser = Annotated[User, Depends(Provide[Container.current_user])]` and decorate
+endpoint functions with `@inject`.
 
 **Acceptance criteria:**
 - [ ] `require_auth` extracts the `Authorization: Bearer <token>` header
 - [ ] Returns HTTP 401 if header is missing or token is invalid
 - [ ] Returns the decoded `User` domain object on success
 - [ ] `/health` and `/auth/*` routes are explicitly public (no `require_auth` dependency)
+- [ ] `CurrentUser` alias uses `Provide[Container.current_user]`; endpoint uses `@inject`
 - [ ] Tests verify 401 on missing token, 401 on expired token, 200 on valid token
 
 **Dependencies:** Tasks 4, 5
@@ -853,12 +872,17 @@ job_start ───►│ agent1 ──► agent2 ──► agent3 ──► age
 ### Task 16: FastAPI application + health route
 
 **Description:** Implement `api/app.py` (factory function), `api/schema.py` (BaseSchema),
-error handlers, and `routes/health/endpoints.py`.
+error handlers, `routes/health/endpoints.py`, and the dependency-injector containers.
 
 **Acceptance criteria:**
 - [ ] `create_app()` returns a `FastAPI` instance with all routers and error handlers mounted
+- [ ] `create_app()` calls `configure_container()` to wire the `Container` to `api.routes`
 - [ ] `GET /health` returns `{"status": "ok"}` and HTTP 200 (public, no auth)
 - [ ] `BaseSchema` uses `alias_generator=to_camel`, `populate_by_name=True`
+- [ ] `injections/production.py`: `Container(DeclarativeContainer)` wires `Sql*` repos + `AuditService` + `EventBroadcaster`
+- [ ] `injections/test.py`: `TestContainer` overrides every `Sql*` provider with `InMemory*`
+- [ ] `tests/api/conftest.py` uses `TestContainer`; `@inject` resolves without real DB
+- [ ] `dependency-injector>=4.41` added to `pyproject.toml`
 - [ ] Tests pass with `TestClient`
 
 **Dependencies:** Task 1
@@ -868,6 +892,10 @@ error handlers, and `routes/health/endpoints.py`.
 - `src/classiflow/api/schema.py`
 - `src/classiflow/api/error_handlers/__init__.py`
 - `src/classiflow/api/routes/health/endpoints.py`
+- `src/classiflow/injections/__init__.py`
+- `src/classiflow/injections/production.py`
+- `src/classiflow/injections/test.py`
+- `pyproject.toml`  (add `dependency-injector>=4.41`)
 - `tests/api/conftest.py`
 - `tests/api/routes/test_health.py`
 
@@ -1012,5 +1040,6 @@ and pushes it to a container registry only on push to `main`.
 | Celery | Not in scope — FastAPI `asyncio` background task is sufficient |
 | Audit persistence | SQLite via `IAuditRepository` (loguru also writes a local file as backup) |
 | Domain objects | Pydantic `BaseModel` — no `@dataclass` |
+| DI framework | `dependency-injector` `DeclarativeContainer` + `@inject` + `Provide` — not plain `Depends()` |
 | DB in production | PostgreSQL — change `DATABASE_URL` and driver only |
 | Target OS | Linux (Docker); Windows is a dev-only environment |

@@ -74,6 +74,9 @@ BATCH 13  ───────────────────────�
 - [x] `uv sync --dev` succeeds, `uv.lock` updated
 - [x] `uv run poe check` passes
 
+> **Note:** `src/classiflow/injections/` skeleton is added in **T16** (FastAPI app) — that is
+> where the container implementation lives.
+
 ```bash
 # Verify
 uv run poe check
@@ -158,10 +161,11 @@ uv run poe test tests/api/routes/test_auth.py
 ### T06 · JWT auth middleware
 **Branch:** `feat/auth-middleware` · **Deps:** T04 · T05 · **Status:** `[ ]`
 
-- [ ] `api/middleware/auth.py`: `require_auth` FastAPI dependency returning `User`
-- [ ] `CurrentUser = Annotated[User, Depends(require_auth)]` in `dependencies.py`
+- [ ] `api/middleware/auth.py`: `require_auth` function returning `User` (registered in `Container`)
+- [ ] `CurrentUser = Annotated[User, Depends(Provide[Container.current_user])]` in `dependencies.py`
+- [ ] Endpoint functions that use `CurrentUser` decorated with `@inject`
 - [ ] HTTP 401 on missing header, invalid token, or expired token
-- [ ] `/health` and `/auth/*` explicitly public
+- [ ] `/health` and `/auth/*` explicitly public (no `CurrentUser` dependency)
 - [ ] Tests: 401 missing, 401 expired, 200 valid
 - [ ] `uv run poe check` passes
 
@@ -347,10 +351,15 @@ uv run poe test tests/ingesta/test_coordinator.py
 ### T16 · FastAPI app + health route
 **Branch:** `feat/api-app` · **Deps:** T01 · **Status:** `[ ]`
 
-- [ ] `api/app.py`: `create_app()` factory mounts all routers and error handlers
+- [ ] `dependency-injector>=4.41` added to `pyproject.toml`; `uv sync --dev` succeeds
+- [ ] `src/classiflow/injections/` skeleton: `__init__.py`, `production.py`, `test.py`
+- [ ] `injections/production.py`: `Container(DeclarativeContainer)` with `providers.Resource(get_session)`, `providers.Factory` for all `Sql*` repos, `AuditService`, `EventBroadcaster`
+- [ ] `injections/test.py`: `TestContainer` overrides every `Sql*` provider with `InMemory*`
+- [ ] `injections/__init__.py`: `configure_container()` with `@lru_cache`
+- [ ] `api/app.py`: `create_app()` factory calls `configure_container()` and mounts all routers and error handlers
 - [ ] `GET /health` → `{"status": "ok"}`, HTTP 200, public
 - [ ] `api/schema.py`: `BaseSchema` with camel-case aliases
-- [ ] `tests/api/conftest.py`: `TestClient` fixture + `auth_headers` fixture (bypasses OAuth)
+- [ ] `tests/api/conftest.py`: overrides container with `TestContainer`; `TestClient` fixture + `auth_headers` fixture (bypasses OAuth)
 - [ ] `uv run poe check` passes
 
 ```bash
