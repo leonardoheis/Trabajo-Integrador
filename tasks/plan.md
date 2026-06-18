@@ -168,8 +168,8 @@ Every resource that touches the database has three classes:
 ```python
 # 1. Protocol — the interface services depend on (Dependency Inversion Principle)
 class IHashRepository(Protocol):
-    def exists(self, sha256: str) -> bool: ...
-    def save(self, sha256: str, job_id: str) -> None: ...
+    async def exists(self, sha256: str) -> bool: ...
+    async def save(self, sha256: str, job_id: str) -> None: ...
 
 # 2. SQLAlchemy implementation — swappable without touching callers
 class SqlHashRepository:
@@ -182,13 +182,20 @@ class SqlHashRepository:
         )
         return result.scalar_one_or_none() is not None
 
+    async def save(self, sha256: str, job_id: str) -> None:
+        self._session.add(HashRecord(sha256=sha256, job_id=job_id))
+        await self._session.flush()
+
 # 3. In-memory implementation — used in unit tests only
 class InMemoryHashRepository:
     def __init__(self) -> None:
         self._store: dict[str, str] = {}
 
-    def exists(self, sha256: str) -> bool:
+    async def exists(self, sha256: str) -> bool:
         return sha256 in self._store
+
+    async def save(self, sha256: str, job_id: str) -> None:
+        self._store[sha256] = job_id
 ```
 
 Agents and services receive the protocol type as a constructor parameter.
@@ -399,18 +406,18 @@ coordinator ──────────────────────�
 
 ## Phase 1: Foundation
 
-### Task 1: Package skeleton + dependencies
+### Task 1: Package skeleton + dependencies ✅ done — PR [#2](https://github.com/lgj2911/Trabajo-Integrador/pull/2)
 
 **Description:** Create the full directory tree with empty `__init__.py` files, stub config
 YAMLs, and add all runtime dependencies to `pyproject.toml`.
 
 **Acceptance criteria:**
-- [ ] All directories in the target file layout above exist with `__init__.py`
-- [ ] `config/` has stub YAMLs for the three configs
-- [ ] `alembic/` initialized (`alembic init`)
-- [ ] All dependencies added to `pyproject.toml`
-- [ ] `uv sync --dev` succeeds and `uv.lock` is updated
-- [ ] `uv run poe check` passes (empty modules, no type errors)
+- [x] All directories in the target file layout above exist with `__init__.py`
+- [x] `config/` has stub YAMLs for the three configs
+- [x] `alembic/` initialized (`alembic init`)
+- [x] All dependencies added to `pyproject.toml`
+- [x] `uv sync --dev` succeeds and `uv.lock` is updated
+- [x] `uv run poe check` passes (empty modules, no type errors)
 
 **Dependencies:** None
 
@@ -459,16 +466,16 @@ Document in `INSTALL.md`.
 
 **Estimated scope:** S
 
-### Checkpoint A
-- [ ] `uv run poe lint` passes
-- [ ] `uv run poe typecheck` passes
-- [ ] `python -c "from classiflow.api import app; from classiflow.ingesta import agents"` succeeds
+### Checkpoint A ✅ done
+- [x] `uv run poe lint` passes
+- [x] `uv run poe typecheck` passes
+- [x] `python -c "from classiflow.api import app; from classiflow.ingesta import agents"` succeeds
 
 ---
 
 ## Phase 2: Database Layer
 
-### Task 2: SQLAlchemy base + ORM models + Alembic migration
+### Task 2: SQLAlchemy base + ORM models + Alembic migration ✅ done — PR [#5](https://github.com/lgj2911/Trabajo-Integrador/pull/5)
 
 **Description:** Implement `shared/database/base.py` with the async engine factory and
 `get_session()` dependency. Define all ORM models in `shared/database/models.py`.
@@ -490,15 +497,15 @@ are summary fields that allow the review queue to be served from a single table 
 joining `document_steps`. They are always derived from the agent result that ended the pipeline.
 
 **Acceptance criteria:**
-- [ ] `create_async_engine(settings.DATABASE_URL)` works with both `sqlite+aiosqlite://` and `postgresql+asyncpg://`
-- [ ] `get_session()` is an async context manager; wired into the container as `providers.Resource`
-- [ ] All six ORM models declared with correct types and constraints
-- [ ] `jobs` has `failed_at_agent` (VARCHAR nullable), `rejection_reason` (TEXT nullable), `review_action_needed` (VARCHAR nullable)
-- [ ] `document_steps` has `step_order`, `agent`, `status`, `passed`, `rejection_reason`, `duration_ms`, `detail` (JSON), `timestamp`; FK → `jobs.job_id`
-- [ ] `human_decisions` has `decided_by`, `decision` (`accept`/`reject`/`escalate`), `notes` (TEXT nullable), `decided_at`; FK → `jobs.job_id`
-- [ ] `alembic upgrade head` creates all six tables on a fresh SQLite file
-- [ ] Changing `DATABASE_URL` to PostgreSQL requires no code changes (only config)
-- [ ] `uv run poe typecheck` passes
+- [x] `create_async_engine(settings.DATABASE_URL)` works with both `sqlite+aiosqlite://` and `postgresql+asyncpg://`
+- [x] `get_session()` is an async generator; wired into the container as `providers.Resource` in T16
+- [x] All six ORM models declared with correct types and constraints
+- [x] `jobs` has `failed_at_agent` (VARCHAR nullable), `rejection_reason` (TEXT nullable), `review_action_needed` (VARCHAR nullable)
+- [x] `document_steps` has `step_order`, `agent`, `status`, `passed`, `rejection_reason`, `duration_ms`, `detail` (JSON), `timestamp`; FK → `jobs.job_id`
+- [x] `human_decisions` has `decided_by`, `decision` (`accept`/`reject`/`escalate`), `notes` (TEXT nullable), `decided_at`; FK → `jobs.job_id`
+- [x] `alembic upgrade head` creates all six tables on a fresh SQLite file
+- [x] Changing `DATABASE_URL` to PostgreSQL requires no code changes (only config)
+- [x] `uv run poe typecheck` passes
 
 **Dependencies:** Task 1
 
@@ -510,19 +517,19 @@ joining `document_steps`. They are always derived from the agent result that end
 
 **Estimated scope:** M
 
-### Task 3: Repository implementations
+### Task 3: Repository implementations ✅ done — PR [#6](https://github.com/lgj2911/Trabajo-Integrador/pull/6)
 
 **Description:** Implement the four Protocol interfaces and their SQLAlchemy-backed
 implementations. Also implement the `InMemory*` variants used only by tests.
 
 **Acceptance criteria:**
-- [ ] `IHashRepository`, `IAuditRepository`, `IUserRepository`, `IHumanDecisionRepository` are `Protocol` classes
-- [ ] `SqlHashRepository`, `SqlAuditRepository`, `SqlUserRepository`, `SqlHumanDecisionRepository` implement them via SQLAlchemy
-- [ ] `InMemoryHashRepository`, `InMemoryAuditRepository`, `InMemoryUserRepository`, `InMemoryHumanDecisionRepository` implement them in-memory
-- [ ] `IDocumentStepsRepository` protocol with `save_step()` and `steps_for_job()` methods
-- [ ] `SqlDocumentStepsRepository` + `InMemoryDocumentStepsRepository` implementations
-- [ ] mypy verifies each concrete class satisfies its protocol (structural check)
-- [ ] Unit tests cover each concrete implementation (SQL via in-memory SQLite, not mocks)
+- [x] `IHashRepository`, `IAuditRepository`, `IUserRepository`, `IHumanDecisionRepository` are `Protocol` classes
+- [x] `SqlHashRepository`, `SqlAuditRepository`, `SqlUserRepository`, `SqlHumanDecisionRepository` implement them via SQLAlchemy
+- [x] `InMemoryHashRepository`, `InMemoryAuditRepository`, `InMemoryUserRepository`, `InMemoryHumanDecisionRepository` implement them in-memory
+- [x] `IDocumentStepsRepository` protocol with `save_step()` and `steps_for_job()` methods
+- [x] `SqlDocumentStepsRepository` + `InMemoryDocumentStepsRepository` implementations
+- [x] mypy verifies each concrete class satisfies its protocol (structural check)
+- [x] Unit tests cover each concrete implementation (SQL via in-memory SQLite, not mocks) — 25 tests, 97% coverage
 
 **Dependencies:** Task 2
 
@@ -533,13 +540,14 @@ implementations. Also implement the `InMemory*` variants used only by tests.
 - `src/classiflow/shared/database/repositories/document_steps.py`
 - `src/classiflow/shared/database/repositories/human_decision.py`
 - `tests/shared/test_repositories.py`
+- `pyproject.toml` (`anyio_mode = "auto"`, `PLR6301` suppressed for `tests/**`)
 
 **Estimated scope:** M
 
-### Checkpoint B
-- [ ] `uv run poe check` passes
-- [ ] `alembic upgrade head` creates all tables
-- [ ] Repository round-trip tests pass against in-memory SQLite
+### Checkpoint B ✅ done
+- [x] `uv run poe check` passes
+- [x] `alembic upgrade head` creates all tables
+- [x] Repository round-trip tests pass against in-memory SQLite
 
 ---
 

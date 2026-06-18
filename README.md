@@ -61,9 +61,52 @@ Sources (inputs)
 │   └── *.csv                       One CSV per document category (10 types)
 ├── src/
 │   └── classiflow/                 Main Python package
+│       ├── settings.py             pydantic-settings config (DATABASE_URL, etc.)
+│       ├── shared/
+│       │   └── database/
+│       │       ├── base.py         Async engine + session factory
+│       │       ├── models.py       ORM models (6 tables)
+│       │       └── repositories/   Protocol interfaces + SQL and InMemory impls
+│       ├── ingesta/                Ingestion agents (in progress)
+│       └── api/                    FastAPI application (in progress)
+├── alembic/                        Database migrations
+│   └── versions/
+│       └── 0001_initial_schema.py  Initial schema — all 6 tables
+├── tasks/
+│   ├── plan.md                     Full implementation plan
+│   └── todo.md                     Task tracker
 ├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
 └── uv.lock                         Locked dependency graph
 ```
+
+## Build Status
+
+| Task | Description | Status |
+|------|-------------|--------|
+| T01 | Package skeleton + dependencies | ✅ done |
+| T02 | Database models + Alembic migration | ✅ done |
+| T03 | Repository implementations | ✅ done |
+| T04 | JWT utilities | 🔲 pending |
+| T07 | Shared domain + AuditService + EventBroadcaster | 🔲 pending |
+| T05 | Google OAuth + whitelist | 🔲 pending |
+| T08 | Ingesta domain models | 🔲 pending |
+| T06 | JWT auth middleware | 🔲 pending |
+| T09–T14 | Ingestion agents | 🔲 pending |
+| T15 | Coordinator — LangGraph | 🔲 pending |
+| T16 | FastAPI app + health route | 🔲 pending |
+| T17 | Pipeline endpoints + SSE stream | 🔲 pending |
+
+Full task details and dependency graph: [tasks/todo.md](tasks/todo.md)
+
+## Key Technical Decisions
+
+- **SQLAlchemy 2.0 async** (`Mapped[]` annotations, `async_sessionmaker`, `aiosqlite` for local dev)
+- **Repository pattern** — Protocol interfaces; `Sql*` for production, `InMemory*` for tests
+- **LangGraph** — 4-agent sequential pipeline (File Reception → Format Validation → Content Validation → Duplicate Control)
+- **FastAPI + SSE** — `POST /pipeline/ingest` triggers background task; `GET /pipeline/{job_id}/events` streams agent state
+- **`dependency-injector`** — `DeclarativeContainer` + `@inject` + `Provide[Container.*]`; `TestContainer` swaps all `Sql*` repos with `InMemory*`
+- **Document tracking** — `document_steps` records per-agent path; `human_decisions` records reviewer actions; review queue via `GET /pipeline/review-queue`
+- **Alembic async migrations** — `asyncio.run()` pattern in `env.py`; single connection string swap to move from SQLite to PostgreSQL
 
 ## Document Categories
 
@@ -111,7 +154,14 @@ Alternatively, open `notebooks/colab_downloader.ipynb` in Google Colab to run th
 ## Development
 
 ```bash
-uv run poe check   # lint + type check + notebook tests (run after every change)
+uv run poe check   # lint + type check + notebook tests + coverage (run after every change)
 uv run poe fmt     # auto-format
 uv run poe test    # unit tests only
+```
+
+### Running the migrations
+
+```bash
+uv run alembic upgrade head   # apply all migrations to classiflow.db
+uv run alembic downgrade -1   # roll back one revision
 ```
