@@ -553,18 +553,18 @@ implementations. Also implement the `InMemory*` variants used only by tests.
 
 ## Phase 3: Auth
 
-### Task 4: JWT utilities
+### Task 4: JWT utilities ✅ done — PR [#7](https://github.com/lgj2911/Trabajo-Integrador/pull/7)
 
 **Description:** Implement `shared/auth/jwt.py` with `encode_token(user_email)` and
 `decode_token(token)`. Tokens carry `sub` (email), `exp`, and `iat`. Signing key and
-expiry come from `settings`.
+expiry come from `settings`. Uses **PyJWT** (ships `py.typed`; replaced `python-jose`).
 
 **Acceptance criteria:**
-- [ ] `encode_token` returns a signed JWT string
-- [ ] `decode_token` returns the payload dict or raises `AuthError` on invalid/expired token
-- [ ] Expiry is configurable via `settings.JWT_EXPIRE_MINUTES`
-- [ ] Unit tests cover valid token, expired token, tampered signature
-- [ ] No secrets hardcoded; key read from `settings.JWT_SECRET_KEY` (env var)
+- [x] `encode_token` returns a signed JWT string
+- [x] `decode_token` returns the payload dict or raises `AuthError` on invalid/expired token
+- [x] Expiry is configurable via `settings.JWT_EXPIRE_MINUTES`
+- [x] Unit tests cover valid token, expired token, tampered signature
+- [x] No secrets hardcoded; key read from `settings.JWT_SECRET_KEY` (env var)
 
 **Dependencies:** Task 1
 
@@ -634,7 +634,7 @@ endpoint functions with `@inject`.
 
 ## Phase 4: Shared Infrastructure
 
-### Task 7: Domain types + AuditService + EventBroadcaster
+### Task 7: Domain types + AuditService + EventBroadcaster ✅ done — PR [#8](https://github.com/lgj2911/Trabajo-Integrador/pull/8)
 
 **Description:** Implement the shared building blocks that every pipeline module depends on.
 
@@ -645,14 +645,14 @@ endpoint functions with `@inject`.
 - `shared/events/broadcaster.py`: `EventBroadcaster` with one `asyncio.Queue` per `job_id`.
 
 **Acceptance criteria:**
-- [ ] `AgentEvent` is a `BaseModel` with a `to_sse()` method returning the SSE wire format
-- [ ] `JobStatus` is a `str` enum
-- [ ] `AuditService.record(event)` persists to DB via `IAuditRepository` and writes a loguru line
-- [ ] `EventBroadcaster.emit(event)` puts the event on the correct queue
-- [ ] `EventBroadcaster.subscribe(job_id)` returns an async generator; closes cleanly on `DONE`
-- [ ] `EventBroadcaster.close(job_id)` removes the queue (called in `finally` on SSE disconnect)
-- [ ] Unit tests cover emit→subscribe round-trip, early disconnect cleanup, and `AuditService`
-- [ ] No `@dataclass` anywhere in this task
+- [x] `AgentEvent` is a `BaseModel` with a `to_sse()` method returning the SSE wire format
+- [x] `JobStatus` is a `str` enum
+- [x] `AuditService.record(event)` persists to DB via `IAuditRepository` and writes a loguru line
+- [x] `EventBroadcaster.emit(event)` puts the event on the correct queue
+- [x] `EventBroadcaster.subscribe(job_id)` returns an async generator; closes cleanly on `DONE`
+- [x] `EventBroadcaster.close(job_id)` removes the queue (called in `finally` on SSE disconnect)
+- [x] Unit tests cover emit→subscribe round-trip, early disconnect cleanup, and `AuditService`
+- [x] No `@dataclass` anywhere in this task
 
 **Dependencies:** Tasks 2, 3
 
@@ -666,9 +666,9 @@ endpoint functions with `@inject`.
 
 **Estimated scope:** S
 
-### Checkpoint D
-- [ ] `uv run poe check` passes
-- [ ] Broadcaster round-trip and audit persistence tests pass
+### Checkpoint D ✅ done
+- [x] `uv run poe check` passes
+- [x] Broadcaster round-trip and audit persistence tests pass
 
 ---
 

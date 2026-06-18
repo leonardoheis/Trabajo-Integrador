@@ -129,14 +129,14 @@ uv run poe test tests/shared/test_repositories.py
 ---
 
 ### T04 · JWT utilities
-**Branch:** `feat/jwt` · **Deps:** T01 · **Status:** `[ ]`
+**Branch:** `feat/jwt` · **Deps:** T01 · **Status:** `[x]` · **PR:** [#7](https://github.com/lgj2911/Trabajo-Integrador/pull/7)
 
-- [ ] `shared/auth/jwt.py`: `encode_token(email)` → JWT string
-- [ ] `decode_token(token)` → payload dict or raises `AuthError`
-- [ ] `settings.py` has `JWT_SECRET_KEY`, `JWT_EXPIRE_MINUTES`
-- [ ] Tests: valid token, expired token, tampered signature
-- [ ] No secrets hardcoded
-- [ ] `uv run poe check` passes
+- [x] `shared/auth/jwt.py`: `encode_token(email)` → JWT string (PyJWT)
+- [x] `decode_token(token)` → payload dict or raises `AuthError`
+- [x] `settings.py` has `JWT_SECRET_KEY`, `JWT_EXPIRE_MINUTES`
+- [x] Tests: valid token, expired token, tampered signature
+- [x] No secrets hardcoded
+- [x] `uv run poe check` passes (114 tests, mypy clean)
 
 ```bash
 # Verify
@@ -184,15 +184,15 @@ uv run poe test tests/api/
 ---
 
 ### T07 · Shared domain + AuditService + EventBroadcaster
-**Branch:** `feat/shared-infra` · **Deps:** T03 · **Status:** `[ ]`
+**Branch:** `feat/shared-infra` · **Deps:** T03 · **Status:** `[x]` · **PR:** [#8](https://github.com/lgj2911/Trabajo-Integrador/pull/8)
 
-- [ ] `shared/domain/job.py`: `AgentEvent(BaseModel)`, `JobStatus(str, Enum)`, `AgentEvent.to_sse()` method
-- [ ] `shared/domain/user.py`: `User(BaseModel)`, `AuthToken(BaseModel)` — no `@dataclass`
-- [ ] `shared/audit/service.py`: `AuditService.record(event)` → persists via `IAuditRepository` + loguru line
-- [ ] `shared/events/broadcaster.py`: `emit()`, `subscribe()` async generator, `close()` with cleanup
-- [ ] `close()` called in `finally` on SSE disconnect (no queue leak)
-- [ ] Tests: emit→subscribe round-trip, early disconnect, audit persistence
-- [ ] `uv run poe check` passes
+- [x] `shared/domain/job.py`: `AgentEvent(BaseModel)`, `JobStatus(str, Enum)`, `AgentEvent.to_sse()` method
+- [x] `shared/domain/user.py`: `User(BaseModel)`, `AuthToken(BaseModel)` — no `@dataclass`
+- [x] `shared/audit/service.py`: `AuditService.record(event)` → persists via `IAuditRepository` + loguru line
+- [x] `shared/events/broadcaster.py`: `emit()`, `subscribe()` async generator, `close()` with cleanup
+- [x] `close()` called in `finally` on SSE disconnect (no queue leak)
+- [x] Tests: emit→subscribe round-trip, early disconnect, audit persistence
+- [x] `uv run poe check` passes (120 tests, mypy clean)
 
 ```bash
 # Verify
@@ -442,24 +442,24 @@ curl http://localhost:8000/health
 
 | Task | Description | Status |
 |---|---|---|
-| T01 | Package skeleton + dependencies | `[ ]` |
-| T02 | Database models + Alembic | `[ ]` |
-| T03 | Repository implementations | `[ ]` |
-| T04 | JWT utilities | `[-]` skipped for now |
-| T05 | Google OAuth + whitelist | `[ ]` |
-| T06 | JWT auth middleware | `[ ]` |
-| T07 | Shared domain + AuditService + EventBroadcaster | `[ ]` |
-| T08 | Ingesta domain models | `[ ]` |
-| T09 | Agent 1 — File Reception | `[ ]` |
-| T10 | Agent 2 — Format Validation (rule-based) | `[ ]` |
-| T11 | LLM Provider singleton | `[ ]` |
-| T12 | Agent 2 — SLM escalation path | `[ ]` |
-| T13 | Agent 3 — Content Validation | `[ ]` |
-| T14 | Agent 4 — Duplicate Control | `[ ]` |
-| T15 | Coordinator — LangGraph | `[ ]` |
-| T16 | FastAPI app + health route | `[ ]` |
-| T17 | Pipeline endpoints + SSE stream | `[ ]` |
+| T01 | Package skeleton + dependencies | `[x]` done — PR [#2](https://github.com/lgj2911/Trabajo-Integrador/pull/2) |
+| T02 | Database models + Alembic | `[x]` done — PR [#5](https://github.com/lgj2911/Trabajo-Integrador/pull/5) |
+| T03 | Repository implementations | `[x]` done — PR [#6](https://github.com/lgj2911/Trabajo-Integrador/pull/6) |
+| T04 | JWT utilities | `[x]` done — PR [#7](https://github.com/lgj2911/Trabajo-Integrador/pull/7) |
+| T07 | Shared domain + AuditService + EventBroadcaster | `[x]` done — PR [#8](https://github.com/lgj2911/Trabajo-Integrador/pull/8) |
+| T05 | Google OAuth + whitelist | `[ ]` pending |
+| T08 | Ingesta domain models | `[ ]` pending |
+| T06 | JWT auth middleware | `[ ]` pending |
+| T09 | Agent 1 — File Reception | `[ ]` pending |
+| T10 | Agent 2 — Format Validation (rule-based) | `[ ]` pending |
+| T11 | LLM Provider singleton | `[ ]` pending |
+| T12 | Agent 2 — SLM escalation path | `[ ]` pending |
+| T13 | Agent 3 — Content Validation | `[ ]` pending |
+| T14 | Agent 4 — Duplicate Control | `[ ]` pending |
+| T15 | Coordinator — LangGraph | `[ ]` pending |
+| T16 | FastAPI app + health route | `[ ]` pending |
+| T17 | Pipeline endpoints + SSE stream | `[ ]` pending |
 | T18 | GitHub Actions CI | `[-]` skipped for now |
-| T19 | Docker build + push | `[ ]` |
+| T19 | Docker build + push | `[ ]` pending |
 
-**1 / 19 tasks complete · 2 skipped for now (T04 · T18)**
+**5 / 19 tasks complete · 1 skipped (T18)**

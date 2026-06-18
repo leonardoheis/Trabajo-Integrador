@@ -62,7 +62,17 @@ Sources (inputs)
 ├── src/
 │   └── classiflow/                 Main Python package
 │       ├── settings.py             pydantic-settings config (DATABASE_URL, etc.)
+│       ├── settings.py             pydantic-settings config (DATABASE_URL, JWT_*, etc.)
 │       ├── shared/
+│       │   ├── auth/
+│       │   │   └── jwt.py          encode_token() / decode_token() / AuthError (PyJWT)
+│       │   ├── audit/
+│       │   │   └── service.py      AuditService — wraps IAuditRepository + loguru
+│       │   ├── domain/
+│       │   │   ├── job.py          AgentEvent, JobStatus
+│       │   │   └── user.py         User, AuthToken
+│       │   ├── events/
+│       │   │   └── broadcaster.py  EventBroadcaster — asyncio.Queue per job_id
 │       │   └── database/
 │       │       ├── base.py         Async engine + session factory
 │       │       ├── models.py       ORM models (6 tables)
@@ -86,8 +96,8 @@ Sources (inputs)
 | T01 | Package skeleton + dependencies | ✅ done |
 | T02 | Database models + Alembic migration | ✅ done |
 | T03 | Repository implementations | ✅ done |
-| T04 | JWT utilities | 🔲 pending |
-| T07 | Shared domain + AuditService + EventBroadcaster | 🔲 pending |
+| T04 | JWT utilities | ✅ done |
+| T07 | Shared domain + AuditService + EventBroadcaster | ✅ done |
 | T05 | Google OAuth + whitelist | 🔲 pending |
 | T08 | Ingesta domain models | 🔲 pending |
 | T06 | JWT auth middleware | 🔲 pending |
