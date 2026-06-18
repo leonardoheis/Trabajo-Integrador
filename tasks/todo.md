@@ -109,16 +109,16 @@ python -c "import sqlite3; c=sqlite3.connect('classiflow.db'); print(c.execute(\
 ---
 
 ### T03 · Repository implementations
-**Branch:** `feat/repositories` · **Deps:** T02 · **Status:** `[ ]`
+**Branch:** `feat/repositories` · **Deps:** T02 · **Status:** `[x]` · **PR:** [#6](https://github.com/lgj2911/Trabajo-Integrador/pull/6)
 
-- [ ] `IHashRepository`, `IAuditRepository`, `IUserRepository`, `IDocumentStepsRepository`, `IHumanDecisionRepository` as `Protocol` classes
-- [ ] `SqlHashRepository`, `SqlAuditRepository`, `SqlUserRepository`, `SqlDocumentStepsRepository`, `SqlHumanDecisionRepository` — SQLAlchemy async
-- [ ] `InMemoryHashRepository`, `InMemoryAuditRepository`, `InMemoryUserRepository`, `InMemoryDocumentStepsRepository`, `InMemoryHumanDecisionRepository` — tests only
-- [ ] `IDocumentStepsRepository`: `save_step(step)` and `steps_for_job(job_id) -> list[DocumentStep]`
-- [ ] `IHumanDecisionRepository`: `save(decision)` and `decisions_for_job(job_id) -> list[HumanDecision]`
-- [ ] mypy confirms each concrete class satisfies its protocol
-- [ ] Unit tests against in-memory SQLite (no mocks)
-- [ ] `uv run poe check` passes
+- [x] `IHashRepository`, `IAuditRepository`, `IUserRepository`, `IDocumentStepsRepository`, `IHumanDecisionRepository` as `Protocol` classes
+- [x] `SqlHashRepository`, `SqlAuditRepository`, `SqlUserRepository`, `SqlDocumentStepsRepository`, `SqlHumanDecisionRepository` — SQLAlchemy async
+- [x] `InMemoryHashRepository`, `InMemoryAuditRepository`, `InMemoryUserRepository`, `InMemoryDocumentStepsRepository`, `InMemoryHumanDecisionRepository` — tests only
+- [x] `IDocumentStepsRepository`: `save_step(step)` and `steps_for_job(job_id) -> list[DocumentStep]`
+- [x] `IHumanDecisionRepository`: `save(decision)` and `decisions_for_job(job_id) -> list[HumanDecision]`
+- [x] mypy confirms each concrete class satisfies its protocol
+- [x] Unit tests against in-memory SQLite (no mocks) — 25 new tests
+- [x] `uv run poe check` passes (111 tests, 97% coverage)
 
 ```bash
 # Verify
