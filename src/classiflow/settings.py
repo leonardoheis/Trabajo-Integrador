@@ -10,5 +10,8 @@ class _Settings(BaseSettings):
 
     DATABASE_URL: str = "sqlite+aiosqlite:///./classiflow.db"
 
+    JWT_SECRET_KEY: str = "dev-secret-change-in-prod"  # noqa: S105
+    JWT_EXPIRE_MINUTES: int = 60
+
 
 settings = _Settings()
