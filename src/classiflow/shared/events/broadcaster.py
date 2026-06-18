@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 class EventBroadcaster:
     def __init__(self) -> None:
         self._queues: dict[str, asyncio.Queue[AgentEvent | None]] = {}
+        self._closed: set[str] = set()
 
     def _get_or_create(self, job_id: str) -> asyncio.Queue[AgentEvent | None]:
         if job_id not in self._queues:
@@ -19,10 +20,14 @@ class EventBroadcaster:
         return self._queues[job_id]
 
     async def emit(self, event: AgentEvent) -> None:
+        if event.job_id in self._closed:
+            return
         queue = self._get_or_create(event.job_id)
         await queue.put(event)
 
     async def subscribe(self, job_id: str) -> AsyncGenerator[AgentEvent, None]:
+        if job_id in self._closed:
+            return
         queue = self._get_or_create(job_id)
         while True:
             event = await queue.get()
@@ -36,3 +41,4 @@ class EventBroadcaster:
         if job_id in self._queues:
             await self._queues[job_id].put(None)  # sentinel
             del self._queues[job_id]
+        self._closed.add(job_id)
