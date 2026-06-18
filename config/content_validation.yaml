@@ -1,0 +1,12 @@
+# Content validation thresholds and rules
+# Agent 3 (Content Validation) uses this config.
+min_text_length_chars: 50
+max_text_length_chars: 500000
+
+# Language detection
+allowed_languages:
+  - es   # Spanish
+  - en   # English (fallback)
+
+# SLM confidence threshold below which a human review is triggered
+slm_confidence_threshold: 0.75
