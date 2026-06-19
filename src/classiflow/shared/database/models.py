@@ -54,6 +54,8 @@ class Job(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
+    # onupdate fires only on ORM-level UPDATEs; Core session.execute(update(...))
+    # bypasses it. Always include updated_at=func.now() in explicit .values() calls.
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
     )
