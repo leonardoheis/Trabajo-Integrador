@@ -61,7 +61,6 @@ Sources (inputs)
 │   └── *.csv                       One CSV per document category (10 types)
 ├── src/
 │   └── classiflow/                 Main Python package
-│       ├── settings.py             pydantic-settings config (DATABASE_URL, etc.)
 │       ├── settings.py             pydantic-settings config (DATABASE_URL, JWT_*, etc.)
 │       ├── shared/
 │       │   ├── auth/
@@ -77,7 +76,10 @@ Sources (inputs)
 │       │       ├── base.py         Async engine + session factory
 │       │       ├── models.py       ORM models (6 tables)
 │       │       └── repositories/   Protocol interfaces + SQL and InMemory impls
-│       ├── ingesta/                Ingestion agents (in progress)
+│       ├── ingesta/
+│       │   └── domain/
+│       │       ├── results.py      FileReceptionResult, FormatValidationResult, etc.
+│       │       └── state.py        JobState TypedDict (LangGraph coordinator state)
 │       └── api/                    FastAPI application (in progress)
 ├── alembic/                        Database migrations
 │   └── versions/
@@ -98,8 +100,8 @@ Sources (inputs)
 | T03 | Repository implementations | ✅ done |
 | T04 | JWT utilities | ✅ done |
 | T07 | Shared domain + AuditService + EventBroadcaster | ✅ done |
+| T08 | Ingesta domain models | ✅ done |
 | T05 | Google OAuth + whitelist | 🔲 pending |
-| T08 | Ingesta domain models | 🔲 pending |
 | T06 | JWT auth middleware | 🔲 pending |
 | T09–T14 | Ingestion agents | 🔲 pending |
 | T15 | Coordinator — LangGraph | 🔲 pending |

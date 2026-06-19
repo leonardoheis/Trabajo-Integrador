@@ -203,13 +203,13 @@ uv run poe test tests/shared/
 ---
 
 ### T08 · Ingesta domain models
-**Branch:** `feat/ingesta-domain` · **Deps:** T07 · **Status:** `[ ]`
+**Branch:** `feat+ingesta-domain` · **Deps:** T07 · **Status:** `[x]` · **PR:** [#11](https://github.com/lgj2911/Trabajo-Integrador/pull/11)
 
-- [ ] `ingesta/domain/results.py`: `FileReceptionResult`, `FormatValidationResult`, `ContentValidationResult`, `DuplicateControlResult` — all `BaseModel`, no `@dataclass`
-- [ ] `ingesta/domain/state.py`: `JobState` TypedDict with all coordinator fields
-- [ ] No logic, no IO — pure typed data
-- [ ] mypy strict, no `Any`
-- [ ] `uv run poe check` passes
+- [x] `ingesta/domain/results.py`: `FileReceptionResult`, `FormatValidationResult`, `ContentValidationResult`, `DuplicateControlResult` — all `BaseModel`, no `@dataclass`
+- [x] `ingesta/domain/state.py`: `JobState` TypedDict with all coordinator fields
+- [x] No logic, no IO — pure typed data
+- [x] mypy strict, no `Any`
+- [x] `uv run poe check` passes
 
 ```bash
 # Verify
@@ -447,8 +447,8 @@ curl http://localhost:8000/health
 | T03 | Repository implementations | `[x]` done — PR [#6](https://github.com/lgj2911/Trabajo-Integrador/pull/6) |
 | T04 | JWT utilities | `[x]` done — PR [#7](https://github.com/lgj2911/Trabajo-Integrador/pull/7) |
 | T07 | Shared domain + AuditService + EventBroadcaster | `[x]` done — PR [#8](https://github.com/lgj2911/Trabajo-Integrador/pull/8) |
+| T08 | Ingesta domain models | `[x]` done — PR [#11](https://github.com/lgj2911/Trabajo-Integrador/pull/11) |
 | T05 | Google OAuth + whitelist | `[ ]` pending |
-| T08 | Ingesta domain models | `[ ]` pending |
 | T06 | JWT auth middleware | `[ ]` pending |
 | T09 | Agent 1 — File Reception | `[ ]` pending |
 | T10 | Agent 2 — Format Validation (rule-based) | `[ ]` pending |
@@ -462,4 +462,4 @@ curl http://localhost:8000/health
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
 
-**5 / 19 tasks complete · 1 skipped (T18)**
+**6 / 19 tasks complete · 1 skipped (T18)**

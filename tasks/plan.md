@@ -674,16 +674,16 @@ endpoint functions with `@inject`.
 
 ## Phase 5: Deterministic Agents (no LLM)
 
-### Task 8: Ingesta domain models
+### Task 8: Ingesta domain models ✅ done — PR [#11](https://github.com/lgj2911/Trabajo-Integrador/pull/11)
 
 **Description:** Define all result models in `ingesta/domain/results.py` and `JobState`
 in `ingesta/domain/state.py`. Pure typed data — no logic, no IO.
 
 **Acceptance criteria:**
-- [ ] `FileReceptionResult`, `FormatValidationResult`, `ContentValidationResult`,
+- [x] `FileReceptionResult`, `FormatValidationResult`, `ContentValidationResult`,
   `DuplicateControlResult` are Pydantic `BaseModel` classes (not dataclasses)
-- [ ] `JobState` is a `TypedDict` with all fields consumed by the LangGraph coordinator
-- [ ] mypy strict passes; no `Any` usage
+- [x] `JobState` is a `TypedDict` with all fields consumed by the LangGraph coordinator
+- [x] mypy strict passes; no `Any` usage
 
 **Dependencies:** Task 1
 
