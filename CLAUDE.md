@@ -138,6 +138,50 @@ Hooks enforced on every commit (see `.pre-commit-config.yaml`):
 - Line length: 100. Quote style: double. (Configured in `[tool.ruff]`.)
 - Type annotations required on all functions in `src/` (mypy strict).
 
+### Exception style
+
+Each service that raises custom exceptions gets its own `exceptions.py` alongside it.
+Define a plain base class and `@dataclass` subclasses for each distinct error case:
+
+```python
+from dataclasses import dataclass
+
+
+class ServiceError(Exception): ...  # base — callers can catch this broadly
+
+
+@dataclass
+class SpecificError(ServiceError):
+    field: str  # typed, inspectable by callers
+
+    def __post_init__(self) -> None:
+        super().__init__(str(self))
+
+    def __str__(self) -> str:
+        return f"{self.field} is required"
+```
+
+Rules:
+- `__post_init__` **must** call `super().__init__(str(self))` so `str(exc)` and logging work.
+- Raise the specific subclass, never the base class directly.
+- Use `try/except SpecificInfraError` (never bare `except` or `except Exception`).
+- For `raise SomeError("literal")` that triggers ruff EM101, add `# noqa: EM101` — the
+  spirit of the rule is already satisfied because the message is inside the exception class.
+- Full rationale: `.claude/learnings.md`
+
+### `__init__.py` content
+
+`__init__.py` files may only contain `__version__`, re-exports, and `__all__`.
+No executable statements, no function definitions, no side-effectful calls — ruff RUF067
+enforces this. `configure_container()` is called inside `create_app()`, never at import time.
+
+### `__init__` vs `BaseModel`
+
+- **Domain / value objects** (data that moves between layers) → `BaseModel`
+- **Services / repositories** (hold injected dependencies or mutable runtime state) → plain `__init__`
+
+Full rationale: `.claude/learnings.md`
+
 ## Git workflow
 
 **Commits, pushes, pull requests, and any other git operations that affect the remote are always initiated by the human with an explicit order.**

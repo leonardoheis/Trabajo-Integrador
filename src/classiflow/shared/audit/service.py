@@ -1,7 +1,9 @@
 from typing import Any
 
 from loguru import logger
+from sqlalchemy.exc import SQLAlchemyError
 
+from classiflow.shared.audit.exceptions import MissingFieldError, PersistenceError
 from classiflow.shared.database.repositories.audit import IAuditRepository, make_audit_record
 
 
@@ -18,8 +20,19 @@ class AuditService:
         duration_ms: int | None = None,
         detail: dict[str, Any] | None = None,
     ) -> None:
+        if not job_id:
+            raise MissingFieldError("job_id")  # noqa: EM101
+        if not agent:
+            raise MissingFieldError("agent")  # noqa: EM101
+        if not event:
+            raise MissingFieldError("event")  # noqa: EM101
+
         audit_record = make_audit_record(
             job_id, agent, event, duration_ms=duration_ms, detail=detail
         )
-        await self._repo.save(audit_record)
+        try:
+            await self._repo.save(audit_record)
+        except SQLAlchemyError as exc:
+            raise PersistenceError(job_id, agent, event) from exc
+
         logger.info("audit | job={} agent={} event={}", job_id, agent, event)
