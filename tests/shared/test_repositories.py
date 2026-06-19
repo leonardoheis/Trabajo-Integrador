@@ -21,6 +21,7 @@ from classiflow.shared.database.repositories.human_decision import (
     InMemoryHumanDecisionRepository,
     SqlHumanDecisionRepository,
 )
+from classiflow.shared.database.repositories.job import InMemoryJobRepository, SqlJobRepository
 from classiflow.shared.database.repositories.user import InMemoryUserRepository, SqlUserRepository
 
 pytestmark = pytest.mark.anyio
@@ -266,3 +267,74 @@ class TestInMemoryHumanDecisionRepository:
         repo = InMemoryHumanDecisionRepository()
         await repo.save(_decision())
         assert await repo.decisions_for_job("other") == []
+
+
+# ---------------------------------------------------------------------------
+# IJobRepository
+# ---------------------------------------------------------------------------
+
+
+def _job(job_id: str = _JOB) -> Job:
+    return Job(job_id=job_id, status="started", filename="doc.pdf")
+
+
+class TestSqlJobRepository:
+    async def test_create_and_find(self, session: AsyncSession) -> None:
+        repo = SqlJobRepository(session)
+        # The session fixture already seeds a Job with job_id=_JOB; use a different ID here.
+        j = _job("sql-job-002")
+        await repo.create(j)
+        found = await repo.find_by_job_id("sql-job-002")
+        assert found is not None
+        assert found.filename == "doc.pdf"
+
+    async def test_find_missing_returns_none(self, session: AsyncSession) -> None:
+        repo = SqlJobRepository(session)
+        assert await repo.find_by_job_id("nonexistent") is None
+
+    async def test_update_status(self, session: AsyncSession) -> None:
+        repo = SqlJobRepository(session)
+        j = _job("sql-job-003")
+        await repo.create(j)
+        await repo.update_status("sql-job-003", "done")
+        found = await repo.find_by_job_id("sql-job-003")
+        assert found is not None
+        assert found.status == "done"
+
+    async def test_list_all(self, session: AsyncSession) -> None:
+        repo = SqlJobRepository(session)
+        # session fixture already has one job (_JOB); create one more
+        await repo.create(_job("sql-job-004"))
+        rows = await repo.list_all()
+        assert len(rows) >= _ROWS_2
+
+
+class TestInMemoryJobRepository:
+    async def test_create_and_find(self) -> None:
+        repo = InMemoryJobRepository()
+        await repo.create(_job())
+        found = await repo.find_by_job_id(_JOB)
+        assert found is not None
+        assert found.status == "started"
+
+    async def test_find_missing_returns_none(self) -> None:
+        repo = InMemoryJobRepository()
+        assert await repo.find_by_job_id("ghost") is None
+
+    async def test_update_status(self) -> None:
+        repo = InMemoryJobRepository()
+        await repo.create(_job())
+        await repo.update_status(_JOB, "classified")
+        found = await repo.find_by_job_id(_JOB)
+        assert found is not None
+        assert found.status == "classified"
+
+    async def test_update_status_noop_for_missing(self) -> None:
+        repo = InMemoryJobRepository()
+        await repo.update_status("ghost", "done")  # must not raise
+
+    async def test_list_all(self) -> None:
+        repo = InMemoryJobRepository()
+        await repo.create(_job("a"))
+        await repo.create(_job("b"))
+        assert len(await repo.list_all()) == _ROWS_2

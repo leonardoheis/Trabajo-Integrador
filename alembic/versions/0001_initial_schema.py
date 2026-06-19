@@ -19,8 +19,8 @@ def upgrade() -> None:
         "allowed_users",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("email", sa.String(255), unique=True, nullable=False),
-        sa.Column("is_active", sa.Boolean, default=True, nullable=False),
-        sa.Column("is_blocked", sa.Boolean, default=False, nullable=False),
+        sa.Column("is_active", sa.Boolean, server_default=sa.true(), nullable=False),
+        sa.Column("is_blocked", sa.Boolean, server_default=sa.false(), nullable=False),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now(), nullable=False),
     )
     op.create_index("ix_allowed_users_email", "allowed_users", ["email"])
@@ -50,7 +50,7 @@ def upgrade() -> None:
         "jobs",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
         sa.Column("job_id", sa.String(36), unique=True, nullable=False),
-        sa.Column("status", sa.String(20), nullable=False, default="started"),
+        sa.Column("status", sa.String(20), nullable=False, server_default="started"),
         sa.Column("filename", sa.String(255), nullable=False),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now(), nullable=False),
         # onupdate is handled at the ORM layer; raw SQL UPDATEs must include updated_at=func.now() explicitly.

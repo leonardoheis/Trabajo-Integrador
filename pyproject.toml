@@ -344,6 +344,6 @@ nbtest = { cmd = "pytest --nbmake notebooks --ignore=notebooks/colab_downloader.
 test = "pytest tests"
 coverage = { shell = "pytest tests -v --override-ini=addopts= --log-level=CRITICAL --cov=. --cov-branch --cov-report=xml --cov-report=html --cov-report=term-missing:skip-covered --junitxml=tests/reports/pytest-report.xml" }
 check = ["lint", "typecheck", "nbtest", "coverage"]
-serve = "uvicorn semantic_ai_agent.api.app:app --reload --port 8000"
+serve = "uvicorn classiflow.api.app:app --reload --port 8000"
 precommit = "uv run pre-commit run --all-files --verbose"
 precommit-update = "uv run pre-commit run --hook-stage manual pre-commit-update"
