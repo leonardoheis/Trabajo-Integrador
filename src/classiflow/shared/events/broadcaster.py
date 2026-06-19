@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 class EventBroadcaster:
     def __init__(self) -> None:
         self._queues: dict[str, asyncio.Queue[AgentEvent | None]] = {}
+        # Retained after queue deletion so late emits/subscribes are rejected without
+        # accidentally recreating a queue for a job that has already finished.
         self._closed: set[str] = set()
 
     def _get_or_create(self, job_id: str) -> asyncio.Queue[AgentEvent | None]:

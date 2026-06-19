@@ -53,6 +53,7 @@ def upgrade() -> None:
         sa.Column("status", sa.String(20), nullable=False, default="started"),
         sa.Column("filename", sa.String(255), nullable=False),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now(), nullable=False),
+        # onupdate is handled at the ORM layer; raw SQL UPDATEs must include updated_at=func.now() explicitly.
         sa.Column("updated_at", sa.DateTime, server_default=sa.func.now(), nullable=False),
         sa.Column("failed_at_agent", sa.String(100), nullable=True),
         sa.Column("rejection_reason", sa.Text, nullable=True),
