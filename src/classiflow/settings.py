@@ -1,9 +1,4 @@
-import warnings
-
-from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-_DEV_SECRET = "dev-secret-change-in-prod"  # noqa: S105
 
 
 class _Settings(BaseSettings):
@@ -13,20 +8,9 @@ class _Settings(BaseSettings):
         extra="ignore",
     )
 
-    DATABASE_URL: str = "sqlite+aiosqlite:///./classiflow.db"
-
-    JWT_SECRET_KEY: str = _DEV_SECRET
-    JWT_EXPIRE_MINUTES: int = 60
-
-    @model_validator(mode="after")
-    def _warn_default_secret(self) -> "_Settings":
-        if self.JWT_SECRET_KEY == _DEV_SECRET:
-            warnings.warn(
-                "JWT_SECRET_KEY is set to the insecure development default. "
-                "Set JWT_SECRET_KEY in your .env file before deploying.",
-                stacklevel=2,
-            )
-        return self
+    DATABASE_URL: str
+    JWT_SECRET_KEY: str
+    JWT_EXPIRE_MINUTES: int
 
 
 settings = _Settings()

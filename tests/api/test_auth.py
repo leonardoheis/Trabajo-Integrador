@@ -6,6 +6,8 @@ import pytest
 from classiflow.settings import settings
 from classiflow.shared.auth.jwt import AuthError, decode_token, encode_token
 
+pytestmark = pytest.mark.usefixtures("_jwt_secret")
+
 
 def test_valid_token() -> None:
     email = "user@example.com"
