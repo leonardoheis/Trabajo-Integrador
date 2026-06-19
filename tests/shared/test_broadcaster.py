@@ -73,8 +73,7 @@ async def test_early_disconnect() -> None:
     # Close before consuming all events
     await broadcaster.close(job_id)
 
-    # The queue key should have been removed from _queues
-    assert job_id not in broadcaster._queues  # noqa: SLF001
+    assert broadcaster.is_closed(job_id)
 
 
 async def test_subscribe_after_close_exits_immediately() -> None:
@@ -91,7 +90,7 @@ async def test_subscribe_after_close_exits_immediately() -> None:
     await asyncio.wait_for(consume(), timeout=2.0)
 
     assert received == []
-    assert job_id not in broadcaster._queues  # noqa: SLF001
+    assert broadcaster.is_closed(job_id)
 
 
 async def test_emit_after_close_is_noop() -> None:
@@ -102,4 +101,4 @@ async def test_emit_after_close_is_noop() -> None:
     await broadcaster.emit(AgentEvent(job_id=job_id, agent="agent", status=JobStatus.STARTED))
 
     # emit must not recreate the queue after close
-    assert job_id not in broadcaster._queues  # noqa: SLF001
+    assert broadcaster.is_closed(job_id)

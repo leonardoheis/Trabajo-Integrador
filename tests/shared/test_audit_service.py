@@ -5,6 +5,10 @@ from classiflow.shared.database.repositories.audit import InMemoryAuditRepositor
 
 pytestmark = pytest.mark.anyio
 
+_RECORD_VALUES = 2
+_DURATION_MS = 50
+_DETAIL = {"confidence": 0.95}
+
 
 async def test_record_persists_to_repo() -> None:
     repo = InMemoryAuditRepository()
@@ -27,8 +31,8 @@ async def test_record_multiple_events() -> None:
     await service.record("job-2", "classification", "passed", detail={"confidence": 0.95})
 
     records = await repo.list_for_job("job-2")
-    assert len(records) == 2  # noqa: PLR2004
+    assert len(records) == _RECORD_VALUES
     assert records[0].event == "started"
-    assert records[0].duration_ms == 50  # noqa: PLR2004
+    assert records[0].duration_ms == _DURATION_MS
     assert records[1].event == "passed"
-    assert records[1].detail == {"confidence": 0.95}
+    assert records[1].detail == _DETAIL

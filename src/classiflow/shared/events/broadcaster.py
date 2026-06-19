@@ -39,6 +39,9 @@ class EventBroadcaster:
             if event.status == JobStatus.DONE:
                 break
 
+    def is_closed(self, job_id: str) -> bool:
+        return job_id in self._closed
+
     async def close(self, job_id: str) -> None:
         if job_id in self._queues:
             await self._queues[job_id].put(None)  # sentinel

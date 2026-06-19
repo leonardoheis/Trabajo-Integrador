@@ -26,6 +26,10 @@ def test_expired_token() -> None:
 def test_tampered_signature() -> None:
     email = "user@example.com"
     token = encode_token(email)
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    header, payload, sig = token.split(".")
+    # Change the first character of the signature — it encodes the most significant
+    # bits of the first digest byte and is always effective, unlike the last character
+    # which may only affect base64 padding bits.
+    tampered_sig = ("B" if sig[0] != "B" else "C") + sig[1:]
     with pytest.raises(AuthError):
-        decode_token(tampered)
+        decode_token(f"{header}.{payload}.{tampered_sig}")

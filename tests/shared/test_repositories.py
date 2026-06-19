@@ -1,17 +1,12 @@
 """Repository round-trip tests — all Sql* variants run against in-memory SQLite."""
 
-from __future__ import annotations
+from collections.abc import AsyncGenerator
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from classiflow.shared.database.base import Base
-from classiflow.shared.database.models import (
-    AllowedUser,
-    DocumentStep,
-    HumanDecision,
-    Job,
-)
+from classiflow.shared.database.models import AllowedUser, DocumentStep, HumanDecision, Job
 from classiflow.shared.database.repositories.audit import (
     InMemoryAuditRepository,
     SqlAuditRepository,
@@ -21,25 +16,20 @@ from classiflow.shared.database.repositories.document_steps import (
     InMemoryDocumentStepsRepository,
     SqlDocumentStepsRepository,
 )
-from classiflow.shared.database.repositories.hash import (
-    InMemoryHashRepository,
-    SqlHashRepository,
-)
+from classiflow.shared.database.repositories.hash import InMemoryHashRepository, SqlHashRepository
 from classiflow.shared.database.repositories.human_decision import (
     InMemoryHumanDecisionRepository,
     SqlHumanDecisionRepository,
 )
-from classiflow.shared.database.repositories.user import (
-    InMemoryUserRepository,
-    SqlUserRepository,
-)
+from classiflow.shared.database.repositories.user import InMemoryUserRepository, SqlUserRepository
 
 pytestmark = pytest.mark.anyio
 
 _SHA = "a" * 64
 _JOB = "job-001"
 _EMAIL = "test@example.com"
-
+_ROWS_1 = 1
+_ROWS_2 = 2
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -47,7 +37,7 @@ _EMAIL = "test@example.com"
 
 
 @pytest.fixture
-async def session() -> AsyncSession:  # type: ignore[misc]
+async def session() -> AsyncGenerator[AsyncSession, None]:
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -100,7 +90,7 @@ class TestSqlAuditRepository:
         rec = make_audit_record(_JOB, "agent1", "started", duration_ms=10)
         await repo.save(rec)
         rows = await repo.list_for_job(_JOB)
-        assert len(rows) == 1
+        assert len(rows) == _ROWS_1
         assert rows[0].agent == "agent1"
 
     async def test_list_filters_by_job(self, session: AsyncSession) -> None:
@@ -108,7 +98,7 @@ class TestSqlAuditRepository:
         await repo.save(make_audit_record(_JOB, "agent1", "started"))
         await repo.save(make_audit_record("other-job", "agent2", "started"))
         rows = await repo.list_for_job(_JOB)
-        assert len(rows) == 1
+        assert len(rows) == _ROWS_1
 
 
 class TestInMemoryAuditRepository:
@@ -249,7 +239,7 @@ class TestSqlHumanDecisionRepository:
         repo = SqlHumanDecisionRepository(session)
         await repo.save(_decision("accept"))
         rows = await repo.decisions_for_job(_JOB)
-        assert len(rows) == 1
+        assert len(rows) == _ROWS_1
         assert rows[0].decision == "accept"
 
     async def test_multiple_decisions_ordered(self, session: AsyncSession) -> None:
@@ -257,7 +247,7 @@ class TestSqlHumanDecisionRepository:
         await repo.save(_decision("reject"))
         await repo.save(_decision("escalate"))
         rows = await repo.decisions_for_job(_JOB)
-        assert len(rows) == 2  # noqa: PLR2004
+        assert len(rows) == _ROWS_2
 
     async def test_filters_by_job(self, session: AsyncSession) -> None:
         repo = SqlHumanDecisionRepository(session)
