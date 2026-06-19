@@ -3,7 +3,7 @@ from typing import Any
 
 import jwt
 
-from classiflow.settings import settings
+from classiflow.settings import Settings
 
 
 class AuthError(Exception):
@@ -15,14 +15,14 @@ def encode_token(email: str) -> str:
     payload: dict[str, Any] = {
         "sub": email,
         "iat": now,
-        "exp": now + timedelta(minutes=settings.JWT_EXPIRE_MINUTES),
+        "exp": now + timedelta(minutes=Settings.JWT_EXPIRE_MINUTES),
     }
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
+    return jwt.encode(payload, Settings.JWT_SECRET_KEY, algorithm="HS256")
 
 
 def decode_token(token: str) -> dict[str, Any]:
     try:
-        return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=["HS256"])
+        return jwt.decode(token, Settings.JWT_SECRET_KEY, algorithms=["HS256"])
     except jwt.ExpiredSignatureError as exc:
         msg = "Token has expired"
         raise AuthError(msg) from exc

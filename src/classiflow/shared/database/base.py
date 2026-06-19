@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from classiflow.settings import settings
+from classiflow.settings import Settings
 
 
 class Base(DeclarativeBase):
@@ -18,7 +18,7 @@ class Base(DeclarativeBase):
 
 @lru_cache(maxsize=1)
 def _get_engine() -> AsyncEngine:
-    return create_async_engine(settings.DATABASE_URL, echo=False)
+    return create_async_engine(Settings.DATABASE_URL, echo=False)
 
 
 @lru_cache(maxsize=1)

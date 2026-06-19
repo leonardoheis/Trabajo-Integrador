@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import pytest
 
-from classiflow.settings import settings
+from classiflow.settings import Settings
 from classiflow.shared.auth.jwt import AuthError, decode_token, encode_token
 
 pytestmark = pytest.mark.usefixtures("_jwt_secret")
@@ -20,7 +20,7 @@ def test_expired_token() -> None:
     email = "user@example.com"
     past = datetime.now(tz=timezone.utc) - timedelta(minutes=1)
     payload: dict[str, object] = {"sub": email, "exp": past}
-    token: str = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
+    token: str = jwt.encode(payload, Settings.JWT_SECRET_KEY, algorithm="HS256")
     with pytest.raises(AuthError):
         decode_token(token)
 

@@ -16,4 +16,4 @@ class _Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int
 
 
-settings = _Settings()
+Settings = _Settings()
