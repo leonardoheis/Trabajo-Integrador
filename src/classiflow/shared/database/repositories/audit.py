@@ -1,5 +1,3 @@
-from typing import Protocol
-
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,11 +7,6 @@ from classiflow.shared.database.models import AuditRecord
 
 class AuditDetail(BaseModel):
     model_config = ConfigDict(extra="allow")
-
-
-class IAuditRepository(Protocol):
-    async def save(self, record: AuditRecord) -> None: ...
-    async def list_for_job(self, job_id: str) -> list[AuditRecord]: ...
 
 
 class SqlAuditRepository:

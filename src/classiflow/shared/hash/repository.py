@@ -1,0 +1,6 @@
+from typing import Protocol
+
+
+class IHashRepository(Protocol):
+    async def exists(self, sha256: str) -> bool: ...
+    async def save(self, sha256: str, job_id: str) -> None: ...

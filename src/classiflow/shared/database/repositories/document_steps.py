@@ -1,18 +1,7 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Protocol
-
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.shared.database.models import DocumentStep
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-
-class IDocumentStepsRepository(Protocol):
-    async def save_step(self, step: DocumentStep) -> None: ...
-    async def steps_for_job(self, job_id: str) -> list[DocumentStep]: ...
 
 
 class SqlDocumentStepsRepository:

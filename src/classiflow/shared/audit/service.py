@@ -2,11 +2,8 @@ from loguru import logger
 from sqlalchemy.exc import SQLAlchemyError
 
 from classiflow.shared.audit.exceptions import MissingFieldError, PersistenceError
-from classiflow.shared.database.repositories.audit import (
-    AuditDetail,
-    IAuditRepository,
-    make_audit_record,
-)
+from classiflow.shared.audit.repository import IAuditRepository
+from classiflow.shared.database.repositories.audit import AuditDetail, make_audit_record
 
 
 class AuditService:

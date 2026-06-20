@@ -1,18 +1,7 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Protocol
-
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.shared.database.models import HashRecord
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-
-class IHashRepository(Protocol):
-    async def exists(self, sha256: str) -> bool: ...
-    async def save(self, sha256: str, job_id: str) -> None: ...
 
 
 class SqlHashRepository:
