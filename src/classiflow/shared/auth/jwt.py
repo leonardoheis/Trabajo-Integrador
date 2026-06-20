@@ -1,18 +1,21 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 import jwt
+from pydantic import BaseModel
 
 from classiflow.settings import Settings
+from classiflow.shared.auth.exceptions import ExpiredTokenError, InvalidTokenError
 
 
-class AuthError(Exception):
-    pass
+class DecodedPayload(BaseModel):
+    sub: str
+    iat: int
+    exp: int
 
 
 def encode_token(email: str) -> str:
     now = datetime.now(tz=timezone.utc)
-    payload: dict[str, Any] = {
+    payload = {
         "sub": email,
         "iat": now,
         "exp": now + timedelta(minutes=Settings.JWT_EXPIRE_MINUTES),
@@ -20,12 +23,11 @@ def encode_token(email: str) -> str:
     return jwt.encode(payload, Settings.JWT_SECRET_KEY, algorithm="HS256")
 
 
-def decode_token(token: str) -> dict[str, Any]:
+def decode_token(token: str) -> DecodedPayload:
     try:
-        return jwt.decode(token, Settings.JWT_SECRET_KEY, algorithms=["HS256"])
+        data = jwt.decode(token, Settings.JWT_SECRET_KEY, algorithms=["HS256"])
+        return DecodedPayload.model_validate(data)
     except jwt.ExpiredSignatureError as exc:
-        msg = "Token has expired"
-        raise AuthError(msg) from exc
+        raise ExpiredTokenError from exc
     except jwt.InvalidTokenError as exc:
-        msg = "Invalid token"
-        raise AuthError(msg) from exc
+        raise InvalidTokenError from exc

@@ -4,7 +4,7 @@ import jwt
 import pytest
 
 from classiflow.settings import Settings
-from classiflow.shared.auth.jwt import AuthError, decode_token, encode_token
+from classiflow.shared.auth import AuthError, decode_token, encode_token
 
 pytestmark = pytest.mark.usefixtures("_jwt_secret")
 
@@ -13,7 +13,7 @@ def test_valid_token() -> None:
     email = "user@example.com"
     token = encode_token(email)
     payload = decode_token(token)
-    assert payload["sub"] == email
+    assert payload.sub == email
 
 
 def test_expired_token() -> None:
