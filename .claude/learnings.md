@@ -144,6 +144,77 @@ from classiflow.shared.auth.jwt import decode_token          ✗
 
 ---
 
+## Avoid `from __future__ import annotations`
+
+**Context:** `shared/database/models.py` used `from __future__ import annotations` solely to
+allow forward references to `DocumentStep` and `HumanDecision` inside the `Job` class, which
+is defined earlier in the same file.
+
+**Decision:** Do not use `from __future__ import annotations` unless there is a true circular
+cross-file import that cannot be resolved any other way. Use explicit string quotes on the
+specific annotations that need them instead.
+
+```python
+# WRONG — silently makes every annotation lazy
+from __future__ import annotations
+
+steps: Mapped[list[DocumentStep]] = relationship(...)
+
+# RIGHT — only the forward references are quoted
+steps: Mapped["list[DocumentStep]"] = relationship(...)
+decisions: Mapped["list[HumanDecision]"] = relationship(...)
+```
+
+**Why:**
+- `from __future__ import annotations` affects every annotation in the file and can interact
+  unexpectedly with runtime consumers (SQLAlchemy column resolution, Pydantic `model_rebuild`,
+  `get_type_hints`).
+- Explicit quotes are surgical — only the problematic annotation pays the cost.
+- When removing the import, check for now-unused `# noqa: TC003` comments on imports.
+
+**For `TYPE_CHECKING` guards:** prefer a real runtime import over a guarded import + string
+quote. If the import is genuinely heavy or circular, keep the guard and quote the annotation;
+do not use `from __future__ import annotations` as a shortcut.
+
+---
+
+## Composed types → named Pydantic models
+
+**Context:** `make_audit_record` had `detail: dict[str, object] | None` as a parameter type.
+`AuditService.record` had `detail: dict[str, Any] | None`.
+
+**Decision:** Replace any inline composed type used as a function parameter or return type
+with a named `BaseModel` subclass. For open-ended / caller-defined payloads use
+`model_config = ConfigDict(extra="allow")`.
+
+```python
+# WRONG
+def make_audit_record(..., detail: dict[str, object] | None) -> AuditRecord: ...
+
+# RIGHT
+class AuditDetail(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+def make_audit_record(..., detail: AuditDetail | None) -> AuditRecord:
+    return AuditRecord(
+        ...
+        detail=detail.model_dump() if detail else None,
+    )
+```
+
+**Why:**
+- Named models are self-documenting and appear in IDE completions and error messages.
+- `extra="allow"` gives a typed container without locking down the shape prematurely.
+- Serialize back to `dict` only at the infrastructure boundary (SQLAlchemy JSON column,
+  HTTP response serializer) — never carry raw dicts between service layers.
+
+**Propagation rule:** when `make_audit_record` changes its signature, update every caller
+(`AuditService.record`) and every test that constructs the detail inline (`{"key": value}`
+→ `AuditDetail(key=value)`). Test assertions against the stored record compare against
+`.model_dump()` since the column stores the plain dict.
+
+---
+
 ## DI container wiring — correct package name and startup timing
 
 **Context:** `injections/__init__.py` contained `container.wire(packages=["app"])`,

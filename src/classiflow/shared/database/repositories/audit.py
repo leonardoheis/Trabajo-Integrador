@@ -1,13 +1,14 @@
-from __future__ import annotations
+from typing import Protocol
 
-from typing import TYPE_CHECKING, Any, Protocol
-
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.shared.database.models import AuditRecord
 
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
+
+class AuditDetail(BaseModel):
+    model_config = ConfigDict(extra="allow")
 
 
 class IAuditRepository(Protocol):
@@ -46,12 +47,12 @@ def make_audit_record(
     agent: str,
     event: str,
     duration_ms: int | None = None,
-    detail: dict[str, Any] | None = None,
+    detail: AuditDetail | None = None,
 ) -> AuditRecord:
     return AuditRecord(
         job_id=job_id,
         agent=agent,
         event=event,
         duration_ms=duration_ms,
-        detail=detail,
+        detail=detail.model_dump() if detail else None,
     )

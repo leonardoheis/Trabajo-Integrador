@@ -1,7 +1,4 @@
-from __future__ import annotations
-
-from datetime import datetime  # noqa: TC003 — SQLAlchemy Mapped[] needs runtime import
-from typing import Any
+from datetime import datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -30,7 +27,7 @@ class AuditRecord(Base):
     event: Mapped[str] = mapped_column(String(50), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    detail: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    detail: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
 
 class HashRecord(Base):
@@ -63,10 +60,10 @@ class Job(Base):
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_action_needed: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
-    steps: Mapped[list[DocumentStep]] = relationship(
+    steps: Mapped["list[DocumentStep]"] = relationship(
         "DocumentStep", back_populates="job", cascade="all, delete-orphan"
     )
-    decisions: Mapped[list[HumanDecision]] = relationship(
+    decisions: Mapped["list[HumanDecision]"] = relationship(
         "HumanDecision", back_populates="job", cascade="all, delete-orphan"
     )
 
@@ -84,7 +81,7 @@ class DocumentStep(Base):
     passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    detail: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    detail: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
     job: Mapped[Job] = relationship("Job", back_populates="steps")
