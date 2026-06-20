@@ -104,6 +104,46 @@ def configure_container() -> Container: ...
 
 ---
 
+## Import style — re-exports via `__init__.py`
+
+**Context:** Deciding between importing from specific submodules (full path) or from the
+package `__init__.py` (short path).
+
+**Decision:** Option B — each package exposes its public surface via re-exports in
+`__init__.py` with an explicit sorted `__all__`. Callers always import from the package,
+never from the internal submodule.
+
+```python
+# shared/auth/__init__.py
+from classiflow.shared.auth.exceptions import AuthError, ExpiredTokenError, InvalidTokenError
+from classiflow.shared.auth.jwt import DecodedPayload, decode_token, encode_token
+
+__all__ = [
+    "AuthError",
+    "DecodedPayload",
+    "ExpiredTokenError",
+    "InvalidTokenError",
+    "decode_token",
+    "encode_token",
+]
+
+# caller
+from classiflow.shared.auth import AuthError, decode_token  ✓
+from classiflow.shared.auth.jwt import decode_token          ✗
+```
+
+**Why:**
+- Stable import paths — if an internal file is renamed or split, only `__init__.py` changes;
+  all callers remain untouched.
+- `__all__` makes the public surface explicit and enforced by linters.
+- ruff checks that `__all__` is sorted (RUF022) — keep it in isort order (uppercase before lowercase).
+
+**Rules:**
+- Direct submodule imports are only acceptable *inside* the same package.
+- `__init__.py` content is still restricted to re-exports and `__all__` — no logic, no side effects (RUF067).
+
+---
+
 ## DI container wiring — correct package name and startup timing
 
 **Context:** `injections/__init__.py` contained `container.wire(packages=["app"])`,
