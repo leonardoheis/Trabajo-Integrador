@@ -185,7 +185,18 @@ Full rationale: `.claude/learnings.md`
 ## Git workflow
 
 **Commits, pushes, pull requests, and any other git operations that affect the remote are always initiated by the human with an explicit order.**
-Claude prepares and verifies changes but **never** runs `git commit`, `git push`, `git pull`, or `gh pr create` unless the user explicitly says so in that message. Saying "execute task X" or "generate a PR" is not sufficient — the user must say "commit", "push", or "open the PR" directly.
+Claude prepares and verifies changes but **never** runs `git commit`, `git push`, `git pull`, or `gh pr create` unless the user explicitly says so in that message.
+
+### PR authorization protocol
+
+Before opening a PR, Claude must:
+1. Implement the changes in a worktree branch.
+2. Verify `uv run poe lint`, `uv run poe typecheck`, and all relevant tests pass.
+3. Present a **change summary**: each file (new/modified), what changed, and test results.
+4. Ask: *"Do you authorize the PR creation?"*
+5. Wait for explicit authorization (e.g. "authorize", "yes", "go ahead") before running any `git commit`, `git push`, or `gh pr create` command.
+
+Saying "execute task X" or "implement and make a PR" is **not** authorization — the user must explicitly approve after reviewing the summary.
 
 ## Downloader link resolution strategies
 
