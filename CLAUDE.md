@@ -198,6 +198,8 @@ Before opening a PR, Claude must:
 
 Saying "execute task X" or "implement and make a PR" is **not** authorization — the user must explicitly approve after reviewing the summary.
 
+**Base branch:** All task PRs target `feat/ingesta-pipeline` (the sprint integration branch), never `main`.
+
 ## Downloader link resolution strategies
 
 | Type | How it works |
