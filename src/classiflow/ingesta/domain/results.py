@@ -1,6 +1,6 @@
 from enum import Enum
 
-from pydantic import BaseModel
+from .base import BaseEntity
 
 
 class FormatDecision(str, Enum):
@@ -9,7 +9,7 @@ class FormatDecision(str, Enum):
     MANUAL_REVIEW = "manual_review"
 
 
-class FileReceptionResult(BaseModel):
+class FileReceptionResult(BaseEntity):
     passed: bool
     sha256: str = ""
     detected_mime: str = ""
@@ -17,14 +17,14 @@ class FileReceptionResult(BaseModel):
     rejection_reason: str = ""
 
 
-class FormatValidationResult(BaseModel):
+class FormatValidationResult(BaseEntity):
     passed: bool
     decision: FormatDecision
     used_slm: bool = False
     rejection_reason: str = ""
 
 
-class ContentValidationResult(BaseModel):
+class ContentValidationResult(BaseEntity):
     passed: bool
     detected_language: str = ""
     char_count: int = 0
@@ -32,7 +32,7 @@ class ContentValidationResult(BaseModel):
     rejection_reason: str = ""
 
 
-class DuplicateControlResult(BaseModel):
+class DuplicateControlResult(BaseEntity):
     passed: bool
     is_duplicate: bool = False
     duplicate_type: str = ""

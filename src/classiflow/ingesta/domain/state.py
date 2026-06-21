@@ -1,6 +1,5 @@
-from typing import TypedDict
-
-from classiflow.ingesta.domain.results import (
+from .base import BaseEntity
+from .results import (
     ContentValidationResult,
     DuplicateControlResult,
     FileReceptionResult,
@@ -8,13 +7,13 @@ from classiflow.ingesta.domain.results import (
 )
 
 
-class JobState(TypedDict, total=False):
-    job_id: str
-    filename: str
-    file_bytes: bytes
-    reception: FileReceptionResult
-    format_validation: FormatValidationResult
-    content_validation: ContentValidationResult
-    duplicate_control: DuplicateControlResult
-    final_status: str
-    rejection_reason: str
+class JobState(BaseEntity):
+    job_id: str | None = None
+    filename: str | None = None
+    file_bytes: bytes | None = None
+    reception: FileReceptionResult | None = None
+    format_validation: FormatValidationResult | None = None
+    content_validation: ContentValidationResult | None = None
+    duplicate_control: DuplicateControlResult | None = None
+    final_status: str | None = None
+    rejection_reason: str | None = None

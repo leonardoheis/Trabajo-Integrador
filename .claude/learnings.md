@@ -215,6 +215,38 @@ def make_audit_record(..., detail: AuditDetail | None) -> AuditRecord:
 
 ---
 
+## Domain models inherit from `BaseEntity`, never plain `BaseModel`
+
+**Context:** `JobState` in `ingesta/domain/state.py` was written with `BaseModel` directly
+instead of `BaseEntity`.
+
+**Decision:** Every domain model inside `classiflow/ingesta/domain/` (and any future agent
+domain package) must inherit from `BaseEntity` defined in that package's `domain/base.py`.
+Never use `pydantic.BaseModel` directly for domain objects.
+
+```python
+# WRONG
+from pydantic import BaseModel
+
+class JobState(BaseModel): ...
+
+# RIGHT
+from classiflow.ingesta.domain.base import BaseEntity
+
+class JobState(BaseEntity): ...
+```
+
+**Why:**
+- `BaseEntity` centralises shared config (`alias_generator`, `populate_by_name`, and any
+  future shared validators or serialisers) so all domain models stay consistent.
+- Changing a config setting in `base.py` propagates to every model automatically.
+- Plain `BaseModel` bypasses that shared config and creates silent inconsistencies.
+
+**Rule:** `base.py` is the single place to touch when domain-wide Pydantic config changes.
+All domain result models, state models, and value objects import from it.
+
+---
+
 ## DI container wiring — correct package name and startup timing
 
 **Context:** `injections/__init__.py` contained `container.wire(packages=["app"])`,
