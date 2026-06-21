@@ -32,7 +32,7 @@ dependencies = [
     "langchain-core>=0.3",
     "langgraph>=0.2",
     "loguru>=0.7",
-    "python-magic>=0.4",
+    "filetype>=1.2",
     "lingua-language-detector>=2.0",
     "chardet>=5.0",
     "sentence-transformers>=3.0",
@@ -144,7 +144,7 @@ warn_unused_configs = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["google.*"]
+module = ["google.*", "filetype"]
 ignore_missing_imports = true
 
 #########################
