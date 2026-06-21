@@ -220,15 +220,16 @@ python -c "from classiflow.ingesta.domain.results import FileReceptionResult; Fi
 ---
 
 ### T09 · Agent 1 — File Reception
-**Branch:** `feat/agent1` · **Deps:** T07 · T08 · **Status:** `[ ]`
+**Branch:** `feat/agent1` · **Deps:** T07 · T08 · **Status:** `[x]` · **PR:** [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13)
 
-- [ ] `FileReceptionResult(passed=False)` for: missing file, empty file, size > limit
-- [ ] `FileReceptionResult(passed=True)` with correct `sha256` + `detected_mime` for valid PDF
-- [ ] Emits `agent_started` then `agent_passed`/`agent_failed` via broadcaster
-- [ ] Calls `AuditService.record()` with `duration_ms` + `detail` on every run
-- [ ] Constructor: `__init__(self, audit: AuditService, broadcaster: EventBroadcaster)`
-- [ ] Tests use `InMemory*` — no DB, no filesystem side effects
-- [ ] `uv run poe check` passes
+- [x] `FileReceptionResult(passed=False)` for: missing file, empty file, size > limit
+- [x] `FileReceptionResult(passed=True)` with correct `sha256` + `detected_mime` for valid PDF
+- [x] Emits `agent_started` then `agent_passed`/`agent_failed` via broadcaster
+- [x] Calls `AuditService.record()` with `duration_ms` + `detail` on every run
+- [x] Constructor: `__init__(self, audit, broadcaster, mime_detector, max_file_size_bytes)` — `mime_detector` injected so tests run without libmagic; production uses `ingesta/mime.py:detect_mime`
+- [x] Tests use `InMemory*` — no DB, no filesystem side effects
+- [x] `uv run poe check` passes (138 tests)
+- [x] Fixed: removed `configure_container()` from `classiflow/__init__.py` (belongs in `create_app()` per learnings)
 
 ```bash
 # Verify
@@ -450,7 +451,7 @@ curl http://localhost:8000/health
 | T08 | Ingesta domain models | `[x]` done — PR [#11](https://github.com/lgj2911/Trabajo-Integrador/pull/11) |
 | T05 | Google OAuth + whitelist | `[ ]` pending |
 | T06 | JWT auth middleware | `[ ]` pending |
-| T09 | Agent 1 — File Reception | `[ ]` pending |
+| T09 | Agent 1 — File Reception | `[x]` done — PR [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13) |
 | T10 | Agent 2 — Format Validation (rule-based) | `[ ]` pending |
 | T11 | LLM Provider singleton | `[ ]` pending |
 | T12 | Agent 2 — SLM escalation path | `[ ]` pending |
@@ -462,4 +463,4 @@ curl http://localhost:8000/health
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
 
-**6 / 19 tasks complete · 1 skipped (T18)**
+**7 / 19 tasks complete · 1 skipped (T18)**

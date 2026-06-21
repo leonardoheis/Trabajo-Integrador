@@ -262,4 +262,10 @@ a copy-paste artifact from the T01 skeleton template. `"app"` does not exist in 
 **Why:** Calling `container.wire()` with a wrong package name raises `ModuleNotFoundError`
 at import time and breaks every test that touches any `classiflow.*` module.
 
+**T09 follow-up:** `configure_container()` was accidentally left in `classiflow/__init__.py`
+from a prior PR. This caused `container.wire(packages=["classiflow"])` to run at import time,
+importing every module in the package — including system-library-backed modules like
+`ingesta/mime.py` (which does `import magic` → needs `libmagic` installed). Removing the
+call from `__init__.py` fixed the issue. The call belongs exclusively in `create_app()` (T16).
+
 ---
