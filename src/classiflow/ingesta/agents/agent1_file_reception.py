@@ -14,24 +14,18 @@ _MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB — matches config/allowed_form
 MimeDetector = Callable[[bytes], str]
 
 
-def _libmagic_detector(data: bytes) -> str:
-    import magic  # noqa: PLC0415 — system dep (libmagic), lazy to avoid startup failure
-
-    return magic.from_buffer(data, mime=True)
-
-
 class FileReceptionAgent:
     def __init__(
         self,
         audit: AuditService,
         broadcaster: EventBroadcaster,
+        mime_detector: MimeDetector,
         max_file_size_bytes: int = _MAX_FILE_SIZE_BYTES,
-        mime_detector: MimeDetector = _libmagic_detector,
     ) -> None:
         self._audit = audit
         self._broadcaster = broadcaster
-        self._max_size = max_file_size_bytes
         self._mime_detector = mime_detector
+        self._max_size = max_file_size_bytes
 
     async def run(
         self,
