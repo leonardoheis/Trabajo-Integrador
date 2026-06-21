@@ -1,20 +1,7 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Protocol
-
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.shared.database.models import Job
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-
-class IJobRepository(Protocol):
-    async def create(self, job: Job) -> None: ...
-    async def find_by_job_id(self, job_id: str) -> Job | None: ...
-    async def update_status(self, job_id: str, status: str) -> None: ...
-    async def list_all(self) -> list[Job]: ...
 
 
 class SqlJobRepository:

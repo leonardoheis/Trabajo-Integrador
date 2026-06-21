@@ -1,18 +1,7 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Protocol
-
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.shared.database.models import HumanDecision
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-
-class IHumanDecisionRepository(Protocol):
-    async def save(self, decision: HumanDecision) -> None: ...
-    async def decisions_for_job(self, job_id: str) -> list[HumanDecision]: ...
 
 
 class SqlHumanDecisionRepository:

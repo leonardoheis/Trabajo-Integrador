@@ -1,18 +1,7 @@
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Protocol
-
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.shared.database.models import AllowedUser
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-
-class IUserRepository(Protocol):
-    async def find_by_email(self, email: str) -> AllowedUser | None: ...
-    async def is_allowed(self, email: str) -> bool: ...
 
 
 class SqlUserRepository:
