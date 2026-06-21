@@ -187,3 +187,4 @@ desktop.ini
 # ---- Un-ignore models directory and all its contents ----
 !models/
 !models/**
+src/classiflow/playground/samples/
