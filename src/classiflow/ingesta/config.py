@@ -10,6 +10,9 @@ _CONFIG_PATH = Path(__file__).parents[3] / "config" / "allowed_formats.yaml"
 class AllowedFormatsConfig(BaseModel):
     allowed_mime_types: list[str]
     allowed_extensions: list[str]
+    disabled_mime_types: list[str] = []
+    disabled_extensions: list[str] = []
+    mime_to_extensions: dict[str, list[str]] = {}
     max_file_size_mb: int
 
     @property
