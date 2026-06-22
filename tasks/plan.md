@@ -718,30 +718,32 @@ MIME from `python-magic`. Emits SSE events and persists an audit record.
 
 **Estimated scope:** S
 
-### Task 10: Agent 2 — Format Validation (rule-based path)
+### Task 10: Agent 2 — Format Validation (rule-based path) ✅ done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15)
 
 **Description:** Implement the rule-based path of `agent2_format_validation.py`. The SLM
 escalation stub raises `NotImplementedError` until Task 12.
 
 **Acceptance criteria:**
-- [ ] `_rule_based_check()` returns `ACCEPT` for `.pdf` with magic bytes `%PDF`
-- [ ] `_rule_based_check()` returns `REJECT` for `.html` (disabled in config)
-- [ ] `_rule_based_check()` returns `MANUAL_REVIEW` for unknown MIME
-- [ ] `_rule_based_check()` returns `None` (gray zone) for MIME/extension mismatch
-- [ ] Emits events + records audit on every execution
-- [ ] Unit tests cover all four branches
+- [x] `_rule_based_check()` returns `ACCEPT` for `.pdf` with magic bytes `%PDF`
+- [x] `_rule_based_check()` returns `REJECT` for `.html` (disabled in config)
+- [x] `_rule_based_check()` returns `MANUAL_REVIEW` for unknown MIME
+- [x] `_rule_based_check()` returns `None` (gray zone) for MIME/extension mismatch
+- [x] Emits events + records audit on every execution
+- [x] Unit tests cover all four branches (13 tests, 98% coverage)
 
 **Dependencies:** Tasks 7, 8, 9
 
 **Files touched:**
+- `config/allowed_formats.yaml` (added `disabled_mime_types`, `disabled_extensions`, `mime_to_extensions`)
+- `src/classiflow/ingesta/config.py` (extended `AllowedFormatsConfig`)
 - `src/classiflow/ingesta/agents/agent2_format_validation.py`
 - `tests/ingesta/test_agent2.py`
 
 **Estimated scope:** M
 
-### Checkpoint E
-- [ ] `uv run poe check` passes
-- [ ] Agents 1 and 2 rule-based tests pass
+### Checkpoint E ✅ done
+- [x] `uv run poe check` passes (151 tests)
+- [x] Agents 1 and 2 rule-based tests pass
 
 ---
 
