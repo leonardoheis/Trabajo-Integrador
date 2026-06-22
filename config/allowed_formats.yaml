@@ -1,5 +1,3 @@
-# Allowed MIME types and extensions for ingestion
-# Agent 1 (File Reception) uses this list.
 allowed_mime_types:
   - application/pdf
   - application/vnd.openxmlformats-officedocument.wordprocessingml.document
@@ -14,5 +12,28 @@ allowed_extensions:
   - .jpeg
   - .png
   - .tiff
+
+# Explicitly rejected — never accepted regardless of magic bytes
+disabled_mime_types:
+  - text/html
+  - application/xhtml+xml
+
+disabled_extensions:
+  - .html
+  - .htm
+
+# Maps each allowed MIME to its expected extensions — mismatches are gray zone
+mime_to_extensions:
+  application/pdf:
+    - .pdf
+  application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+    - .docx
+  image/jpeg:
+    - .jpg
+    - .jpeg
+  image/png:
+    - .png
+  image/tiff:
+    - .tiff
 
 max_file_size_mb: 50
