@@ -17,7 +17,7 @@ class _Settings(BaseSettings):
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your_secret_key")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     AGENT_NAME: str = "agent1_file_reception"
-    LLM_MODEL_PATH: str = os.getenv("LLM_MODEL_PATH", "")
+    LLM_MODEL_PATH: str = "./classiflow/ingesta/models/wizardLM-7B-uncensored.gguf"
 
     @property
     def agent_name(self) -> str:
@@ -34,6 +34,10 @@ class _Settings(BaseSettings):
     @property
     def jwt_expire_minutes(self) -> int:
         return self.JWT_EXPIRE_MINUTES
+
+    @property
+    def llm_model_path(self) -> str:
+        return self.LLM_MODEL_PATH
 
 
 Settings = _Settings()

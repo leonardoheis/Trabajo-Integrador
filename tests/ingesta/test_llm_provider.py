@@ -1,5 +1,3 @@
-import sys
-from types import ModuleType
 from unittest.mock import MagicMock
 
 import pytest
@@ -60,15 +58,14 @@ class TestGetLlmLangchain:
 
     def test_returns_same_instance_on_repeated_calls(self, monkeypatch: pytest.MonkeyPatch) -> None:
         sentinel = object()
-        fake_llms = ModuleType("langchain_community.llms")
-        fake_llms.LlamaCpp = MagicMock(return_value=sentinel)  # type: ignore[attr-defined]
-        monkeypatch.setitem(sys.modules, "langchain_community.llms", fake_llms)
+        mock_llamacpp = MagicMock(return_value=sentinel)
+        monkeypatch.setattr("classiflow.ingesta.llm_provider.LlamaCpp", mock_llamacpp)
         monkeypatch.setattr("classiflow.settings.Settings.LLM_MODEL_PATH", "fake/model.gguf")
         get_llm_langchain.cache_clear()
         try:
             first = get_llm_langchain()
             second = get_llm_langchain()
             assert first is second
-            assert fake_llms.LlamaCpp.call_count == 1  # type: ignore[attr-defined]
+            assert mock_llamacpp.call_count == 1
         finally:
             get_llm_langchain.cache_clear()
