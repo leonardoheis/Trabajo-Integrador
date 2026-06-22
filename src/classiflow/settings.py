@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,14 +13,26 @@ class _Settings(BaseSettings):
         extra="ignore",
     )
 
-    DATABASE_URL: str
-    JWT_SECRET_KEY: str
-    JWT_EXPIRE_MINUTES: int
-    AGENT_NAME = "agent1_file_reception"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your_secret_key")
+    JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
+    AGENT_NAME: str = "agent1_file_reception"
 
     @property
     def agent_name(self) -> str:
         return self.AGENT_NAME
+
+    @property
+    def database_url(self) -> str:
+        return self.DATABASE_URL
+
+    @property
+    def jwt_secret_key(self) -> str:
+        return self.JWT_SECRET_KEY
+
+    @property
+    def jwt_expire_minutes(self) -> int:
+        return self.JWT_EXPIRE_MINUTES
 
 
 Settings = _Settings()
