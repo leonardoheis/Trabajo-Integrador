@@ -17,6 +17,7 @@ class _Settings(BaseSettings):
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your_secret_key")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     AGENT_NAME: str = "agent1_file_reception"
+    LLM_MODEL_PATH: str = os.getenv("LLM_MODEL_PATH", "")
 
     @property
     def agent_name(self) -> str:
