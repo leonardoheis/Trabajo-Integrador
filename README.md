@@ -77,6 +77,11 @@ Sources (inputs)
 │       │       ├── models.py       ORM models (6 tables)
 │       │       └── repositories/   Protocol interfaces + SQL and InMemory impls
 │       ├── ingesta/
+│       │   ├── config.py           AllowedFormatsConfig — loads allowed_formats.yaml
+│       │   ├── mime.py             MimeDetector callable — filetype-based MIME detection
+│       │   ├── agents/
+│       │   │   ├── agent1_file_reception.py    Size · SHA-256 · MIME detection
+│       │   │   └── agent2_format_validation.py Rule-based ACCEPT/REJECT/MANUAL_REVIEW
 │       │   └── domain/
 │       │       ├── results.py      FileReceptionResult, FormatValidationResult, etc.
 │       │       └── state.py        JobState TypedDict (LangGraph coordinator state)
