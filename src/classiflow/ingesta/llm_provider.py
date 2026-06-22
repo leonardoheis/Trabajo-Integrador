@@ -1,13 +1,10 @@
 from functools import lru_cache
-from typing import TYPE_CHECKING
 
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseLLM
 from langchain_core.outputs import Generation, LLMResult
+from llama_cpp import Llama
 from pydantic import Field
-
-if TYPE_CHECKING:
-    from llama_cpp import Llama  # type: ignore[import-not-found]
 
 _INSTALL_MSG = (
     "llama-cpp-python is not installed. See INSTALL.md for build and GPU-flag instructions."
@@ -32,15 +29,13 @@ class MockLlm(BaseLLM):
 
 
 @lru_cache(maxsize=1)
-def get_llm() -> "Llama":  # type: ignore[no-any-unimported]
+def get_llm() -> Llama:
     try:
-        from llama_cpp import Llama  # noqa: PLC0415  # type: ignore[import-not-found]
-    except ImportError as exc:
+        from classiflow.settings import Settings  # noqa: PLC0415
+
+        return Llama(model_path=Settings.LLM_MODEL_PATH, n_ctx=2048, verbose=False)
+    except Exception as exc:
         raise ImportError(_INSTALL_MSG) from exc
-
-    from classiflow.settings import Settings  # noqa: PLC0415
-
-    return Llama(model_path=Settings.LLM_MODEL_PATH, n_ctx=2048, verbose=False)
 
 
 @lru_cache(maxsize=1)
