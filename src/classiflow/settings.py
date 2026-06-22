@@ -14,6 +14,11 @@ class _Settings(BaseSettings):
     DATABASE_URL: str
     JWT_SECRET_KEY: str
     JWT_EXPIRE_MINUTES: int
+    AGENT_NAME = "agent1_file_reception"
+
+    @property
+    def agent_name(self) -> str:
+        return self.AGENT_NAME
 
 
 Settings = _Settings()

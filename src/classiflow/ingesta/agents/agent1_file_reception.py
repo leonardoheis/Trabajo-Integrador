@@ -3,15 +3,14 @@ import time
 
 from pydantic import BaseModel, ConfigDict
 
+from classiflow.ingesta.config import get_allowed_formats
 from classiflow.ingesta.domain.results import FileReceptionResult
 from classiflow.ingesta.mime import MimeDetector, detect_mime
+from classiflow.settings import Settings
 from classiflow.shared.audit.service import AuditService
 from classiflow.shared.database.repositories.audit import AuditDetail
 from classiflow.shared.domain.job import AgentEvent, JobStatus
 from classiflow.shared.events.broadcaster import EventBroadcaster
-
-AGENT_NAME = "agent1_file_reception"
-_MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB — matches config/allowed_formats.yaml
 
 
 class FileReceptionAgent(BaseModel):
@@ -20,7 +19,7 @@ class FileReceptionAgent(BaseModel):
     audit: AuditService
     broadcaster: EventBroadcaster
     mime_detector: MimeDetector = detect_mime
-    max_file_size_bytes: int = _MAX_FILE_SIZE_BYTES
+    max_file_size_bytes: int = get_allowed_formats().max_file_size_bytes
 
     async def run(
         self,
@@ -31,18 +30,20 @@ class FileReceptionAgent(BaseModel):
         start = time.monotonic()
 
         await self.broadcaster.emit(
-            AgentEvent(job_id=job_id, agent=AGENT_NAME, status=JobStatus.STARTED)
+            AgentEvent(job_id=job_id, agent=Settings.agent_name, status=JobStatus.STARTED)
         )
 
         result = self._receive(file_bytes)
         duration_ms = int((time.monotonic() - start) * 1000)
 
         status = JobStatus.PASSED if result.passed else JobStatus.FAILED
-        await self.broadcaster.emit(AgentEvent(job_id=job_id, agent=AGENT_NAME, status=status))
+        await self.broadcaster.emit(
+            AgentEvent(job_id=job_id, agent=Settings.agent_name, status=status)
+        )
 
         await self.audit.record(
             job_id,
-            AGENT_NAME,
+            Settings.agent_name,
             status.value,
             duration_ms=duration_ms,
             detail=AuditDetail.model_validate({
