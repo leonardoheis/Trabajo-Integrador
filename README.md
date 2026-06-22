@@ -77,6 +77,11 @@ Sources (inputs)
 │       │       ├── models.py       ORM models (6 tables)
 │       │       └── repositories/   Protocol interfaces + SQL and InMemory impls
 │       ├── ingesta/
+│       │   ├── config.py           AllowedFormatsConfig — loads allowed_formats.yaml
+│       │   ├── mime.py             MimeDetector callable — filetype-based MIME detection
+│       │   ├── agents/
+│       │   │   ├── agent1_file_reception.py    Size · SHA-256 · MIME detection
+│       │   │   └── agent2_format_validation.py Rule-based ACCEPT/REJECT/MANUAL_REVIEW
 │       │   └── domain/
 │       │       ├── results.py      FileReceptionResult, FormatValidationResult, etc.
 │       │       └── state.py        JobState TypedDict (LangGraph coordinator state)
@@ -93,6 +98,8 @@ Sources (inputs)
 
 ## Build Status
 
+8 / 19 tasks complete · 1 skipped (T18 CI — deferred)
+
 | Task | Description | Status |
 |------|-------------|--------|
 | T01 | Package skeleton + dependencies | ✅ done |
@@ -101,12 +108,18 @@ Sources (inputs)
 | T04 | JWT utilities | ✅ done |
 | T07 | Shared domain + AuditService + EventBroadcaster | ✅ done |
 | T08 | Ingesta domain models | ✅ done |
+| T09 | Agent 1 — File Reception | ✅ done |
+| T10 | Agent 2 — Format Validation (rule-based) | ✅ done |
 | T05 | Google OAuth + whitelist | 🔲 pending |
 | T06 | JWT auth middleware | 🔲 pending |
-| T09–T14 | Ingestion agents | 🔲 pending |
+| T11 | LLM Provider singleton | 🔲 pending |
+| T12 | Agent 2 — SLM escalation path | 🔲 pending |
+| T13 | Agent 3 — Content Validation | 🔲 pending |
+| T14 | Agent 4 — Duplicate Control | 🔲 pending |
 | T15 | Coordinator — LangGraph | 🔲 pending |
 | T16 | FastAPI app + health route | 🔲 pending |
 | T17 | Pipeline endpoints + SSE stream | 🔲 pending |
+| T19 | Docker build + push | 🔲 pending |
 
 Full task details and dependency graph: [tasks/todo.md](tasks/todo.md)
 

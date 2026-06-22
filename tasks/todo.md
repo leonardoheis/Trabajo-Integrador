@@ -240,16 +240,16 @@ uv run poe test tests/ingesta/test_agent1.py
 ---
 
 ### T10 · Agent 2 — Format Validation (rule-based)
-**Branch:** `feat/agent2-rules` · **Deps:** T07 · T08 · T09 · **Status:** `[ ]`
+**Branch:** `feat/agent2-rules` · **Deps:** T07 · T08 · T09 · **Status:** `[x]` · **PR:** [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15)
 
-- [ ] `_rule_based_check()` → `ACCEPT` for `.pdf` (magic bytes `%PDF`)
-- [ ] `_rule_based_check()` → `REJECT` for `.html` (disabled in config)
-- [ ] `_rule_based_check()` → `MANUAL_REVIEW` for unknown MIME
-- [ ] `_rule_based_check()` → `None` (gray zone) for MIME/extension mismatch
-- [ ] `_slm_check()` raises `NotImplementedError` (stub until T12)
-- [ ] Emits events + records audit on every execution
-- [ ] Tests cover all four branches
-- [ ] `uv run poe check` passes
+- [x] `_rule_based_check()` → `ACCEPT` for `.pdf` (magic bytes `%PDF`)
+- [x] `_rule_based_check()` → `REJECT` for `.html` (disabled in config)
+- [x] `_rule_based_check()` → `MANUAL_REVIEW` for unknown MIME
+- [x] `_rule_based_check()` → `None` (gray zone) for MIME/extension mismatch
+- [x] `_slm_check()` raises `NotImplementedError` (stub until T12)
+- [x] Emits events + records audit on every execution
+- [x] Tests cover all four branches (13 tests, 98% coverage)
+- [x] `uv run poe check` passes (151 tests)
 
 ```bash
 # Verify
@@ -452,7 +452,7 @@ curl http://localhost:8000/health
 | T05 | Google OAuth + whitelist | `[ ]` pending |
 | T06 | JWT auth middleware | `[ ]` pending |
 | T09 | Agent 1 — File Reception | `[x]` done — PR [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13) |
-| T10 | Agent 2 — Format Validation (rule-based) | `[ ]` pending |
+| T10 | Agent 2 — Format Validation (rule-based) | `[x]` done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15) |
 | T11 | LLM Provider singleton | `[ ]` pending |
 | T12 | Agent 2 — SLM escalation path | `[ ]` pending |
 | T13 | Agent 3 — Content Validation | `[ ]` pending |
@@ -463,4 +463,4 @@ curl http://localhost:8000/health
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
 
-**7 / 19 tasks complete · 1 skipped (T18)**
+**8 / 19 tasks complete · 1 skipped (T18)**
