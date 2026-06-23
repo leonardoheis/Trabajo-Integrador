@@ -16,12 +16,7 @@ class _Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your_secret_key")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
-    AGENT_NAME: str = "agent1_file_reception"
     LLM_MODEL_PATH: str = "./classiflow/ingesta/models/wizardLM-7B-uncensored.gguf"
-
-    @property
-    def agent_name(self) -> str:
-        return self.AGENT_NAME
 
     @property
     def database_url(self) -> str:

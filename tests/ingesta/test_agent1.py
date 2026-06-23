@@ -4,7 +4,6 @@ import hashlib
 import pytest
 
 from classiflow.ingesta.agents.agent1_file_reception import FileReceptionAgent
-from classiflow.settings import Settings
 from classiflow.shared.audit.service import AuditService
 from classiflow.shared.database.repositories.audit import InMemoryAuditRepository
 from classiflow.shared.domain.job import JobStatus
@@ -125,9 +124,9 @@ class TestFileReceptionAgent:
 
         assert len(events) == _STARTED_PLUS_OUTCOME_EVENTS
         assert events[0].status == JobStatus.STARTED  # type: ignore[union-attr]
-        assert events[0].agent == Settings.agent_name  # type: ignore[union-attr]
+        assert events[0].agent == "agent1_file_reception"  # type: ignore[union-attr]
         assert events[1].status == JobStatus.PASSED  # type: ignore[union-attr]
-        assert events[1].agent == Settings.agent_name  # type: ignore[union-attr]
+        assert events[1].agent == "agent1_file_reception"  # type: ignore[union-attr]
 
     async def test_emits_started_then_failed(
         self,

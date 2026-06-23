@@ -1,8 +1,9 @@
 import time
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from classiflow.ingesta.agents.base import BaseAgent
 from classiflow.ingesta.config import AllowedFormatsConfig, get_allowed_formats
 from classiflow.ingesta.domain.results import (
     FileReceptionResult,
@@ -14,11 +15,13 @@ from classiflow.shared.database.repositories.audit import AuditDetail
 from classiflow.shared.domain.job import AgentEvent, JobStatus
 from classiflow.shared.events.broadcaster import EventBroadcaster
 
-_AGENT_NAME = "agent2_format_validation"
 
-
-class FormatValidationAgent(BaseModel):
+class FormatValidationAgent(BaseAgent):
     model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    @property
+    def name(self) -> str:
+        return "agent2_format_validation"
 
     audit: AuditService
     broadcaster: EventBroadcaster
@@ -33,18 +36,18 @@ class FormatValidationAgent(BaseModel):
         start = time.monotonic()
 
         await self.broadcaster.emit(
-            AgentEvent(job_id=job_id, agent=_AGENT_NAME, status=JobStatus.STARTED)
+            AgentEvent(job_id=job_id, agent=self.name, status=JobStatus.STARTED)
         )
 
         result = self._validate(filename, reception)
         duration_ms = int((time.monotonic() - start) * 1000)
 
         status = JobStatus.PASSED if result.passed else JobStatus.FAILED
-        await self.broadcaster.emit(AgentEvent(job_id=job_id, agent=_AGENT_NAME, status=status))
+        await self.broadcaster.emit(AgentEvent(job_id=job_id, agent=self.name, status=status))
 
         await self.audit.record(
             job_id,
-            _AGENT_NAME,
+            self.name,
             status.value,
             duration_ms=duration_ms,
             detail=AuditDetail.model_validate({
