@@ -152,6 +152,7 @@ checkpoints/
 *.pth
 *.ckpt
 *.onnx
+*.gguf
 *.pb
 *.tflite
 saved_model/
@@ -184,9 +185,6 @@ desktop.ini
 # Secrets
 .env
 
-# ---- Un-ignore models directory and all its contents ----
-!models/
-!models/**
 src/classiflow/playground/samples/
 
 # ---- Claude Code worktrees (local working directories, never committed) ----
