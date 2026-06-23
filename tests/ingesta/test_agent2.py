@@ -5,10 +5,14 @@ import pytest
 from classiflow.ingesta.agents.agent2_format_validation import FormatValidationAgent
 from classiflow.ingesta.config import AllowedFormatsConfig
 from classiflow.ingesta.domain.results import FileReceptionResult, FormatDecision
+from classiflow.ingesta.llm_provider import MockLlm
 from classiflow.shared.audit.service import AuditService
 from classiflow.shared.database.repositories.audit import InMemoryAuditRepository
 from classiflow.shared.domain.job import JobStatus
 from classiflow.shared.events.broadcaster import EventBroadcaster
+
+_SLM_ACCEPT_RESPONSE = '{"decision": "accept", "confidence": 0.9, "reasoning": "valid format"}'
+_SLM_REJECT_RESPONSE = '{"decision": "reject", "confidence": 0.85, "reasoning": "binary content"}'
 
 _JOB_ID = "test-job-002"
 _STARTED_PLUS_OUTCOME_EVENTS = 2
@@ -28,6 +32,7 @@ _CONFIG = AllowedFormatsConfig(
         "image/jpeg": [".jpg", ".jpeg"],
     },
     max_file_size_mb=50,
+    known_mismatches={"application/zip": [".docx"]},
 )
 
 
@@ -90,6 +95,11 @@ class TestRuleBasedCheck:
         assert agent._rule_based_check("photo.jpg", "image/jpeg") == FormatDecision.ACCEPT  # noqa: SLF001
         assert agent._rule_based_check("photo.jpeg", "image/jpeg") == FormatDecision.ACCEPT  # noqa: SLF001
 
+    def test_known_mismatch_is_accepted_without_slm(self, agent: FormatValidationAgent) -> None:
+        # libmagic detects DOCX as application/zip because DOCX is a ZIP archive
+        result = agent._rule_based_check("report.docx", "application/zip")  # noqa: SLF001
+        assert result == FormatDecision.ACCEPT
+
 
 class TestFormatValidationAgentRun:
     async def test_pdf_passes(
@@ -129,12 +139,43 @@ class TestFormatValidationAgentRun:
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].event == JobStatus.FAILED.value
 
-    async def test_mismatch_raises_not_implemented(
+    async def test_slm_accept_on_mime_extension_mismatch(
         self,
+        monkeypatch: pytest.MonkeyPatch,
         agent: FormatValidationAgent,
     ) -> None:
-        with pytest.raises(NotImplementedError):
-            await agent.run(_JOB_ID, "document.docx", _reception("application/pdf"))
+        accept_llm = MockLlm(response=_SLM_ACCEPT_RESPONSE)
+        monkeypatch.setattr(
+            "classiflow.ingesta.agents.agent2_format_validation.get_llm_langchain",
+            lambda _path: accept_llm,
+        )
+        result = await agent.run(_JOB_ID, "document.docx", _reception("application/pdf"))
+
+        assert result.passed
+        assert result.decision == FormatDecision.ACCEPT
+        assert result.used_slm
+
+    async def test_slm_reject_on_mime_extension_mismatch(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        agent: FormatValidationAgent,
+    ) -> None:
+        reject_llm = MockLlm(response=_SLM_REJECT_RESPONSE)
+        monkeypatch.setattr(
+            "classiflow.ingesta.agents.agent2_format_validation.get_llm_langchain",
+            lambda _path: reject_llm,
+        )
+        result = await agent.run(_JOB_ID, "document.docx", _reception("application/pdf"))
+
+        assert not result.passed
+        assert result.decision == FormatDecision.REJECT
+        assert result.used_slm
+        assert "SLM:" in result.rejection_reason
+
+    async def test_agent2_has_model_path(self, agent: FormatValidationAgent) -> None:
+        assert agent.model_path is not None
+        assert isinstance(agent.model_path, str)
+        assert agent.model_path.endswith(".gguf")
 
     async def test_emits_started_then_passed(
         self,

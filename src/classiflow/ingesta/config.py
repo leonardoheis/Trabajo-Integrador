@@ -14,6 +14,7 @@ class AllowedFormatsConfig(BaseModel):
     disabled_extensions: list[str] = []
     mime_to_extensions: dict[str, list[str]] = {}
     max_file_size_mb: int
+    known_mismatches: dict[str, list[str]] = {}
 
     @property
     def max_file_size_bytes(self) -> int:

@@ -37,3 +37,13 @@ mime_to_extensions:
     - .tiff
 
 max_file_size_mb: 50
+
+# Known acceptable MIME/extension pairs where libmagic detects a different MIME
+# than the canonical one for the extension but the file is still valid.
+# Example: DOCX files are ZIP archives internally — libmagic often reports application/zip.
+known_mismatches:
+  application/zip:
+    - .docx
+  image/pjpeg:
+    - .jpg
+    - .jpeg
