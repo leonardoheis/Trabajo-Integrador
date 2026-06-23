@@ -79,6 +79,8 @@ Sources (inputs)
 │       ├── ingesta/
 │       │   ├── config.py           AllowedFormatsConfig — loads allowed_formats.yaml
 │       │   ├── mime.py             MimeDetector callable — filetype-based MIME detection
+│       │   ├── llm_provider.py     get_llm() / get_llm_langchain() singletons + MockLlm
+│       │   ├── exceptions.py       LlmProviderError · ModelNotFoundError · ModelLoadError
 │       │   ├── agents/
 │       │   │   ├── agent1_file_reception.py    Size · SHA-256 · MIME detection
 │       │   │   └── agent2_format_validation.py Rule-based ACCEPT/REJECT/MANUAL_REVIEW
@@ -86,6 +88,9 @@ Sources (inputs)
 │       │       ├── results.py      FileReceptionResult, FormatValidationResult, etc.
 │       │       └── state.py        JobState TypedDict (LangGraph coordinator state)
 │       └── api/                    FastAPI application (in progress)
+│           └── error_handlers/
+│               ├── types.py        ExceptionHandler type + EXCEPTION_HANDLERS registry
+│               └── llm.py          LlmErrorBody (Pydantic) + handlers for LLM errors
 ├── alembic/                        Database migrations
 │   └── versions/
 │       └── 0001_initial_schema.py  Initial schema — all 6 tables
@@ -98,7 +103,7 @@ Sources (inputs)
 
 ## Build Status
 
-8 / 19 tasks complete · 1 skipped (T18 CI — deferred)
+9 / 19 tasks complete · 1 skipped (T18 CI — deferred)
 
 | Task | Description | Status |
 |------|-------------|--------|
@@ -112,7 +117,7 @@ Sources (inputs)
 | T10 | Agent 2 — Format Validation (rule-based) | ✅ done |
 | T05 | Google OAuth + whitelist | 🔲 pending |
 | T06 | JWT auth middleware | 🔲 pending |
-| T11 | LLM Provider singleton | 🔲 pending |
+| T11 | LLM Provider singleton | ✅ done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
 | T12 | Agent 2 — SLM escalation path | 🔲 pending |
 | T13 | Agent 3 — Content Validation | 🔲 pending |
 | T14 | Agent 4 — Duplicate Control | 🔲 pending |

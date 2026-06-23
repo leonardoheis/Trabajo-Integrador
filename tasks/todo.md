@@ -260,14 +260,16 @@ uv run poe test tests/ingesta/test_agent2.py -k "rule"
 ---
 
 ### T11 · LLM Provider singleton
-**Branch:** `feat/llm-provider` · **Deps:** T01 · **Status:** `[ ]`
+**Branch:** `feat/llm-provider` · **Deps:** T01 · **Status:** `[x]` · **PR:** [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) · [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18)
 
-- [ ] `get_llm()` and `get_llm_langchain()` both `@lru_cache(maxsize=1)`, fully typed
-- [ ] Two calls to `get_llm()` return the same instance (tested)
-- [ ] `MockLlm` substitutes anywhere `Llama` is expected; returns fixed JSON
-- [ ] `llama_cpp` import guarded: `TYPE_CHECKING` + runtime `try/except` with clear error
-- [ ] `MockLlm` exposed as a pytest fixture in `tests/ingesta/conftest.py`
-- [ ] `uv run poe check` passes
+- [x] `get_llm()` and `get_llm_langchain()` both `@lru_cache(maxsize=1)`, fully typed
+- [x] Two calls to `get_llm()` return the same instance (tested)
+- [x] `MockLlm` (`BaseLLM` subclass) substitutes anywhere LangChain LLM is expected; returns fixed JSON
+- [x] `llama-cpp-python` added as hard dependency; `Llama` imported directly (no `TYPE_CHECKING`)
+- [x] `FileNotFoundError` → `ModelNotFoundError`; other failures → `ModelLoadError` (typed exceptions in `ingesta/exceptions.py`)
+- [x] API error handlers for `LlmProviderError` hierarchy registered in `EXCEPTION_HANDLERS` (`error_handlers/llm.py`)
+- [x] `MockLlm` exposed as a pytest fixture in `tests/ingesta/conftest.py`
+- [x] `uv run poe check` passes (160 tests)
 
 ```bash
 # Verify
@@ -453,7 +455,7 @@ curl http://localhost:8000/health
 | T06 | JWT auth middleware | `[ ]` pending |
 | T09 | Agent 1 — File Reception | `[x]` done — PR [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13) |
 | T10 | Agent 2 — Format Validation (rule-based) | `[x]` done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15) |
-| T11 | LLM Provider singleton | `[ ]` pending |
+| T11 | LLM Provider singleton | `[x]` done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
 | T12 | Agent 2 — SLM escalation path | `[ ]` pending |
 | T13 | Agent 3 — Content Validation | `[ ]` pending |
 | T14 | Agent 4 — Duplicate Control | `[ ]` pending |
@@ -463,4 +465,4 @@ curl http://localhost:8000/health
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
 
-**8 / 19 tasks complete · 1 skipped (T18)**
+**9 / 19 tasks complete · 1 skipped (T18)**

@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
 from classiflow.ingesta.llm_provider import MockLlm, get_llm, get_llm_langchain
 
 
@@ -24,11 +25,24 @@ class TestMockLlm:
 
 
 class TestGetLlm:
-    def test_raises_import_error_when_model_path_is_invalid(self) -> None:
+    def test_raises_model_load_error_when_model_path_is_invalid(self) -> None:
         get_llm.cache_clear()
         try:
-            with pytest.raises(ImportError, match="llama-cpp-python"):
-                get_llm()  # LLM_MODEL_PATH="" → Llama raises ValueError → caught → ImportError
+            with pytest.raises(ModelLoadError):
+                get_llm()  # LLM_MODEL_PATH="" → Llama raises → caught → ModelLoadError
+        finally:
+            get_llm.cache_clear()
+
+    def test_raises_model_not_found_when_path_missing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("classiflow.settings.Settings.LLM_MODEL_PATH", "/no/such/model.gguf")
+        mock_llama = MagicMock(side_effect=FileNotFoundError)
+        monkeypatch.setattr("classiflow.ingesta.llm_provider.Llama", mock_llama)
+        get_llm.cache_clear()
+        try:
+            with pytest.raises(ModelNotFoundError):
+                get_llm()
         finally:
             get_llm.cache_clear()
 

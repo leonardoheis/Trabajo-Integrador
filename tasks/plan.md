@@ -749,23 +749,32 @@ escalation stub raises `NotImplementedError` until Task 12.
 
 ## Phase 6: LLM Integration
 
-### Task 11: LLM Provider singleton
+### Task 11: LLM Provider singleton ✅ done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) · [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18)
 
 **Description:** Implement `llm_provider.py` with `get_llm()` and `get_llm_langchain()`,
-both `@lru_cache(maxsize=1)`. Add `MockLlm` for tests.
+both `@lru_cache(maxsize=1)`. Add `MockLlm` for tests. Add typed exceptions for LLM
+failures and register API error handlers.
 
 **Acceptance criteria:**
-- [ ] Both functions are type-annotated and return the correct types
-- [ ] Calling `get_llm()` twice returns the same instance
-- [ ] `MockLlm` substitutes wherever `Llama` is expected; returns a fixed JSON string
-- [ ] `llama_cpp` import guarded: `TYPE_CHECKING` + runtime `try/except` with a clear error
-- [ ] mypy passes
+- [x] Both functions are type-annotated and return the correct types
+- [x] Calling `get_llm()` twice returns the same instance (tested via monkeypatch)
+- [x] `MockLlm` (`BaseLLM` subclass) substitutes wherever a LangChain LLM is expected; returns a fixed JSON string
+- [x] `llama-cpp-python` is a hard dependency; `Llama` imported at module level (no `TYPE_CHECKING`)
+- [x] `FileNotFoundError` → `ModelNotFoundError`; other failures → `ModelLoadError` (typed, inspectable)
+- [x] `LlmProviderError` hierarchy + `LlmErrorBody` Pydantic response registered in `EXCEPTION_HANDLERS`
+- [x] mypy strict passes (160 tests)
 
 **Dependencies:** Task 1
 
 **Files touched:**
 - `src/classiflow/ingesta/llm_provider.py`
+- `src/classiflow/ingesta/exceptions.py`  (new — `LlmProviderError`, `ModelNotFoundError`, `ModelLoadError`)
+- `src/classiflow/api/error_handlers/llm.py`  (new — `LlmErrorBody` + 3 handlers)
+- `src/classiflow/api/error_handlers/types.py`  (register handlers)
+- `src/classiflow/settings.py`  (add `LLM_MODEL_PATH`)
+- `pyproject.toml` / `uv.lock`  (add `llama-cpp-python>=0.2`)
 - `tests/ingesta/conftest.py`  (expose `MockLlm` fixture)
+- `tests/ingesta/test_llm_provider.py`
 
 **Estimated scope:** S
 
