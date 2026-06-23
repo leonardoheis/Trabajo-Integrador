@@ -131,11 +131,22 @@ Client                       API (FastAPI)                Background Task
 ### LLM / Agents
 - **`llama-cpp-python` over Ollama** — embedded in-process, no HTTP round-trip, native
   grammar-constrained JSON output, easy to mock in tests.
-- **Shared LLM singleton** (`@lru_cache`) — loaded once at startup, injected into Agent 2
-  and Agent 3. Avoids reloading 2.5 GB per job.
+- **Model: Phi-4-mini (GGUF, ~2.5 GB Q4)** — single shared singleton (`@lru_cache`) for
+  Agent 2 SLM escalation and Agent 3 content validation. Multilingual, strong structured
+  JSON output, fits CPU RAM budget.
+- **Agent 2 gray zone: rules first, model last** — before invoking Phi-4-mini, extend the
+  `mime_to_extensions` config with known legitimate mismatches (e.g. `.doc` files that are
+  actually OOXML). The LLM is the last resort for truly ambiguous cases; non-determinism
+  should not be introduced where a lookup table suffices.
 - **LangChain for Agent 2 and Agent 3 only** — `PromptTemplate` + `JsonOutputParser`
   allow model swaps without touching agent logic.
 - **LangGraph as Coordinator** — typed state graph with conditional edges.
+- **Image-only PDFs → `requires_ocr` routing** — Agent 3 detects PDFs that yield zero
+  extracted text (scanned documents). Instead of failing, it tags the job
+  `status=REQUIRES_OCR` and routes it out of Stage 1. Text extraction for these documents
+  is handled in Stage 2 via MarkItDown + LLaVA-phi-3-mini (GGUF, ~2.3 GB Q4), running as
+  a separate llama-cpp-python server. This keeps Stage 1 fast and Stage 2 responsible for
+  content extraction — MarkItDown does not belong inside ingesta agents.
 
 ### Cross-Platform & Deployment
 - **Target OS: Linux** (Ubuntu/Debian). Docker image uses `python:3.12-slim` (Linux).
@@ -693,21 +704,21 @@ in `ingesta/domain/state.py`. Pure typed data — no logic, no IO.
 
 **Estimated scope:** S
 
-### Task 9: Config YAMLs + Agent 1 — File Reception
+### Task 9: Config YAMLs + Agent 1 — File Reception ✅ done
 
 **Description:** Fill stub config YAMLs. Implement `agent1_file_reception.py` — the
 deterministic first gate. Checks file existence, size bounds, computes SHA-256, detects
 MIME from `python-magic`. Emits SSE events and persists an audit record.
 
 **Acceptance criteria:**
-- [ ] `config/allowed_formats.yaml` has entries for pdf, docx, image (html disabled)
-- [ ] Returns `FileReceptionResult(passed=False)` for: missing file, empty file, size > limit
-- [ ] Returns `FileReceptionResult(passed=True)` with correct `sha256` and `detected_mime` for a valid PDF
-- [ ] Emits `agent_started` then `agent_passed`/`agent_failed` via `EventBroadcaster`
-- [ ] Calls `AuditService.record()` with duration and detail on every execution
-- [ ] Agent constructor: `__init__(self, audit: AuditService, broadcaster: EventBroadcaster)`
-- [ ] mypy strict passes
-- [ ] `test_agent1.py` covers all code paths using `InMemory*` dependencies
+- [x] `config/allowed_formats.yaml` has entries for pdf, docx, image (html disabled)
+- [x] Returns `FileReceptionResult(passed=False)` for: missing file, empty file, size > limit
+- [x] Returns `FileReceptionResult(passed=True)` with correct `sha256` and `detected_mime` for a valid PDF
+- [x] Emits `agent_started` then `agent_passed`/`agent_failed` via `EventBroadcaster`
+- [x] Calls `AuditService.record()` with duration and detail on every execution
+- [x] Agent constructor: `__init__(self, audit: AuditService, broadcaster: EventBroadcaster)`
+- [x] mypy strict passes
+- [x] `test_agent1.py` covers all code paths using `InMemory*` dependencies
 
 **Dependencies:** Tasks 7, 8
 
@@ -781,18 +792,31 @@ failures and register API error handlers.
 ### Task 12: Agent 2 — SLM escalation path + prompts
 
 **Description:** Fill `prompts/format_validation.py`. Wire `_slm_check()` in Agent 2,
-replacing the `NotImplementedError` stub.
+replacing the `NotImplementedError` stub. Before invoking the model, first extend the
+rule-based check with a config-driven lookup of known legitimate MIME/extension mismatches.
+Phi-4-mini is only called for cases that survive the extended rules.
+
+**Model:** Phi-4-mini (GGUF) via `get_llm_langchain()` singleton.
+
+**Gray-zone strategy (in order):**
+1. Extend `mime_to_extensions` in `allowed_formats.yaml` with known-legitimate mismatches
+   (e.g. `.doc` files detected as `application/vnd.openxmlformats-officedocument...`)
+2. Only residual unknowns escalate to Phi-4-mini with a constrained JSON prompt
 
 **Acceptance criteria:**
+- [ ] `allowed_formats.yaml` extended with a `known_mismatches` map covering common cases
+- [ ] `_rule_based_check()` consults `known_mismatches` before returning `None`
 - [ ] `FormatDecision` is a Pydantic `BaseModel` matching the spec schema
-- [ ] `build_format_chain(llm)` returns a LangChain LCEL chain
+- [ ] `build_format_chain(llm)` returns a LangChain LCEL chain producing constrained JSON
 - [ ] `_slm_check()` invokes the chain and returns `FormatValidationResult(used_slm=True)`
-- [ ] Gray-zone input end-to-end: calls `_slm_check()` → emits event → records audit
+- [ ] Gray-zone end-to-end: rules → (if still None) → `_slm_check()` → emits event → records audit
 - [ ] Tests use `MockLlm`; no real model required
 
 **Dependencies:** Tasks 10, 11
 
 **Files touched:**
+- `config/allowed_formats.yaml`  (add `known_mismatches` section)
+- `src/classiflow/ingesta/config.py`  (extend `AllowedFormatsConfig` with `known_mismatches`)
 - `src/classiflow/ingesta/prompts/format_validation.py`
 - `src/classiflow/ingesta/agents/agent2_format_validation.py`
 - `tests/ingesta/test_agent2.py`
@@ -802,21 +826,31 @@ replacing the `NotImplementedError` stub.
 ### Task 13: Agent 3 — Content Validation
 
 **Description:** Implement `agent3_content_validation.py` with rule-based checks (language
-detection via `lingua`, encoding via `chardet`, min char count) and SLM escalation.
+detection via `lingua`, encoding via `chardet`, min char count) and SLM legitimacy check.
+Also detect image-only PDFs (zero extracted text) and route them out of Stage 1.
+
+**Model:** Phi-4-mini (GGUF) via `get_llm_langchain()` singleton — same instance as Agent 2.
+
+**Image-only PDF handling:**
+If text extraction yields fewer than a minimum threshold of characters AND the file is a PDF,
+Agent 3 sets `status=REQUIRES_OCR` instead of `passed=False`. This routes the job to the
+Stage 2 OCR path (MarkItDown + LLaVA-phi-3-mini) rather than rejecting a valid scanned document.
 
 **Acceptance criteria:**
-- [ ] Returns `passed=False` for text shorter than `MIN_CHARS`
+- [ ] Returns `passed=False` for text shorter than `MIN_CHARS` (non-PDF files)
 - [ ] Returns `passed=False, needs_agent_review=True` for non-Spanish text
 - [ ] Returns `passed=True` for a valid Spanish text sample
+- [ ] PDF with zero extracted text → `ContentValidationResult(passed=False, requires_ocr=True)` instead of rejection
 - [ ] `LegitimacyDecision` is a Pydantic `BaseModel`
-- [ ] `_slm_legitimacy_check()` calls `build_content_chain(llm)` and returns parsed result
+- [ ] `_slm_legitimacy_check()` calls `build_content_chain(llm)` with Phi-4-mini and returns parsed result
 - [ ] Emits events + records audit on every execution
-- [ ] Tests cover all paths using `MockLlm`
+- [ ] Tests cover all paths including the `requires_ocr` branch, using `MockLlm`
 
 **Dependencies:** Tasks 7, 8, 11
 
 **Files touched:**
-- `config/content_validation.yaml`
+- `config/content_validation.yaml`  (add `min_chars`, `ocr_char_threshold`)
+- `src/classiflow/ingesta/domain/results.py`  (add `requires_ocr: bool = False` to `ContentValidationResult`)
 - `src/classiflow/ingesta/prompts/content_validation.py`
 - `src/classiflow/ingesta/agents/agent3_content_validation.py`
 - `tests/ingesta/test_agent3.py`
@@ -1063,6 +1097,9 @@ and pushes it to a container registry only on push to `main`.
 | Risk | Impact | Mitigation |
 |---|---|---|
 | `llama-cpp-python` not installable in CI without GPU | High | `MockLlm` for all tests; real model only in manual integration runs |
+| Phi-4-mini GGUF not available / slow on CPU | Medium | Quantize to Q4_K_M (~2.5 GB); test with `MockLlm`; production requires ≥ 8 GB RAM |
+| Scanned PDFs (image-only) rejected by Agent 3 | High | Detect zero-text PDFs, emit `requires_ocr=True`, route to Stage 2 OCR — do not reject |
+| LLaVA-phi-3-mini server adds operational complexity | Medium | Stage 2 only; not required for Stage 1 tests; run as separate llama-cpp-python server process |
 | `python-magic` requires system `libmagic1` | Medium | Install in Dockerfile via `apt-get`; document for local Linux dev; Windows devs install `python-magic-bin` manually |
 | `faiss-cpu` slow on first import | Low | Lazy import inside Agent 4; only loaded when `run()` is called |
 | mypy strict + LangChain generics | Medium | `type: ignore[misc]` only for LangChain internals; document each suppression |

@@ -282,9 +282,15 @@ uv run poe test tests/ingesta/test_llm_provider.py
 ### T12 · Agent 2 — SLM escalation path
 **Branch:** `feat/agent2-slm` · **Deps:** T10 · T11 · **Status:** `[ ]`
 
+**Model:** Phi-4-mini (GGUF) via `get_llm_langchain()` singleton.
+**Strategy:** extend rules first; invoke model only for residual unknowns.
+
+- [ ] `allowed_formats.yaml` extended with `known_mismatches` map (common MIME/extension pairs)
+- [ ] `AllowedFormatsConfig` extended with `known_mismatches: dict[str, list[str]]`
+- [ ] `_rule_based_check()` consults `known_mismatches` before returning `None`
 - [ ] `ingesta/prompts/format_validation.py`: `FormatDecision(BaseModel)`, `build_format_chain(llm)` → LCEL chain
 - [ ] `_slm_check()` replaces `NotImplementedError`, returns `FormatValidationResult(used_slm=True)`
-- [ ] Gray-zone end-to-end: `run()` → `_slm_check()` → emits event → records audit
+- [ ] Gray-zone end-to-end: rules → (if still None) → `_slm_check()` → emits event → records audit
 - [ ] Tests use `MockLlm`; no real model
 - [ ] `uv run poe check` passes
 
@@ -299,14 +305,19 @@ uv run poe test tests/ingesta/test_agent2.py
 ### T13 · Agent 3 — Content Validation
 **Branch:** `feat/agent3` · **Deps:** T07 · T08 · T11 · **Status:** `[ ]`
 
+**Model:** Phi-4-mini (GGUF) via `get_llm_langchain()` singleton.
+
+- [ ] `ContentValidationResult` gains `requires_ocr: bool` field
+- [ ] Zero-text detection: if extracted text is empty/whitespace, set `requires_ocr=True` and skip SLM check
+- [ ] `requires_ocr=True` jobs route to Stage 2 (OCR pipeline) instead of being rejected
 - [ ] `config/content_validation.yaml` has `min_chars` and `allowed_languages`
-- [ ] `passed=False` for text shorter than `MIN_CHARS`
+- [ ] `passed=False` for text shorter than `MIN_CHARS` (non-OCR path)
 - [ ] `passed=False, needs_agent_review=True` for non-Spanish text
 - [ ] `passed=True` for valid Spanish text sample
 - [ ] `LegitimacyDecision(BaseModel)` matches spec schema
 - [ ] `_slm_legitimacy_check()` calls `build_content_chain(llm)` → parsed result
-- [ ] Emits events + records audit on every run
-- [ ] Tests cover all paths using `MockLlm`
+- [ ] Emits events + records audit on every run (including `requires_ocr` branch)
+- [ ] Tests cover all paths using `MockLlm`, including image-only PDF branch
 - [ ] `uv run poe check` passes
 
 ```bash
