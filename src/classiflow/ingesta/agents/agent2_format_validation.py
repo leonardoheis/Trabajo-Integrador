@@ -10,6 +10,9 @@ from classiflow.ingesta.domain.results import (
     FormatDecision,
     FormatValidationResult,
 )
+from classiflow.ingesta.llm_provider import get_llm_langchain
+from classiflow.ingesta.prompts.format_validation import FormatDecisionOutput, build_format_chain
+from classiflow.settings import Settings
 from classiflow.shared.audit.service import AuditService
 from classiflow.shared.database.repositories.audit import AuditDetail
 from classiflow.shared.domain.job import AgentEvent, JobStatus
@@ -22,6 +25,10 @@ class FormatValidationAgent(BaseAgent):
     @property
     def name(self) -> str:
         return "agent2_format_validation"
+
+    @property
+    def model_path(self) -> str:
+        return Settings.agent2_model_path
 
     audit: AuditService
     broadcaster: EventBroadcaster
@@ -96,6 +103,8 @@ class FormatValidationAgent(BaseAgent):
             return FormatDecision.REJECT
 
         if detected_mime not in self.config.allowed_mime_types:
+            if extension in self.config.known_mismatches.get(detected_mime, []):
+                return FormatDecision.ACCEPT
             return FormatDecision.MANUAL_REVIEW
 
         expected_extensions = self.config.mime_to_extensions.get(detected_mime, [])
@@ -105,5 +114,15 @@ class FormatValidationAgent(BaseAgent):
         return FormatDecision.ACCEPT
 
     def _slm_check(self, filename: str, reception: FileReceptionResult) -> FormatValidationResult:
-        msg = "SLM escalation is implemented in T12"
-        raise NotImplementedError(msg)
+        llm = get_llm_langchain(self.model_path)
+        output: FormatDecisionOutput = build_format_chain(llm).invoke({
+            "filename": filename,
+            "detected_mime": reception.detected_mime,
+        })
+        passed = output.decision == FormatDecision.ACCEPT
+        return FormatValidationResult(
+            passed=passed,
+            decision=output.decision,
+            used_slm=True,
+            rejection_reason="" if passed else f"SLM: {output.reasoning}",
+        )
