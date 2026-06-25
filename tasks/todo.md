@@ -303,22 +303,22 @@ uv run poe test tests/ingesta/test_agent2.py
 ---
 
 ### T13 · Agent 3 — Content Validation
-**Branch:** `feat/agent3` · **Deps:** T07 · T08 · T11 · **Status:** `[ ]`
+**Branch:** `feat/agent3` · **Deps:** T07 · T08 · T11 · **Status:** `[x]` · **PR:** [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1)
 
 **Model:** Phi-4-mini (GGUF) via `get_llm_langchain()` singleton.
 
-- [ ] `ContentValidationResult` gains `requires_ocr: bool` field
-- [ ] Zero-text detection: if extracted text is empty/whitespace, set `requires_ocr=True` and skip SLM check
-- [ ] `requires_ocr=True` jobs route to Stage 2 (OCR pipeline) instead of being rejected
-- [ ] `config/content_validation.yaml` has `min_chars` and `allowed_languages`
-- [ ] `passed=False` for text shorter than `MIN_CHARS` (non-OCR path)
-- [ ] `passed=False, needs_agent_review=True` for non-Spanish text
-- [ ] `passed=True` for valid Spanish text sample
-- [ ] `LegitimacyDecision(BaseModel)` matches spec schema
-- [ ] `_slm_legitimacy_check()` calls `build_content_chain(llm)` → parsed result
-- [ ] Emits events + records audit on every run (including `requires_ocr` branch)
-- [ ] Tests cover all paths using `MockLlm`, including image-only PDF branch
-- [ ] `uv run poe check` passes
+- [x] `ContentValidationResult` gains `requires_ocr: bool` field
+- [x] Zero-text detection: if extracted text is empty/whitespace, set `requires_ocr=True` and skip SLM check
+- [x] `requires_ocr=True` jobs route to Stage 2 (OCR pipeline) instead of being rejected
+- [x] `config/content_validation.yaml` has `min_chars` and `allowed_languages`
+- [x] `passed=False` for text shorter than `MIN_CHARS` (non-OCR path)
+- [x] `passed=False, needs_agent_review=True` for non-Spanish text
+- [x] `passed=True` for valid Spanish text sample
+- [x] `LegitimacyDecision(BaseModel)` matches spec schema
+- [x] `_slm_legitimacy_check()` calls `build_content_chain(llm)` → parsed result
+- [x] Emits events + records audit on every run (including `requires_ocr` branch)
+- [x] Tests cover all paths using `MockLlm`, including image-only PDF branch
+- [x] `uv run poe check` passes
 
 ```bash
 # Verify
@@ -468,7 +468,7 @@ curl http://localhost:8000/health
 | T10 | Agent 2 — Format Validation (rule-based) | `[x]` done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15) |
 | T11 | LLM Provider singleton | `[x]` done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
 | T12 | Agent 2 — SLM escalation path | `[x]` done — PR [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19) |
-| T13 | Agent 3 — Content Validation | `[ ]` pending |
+| T13 | Agent 3 — Content Validation | `[x]` done — PR [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1) |
 | T14 | Agent 4 — Duplicate Control | `[ ]` pending |
 | T15 | Coordinator — LangGraph | `[ ]` pending |
 | T16 | FastAPI app + health route | `[ ]` pending |
@@ -476,4 +476,4 @@ curl http://localhost:8000/health
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
 
-**9 / 19 tasks complete · 1 skipped (T18)**
+**10 / 19 tasks complete · 1 skipped (T18)**
