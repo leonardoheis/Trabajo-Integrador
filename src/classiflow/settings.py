@@ -1,6 +1,12 @@
 import os
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_PROJECT_ROOT = Path(__file__).parents[2]
+_DEFAULT_MODEL = str(
+    _PROJECT_ROOT / "src" / "classiflow" / "ingesta" / "models" / "Phi-4-mini-instruct-Q4_K_M.gguf"
+)
 
 
 class _Settings(BaseSettings):
@@ -16,8 +22,8 @@ class _Settings(BaseSettings):
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./test.db")
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your_secret_key")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
-    AGENT2_MODEL_PATH: str = "src/classiflow/ingesta/models/Phi-4-mini-instruct-Q4_K_M.gguf"
-    AGENT3_MODEL_PATH: str = "src/classiflow/ingesta/models/Phi-4-mini-instruct-Q4_K_M.gguf"
+    AGENT2_MODEL_PATH: str = _DEFAULT_MODEL
+    AGENT3_MODEL_PATH: str = _DEFAULT_MODEL
 
     @property
     def database_url(self) -> str:

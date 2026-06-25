@@ -48,6 +48,104 @@ Sources (inputs)
                 upload · agent visualization · classification · chat
 ```
 
+## Stage 1 — Ingesta Pipeline
+
+Stage 1 is the first and only processing gate before a document enters the system.
+It determines whether a file is **safe, valid, and new** — it never classifies content.
+Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
+
+### How a file moves through the agents
+
+```
+[FILE UPLOAD]  ordenanza_2026.pdf
+       │
+       ▼
+┌─────────────┐
+│   AGENT 1   │  File Reception
+│             │  · file present? not empty? size ≤ limit?
+│             │  · compute SHA-256
+│             │  · detect MIME type (python-magic)
+└──────┬──────┘
+       │ passed=True
+       │ passed=False ──────────────────────────────► REJECTED  (malformed / missing)
+       ▼
+┌─────────────┐
+│   AGENT 2   │  Format Validation
+│             │  · magic bytes match MIME? extension consistent?
+│             │  · known-mismatches lookup table (config)
+│             │  · gray zone → Phi-4-mini SLM decides
+└──────┬──────┘
+       │ passed=True
+       │ passed=False ──────────────────────────────► REJECTED  (wrong format)
+       │ needs_manual_review ───────────────────────► REVIEW QUEUE
+       │
+       ▼
+┌──────────────────────────────────────────────────────────────────┐
+│   TEXT EXTRACTION   (Coordinator step — not a named agent)       │
+│                                                                  │
+│   Attempt 1 — pdfplumber  (fast, selectable text)                │
+│       ├─ chars ≥ min_chars ──────────────────────────────────► ✓ │
+│       ├─ 0 < chars < min_chars                                   │
+│       │       Attempt 2 — MarkItDown  (tables, columns,          │
+│       │                   bad encodings, complex layouts)        │
+│       │           ├─ chars ≥ min_chars ──────────────────────► ✓ │
+│       │           └─ still insufficient ──────────────────────► OCR │
+│       └─ empty (0 chars) ──────────────────────────────────────► OCR │
+│                                                                  │
+│   OCR path  (Stage 2 — not built yet)                            │
+│       Attempt 3 — EasyOCR  (fast, CPU, clean scans)              │
+│           ├─ confidence ≥ threshold, chars ≥ min_chars ────────► ✓ │
+│           └─ low confidence / insufficient                       │
+│                   Attempt 4 — LLaVA-phi-3-mini via MarkItDown    │
+│                       ├─ got text ─────────────────────────────► ✓ │
+│                       └─ still empty ──────────────────────────► REJECTED (unreadable) │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+       │  text: str
+       ▼
+┌─────────────┐
+│   AGENT 3   │  Content Validation
+│             │  · length ≥ min_chars?
+│             │  · language = Spanish? (lingua detector)
+│             │  · SLM legitimacy check (Phi-4-mini)
+└──────┬──────┘
+       │ passed=True
+       │ passed=False (too short) ──────────────────► REJECTED
+       │ passed=False (non-Spanish) ────────────────► REVIEW QUEUE  (human: translate? reject?)
+       │ passed=False (not legitimate) ────────────► REJECTED or REVIEW QUEUE
+       ▼
+┌─────────────┐
+│   AGENT 4   │  Duplicate Control
+│             │  · SHA-256 exact match → exact duplicate
+│             │  · cosine similarity > threshold → near-duplicate
+│             │  · new document → save hash
+└──────┬──────┘
+       │ is_duplicate=False
+       ▼
+    ACCEPTED → Stage 2 (text extraction · enrichment · classification)
+```
+
+### Text extraction retry circuit
+
+| Attempt | Tool | Trigger | Notes |
+|---------|------|---------|-------|
+| 1 | **pdfplumber** | always | Fast, no model. Works on most digital PDFs. |
+| 2 | **MarkItDown** | pdfplumber < min\_chars | Handles tables, columns, bad font encodings. Still needs selectable text — not pixel OCR. |
+| 3 | **EasyOCR** | text still insufficient | Pixel-level OCR, CPU-only, good for clean scans. |
+| 4 | **LLaVA-phi-3-mini** | EasyOCR low confidence | Multimodal LLM (∼2.3 GB GGUF). Last resort for complex layouts, handwriting, mixed pages. |
+
+MarkItDown and pdfplumber run inside the Stage 1 Coordinator (no model needed, fast).
+EasyOCR and LLaVA run in Stage 2 (heavier, separate process).
+
+### Routing outcomes
+
+| Outcome | Meaning | Next step |
+|---------|---------|-----------|
+| `ACCEPTED` | All 4 agents passed | Stage 2 pipeline |
+| `REJECTED` | Hard failure at any agent | Audit log, no retry |
+| `REVIEW QUEUE` | Ambiguous result | Human reviewer decides |
+| `REQUIRES_OCR` | Empty text from digital extraction | Stage 2 OCR path |
+
 ## Repository Structure
 
 ```
@@ -103,7 +201,7 @@ Sources (inputs)
 
 ## Build Status
 
-9 / 19 tasks complete · 1 skipped (T18 CI — deferred)
+10 / 19 tasks complete · 1 skipped (T18 CI — deferred)
 
 | Task | Description | Status |
 |------|-------------|--------|
@@ -115,11 +213,11 @@ Sources (inputs)
 | T08 | Ingesta domain models | ✅ done |
 | T09 | Agent 1 — File Reception | ✅ done |
 | T10 | Agent 2 — Format Validation (rule-based) | ✅ done |
+| T11 | LLM Provider singleton | ✅ done |
+| T12 | Agent 2 — SLM escalation path | ✅ done |
+| T13 | Agent 3 — Content Validation | ✅ done |
 | T05 | Google OAuth + whitelist | 🔲 pending |
 | T06 | JWT auth middleware | 🔲 pending |
-| T11 | LLM Provider singleton | ✅ done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
-| T12 | Agent 2 — SLM escalation path | 🔲 pending |
-| T13 | Agent 3 — Content Validation | 🔲 pending |
 | T14 | Agent 4 — Duplicate Control | 🔲 pending |
 | T15 | Coordinator — LangGraph | 🔲 pending |
 | T16 | FastAPI app + health route | 🔲 pending |
