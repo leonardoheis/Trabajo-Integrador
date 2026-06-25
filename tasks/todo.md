@@ -280,19 +280,19 @@ uv run poe test tests/ingesta/test_llm_provider.py
 ---
 
 ### T12 · Agent 2 — SLM escalation path
-**Branch:** `feat/agent2-slm` · **Deps:** T10 · T11 · **Status:** `[ ]`
+**Branch:** `feat/agent2-slm` · **Deps:** T10 · T11 · **Status:** `[x]` · **PR:** [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19)
 
 **Model:** Phi-4-mini (GGUF) via `get_llm_langchain()` singleton.
 **Strategy:** extend rules first; invoke model only for residual unknowns.
 
-- [ ] `allowed_formats.yaml` extended with `known_mismatches` map (common MIME/extension pairs)
-- [ ] `AllowedFormatsConfig` extended with `known_mismatches: dict[str, list[str]]`
-- [ ] `_rule_based_check()` consults `known_mismatches` before returning `None`
-- [ ] `ingesta/prompts/format_validation.py`: `FormatDecision(BaseModel)`, `build_format_chain(llm)` → LCEL chain
-- [ ] `_slm_check()` replaces `NotImplementedError`, returns `FormatValidationResult(used_slm=True)`
-- [ ] Gray-zone end-to-end: rules → (if still None) → `_slm_check()` → emits event → records audit
-- [ ] Tests use `MockLlm`; no real model
-- [ ] `uv run poe check` passes
+- [x] `allowed_formats.yaml` extended with `known_mismatches` map (common MIME/extension pairs)
+- [x] `AllowedFormatsConfig` extended with `known_mismatches: dict[str, list[str]]`
+- [x] `_rule_based_check()` consults `known_mismatches` before returning `None`
+- [x] `ingesta/prompts/format_validation.py`: `FormatDecisionOutput(BaseModel)`, `build_format_chain(llm)` → LCEL chain
+- [x] `_slm_check()` replaces `NotImplementedError`, returns `FormatValidationResult(used_slm=True)`
+- [x] Gray-zone end-to-end: rules → (if still None) → `_slm_check()` → emits event → records audit
+- [x] Tests use `MockLlm`; no real model (163 tests, all passing)
+- [x] `uv run poe check` passes
 
 ```bash
 # Verify
@@ -467,7 +467,7 @@ curl http://localhost:8000/health
 | T09 | Agent 1 — File Reception | `[x]` done — PR [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13) |
 | T10 | Agent 2 — Format Validation (rule-based) | `[x]` done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15) |
 | T11 | LLM Provider singleton | `[x]` done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
-| T12 | Agent 2 — SLM escalation path | `[ ]` pending |
+| T12 | Agent 2 — SLM escalation path | `[x]` done — PR [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19) |
 | T13 | Agent 3 — Content Validation | `[ ]` pending |
 | T14 | Agent 4 — Duplicate Control | `[ ]` pending |
 | T15 | Coordinator — LangGraph | `[ ]` pending |
