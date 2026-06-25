@@ -314,11 +314,11 @@ uv run poe test tests/ingesta/test_agent2.py
 - [x] `passed=False` for text shorter than `MIN_CHARS` (non-OCR path)
 - [x] `passed=False, needs_agent_review=True` for non-Spanish text
 - [x] `passed=True` for valid Spanish text sample
-- [x] `LegitimacyDecisionOutput(BaseModel)` matches spec schema
+- [x] `LegitimacyDecision(BaseModel)` matches spec schema
 - [x] `_slm_legitimacy_check()` calls `build_content_chain(llm)` → parsed result
 - [x] Emits events + records audit on every run (including `requires_ocr` branch)
 - [x] Tests cover all paths using `MockLlm`, including image-only PDF branch
-- [x] `uv run poe check` passes (175 tests)
+- [x] `uv run poe check` passes
 
 ```bash
 # Verify

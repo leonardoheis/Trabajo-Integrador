@@ -841,7 +841,7 @@ Stage 2 OCR path (MarkItDown + LLaVA-phi-3-mini) rather than rejecting a valid s
 - [x] Returns `passed=False, needs_agent_review=True` for non-Spanish text
 - [x] Returns `passed=True` for a valid Spanish text sample
 - [x] PDF with zero extracted text → `ContentValidationResult(passed=False, requires_ocr=True)` instead of rejection
-- [x] `LegitimacyDecisionOutput` is a Pydantic `BaseModel`
+- [x] `LegitimacyDecision` is a Pydantic `BaseModel`
 - [x] `_slm_legitimacy_check()` calls `build_content_chain(llm)` with Phi-4-mini and returns parsed result
 - [x] Emits events + records audit on every execution
 - [x] Tests cover all paths including the `requires_ocr` branch, using `MockLlm`
@@ -857,8 +857,8 @@ Stage 2 OCR path (MarkItDown + LLaVA-phi-3-mini) rather than rejecting a valid s
 
 **Estimated scope:** M · **PR:** [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1)
 
-### Checkpoint F ✅ done
-- [x] `uv run poe check` passes (175 tests)
+### Checkpoint F
+- [x] `uv run poe check` passes
 - [x] Agents 1–3 callable end-to-end with `MockLlm`
 
 ---
