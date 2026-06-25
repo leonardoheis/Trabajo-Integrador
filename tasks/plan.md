@@ -789,7 +789,7 @@ failures and register API error handlers.
 
 **Estimated scope:** S
 
-### Task 12: Agent 2 — SLM escalation path + prompts
+### ✅ Task 12: Agent 2 — SLM escalation path + prompts
 
 **Description:** Fill `prompts/format_validation.py`. Wire `_slm_check()` in Agent 2,
 replacing the `NotImplementedError` stub. Before invoking the model, first extend the
@@ -804,13 +804,13 @@ Phi-4-mini is only called for cases that survive the extended rules.
 2. Only residual unknowns escalate to Phi-4-mini with a constrained JSON prompt
 
 **Acceptance criteria:**
-- [ ] `allowed_formats.yaml` extended with a `known_mismatches` map covering common cases
-- [ ] `_rule_based_check()` consults `known_mismatches` before returning `None`
-- [ ] `FormatDecision` is a Pydantic `BaseModel` matching the spec schema
-- [ ] `build_format_chain(llm)` returns a LangChain LCEL chain producing constrained JSON
-- [ ] `_slm_check()` invokes the chain and returns `FormatValidationResult(used_slm=True)`
-- [ ] Gray-zone end-to-end: rules → (if still None) → `_slm_check()` → emits event → records audit
-- [ ] Tests use `MockLlm`; no real model required
+- [x] `allowed_formats.yaml` extended with a `known_mismatches` map covering common cases
+- [x] `_rule_based_check()` consults `known_mismatches` before returning `None`
+- [x] `FormatDecisionOutput` is a Pydantic `BaseModel` matching the spec schema
+- [x] `build_format_chain(llm)` returns a LangChain LCEL chain producing constrained JSON
+- [x] `_slm_check()` invokes the chain and returns `FormatValidationResult(used_slm=True)`
+- [x] Gray-zone end-to-end: rules → (if still None) → `_slm_check()` → emits event → records audit
+- [x] Tests use `MockLlm`; no real model required (163 tests, all passing)
 
 **Dependencies:** Tasks 10, 11
 
@@ -821,7 +821,7 @@ Phi-4-mini is only called for cases that survive the extended rules.
 - `src/classiflow/ingesta/agents/agent2_format_validation.py`
 - `tests/ingesta/test_agent2.py`
 
-**Estimated scope:** M
+**Estimated scope:** M · **PR:** [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19)
 
 ### Task 13: Agent 3 — Content Validation
 
