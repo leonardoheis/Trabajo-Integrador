@@ -823,7 +823,7 @@ Phi-4-mini is only called for cases that survive the extended rules.
 
 **Estimated scope:** M · **PR:** [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19)
 
-### Task 13: Agent 3 — Content Validation
+### ✅ Task 13: Agent 3 — Content Validation
 
 **Description:** Implement `agent3_content_validation.py` with rule-based checks (language
 detection via `lingua`, encoding via `chardet`, min char count) and SLM legitimacy check.
@@ -837,14 +837,14 @@ Agent 3 sets `status=REQUIRES_OCR` instead of `passed=False`. This routes the jo
 Stage 2 OCR path (MarkItDown + LLaVA-phi-3-mini) rather than rejecting a valid scanned document.
 
 **Acceptance criteria:**
-- [ ] Returns `passed=False` for text shorter than `MIN_CHARS` (non-PDF files)
-- [ ] Returns `passed=False, needs_agent_review=True` for non-Spanish text
-- [ ] Returns `passed=True` for a valid Spanish text sample
-- [ ] PDF with zero extracted text → `ContentValidationResult(passed=False, requires_ocr=True)` instead of rejection
-- [ ] `LegitimacyDecision` is a Pydantic `BaseModel`
-- [ ] `_slm_legitimacy_check()` calls `build_content_chain(llm)` with Phi-4-mini and returns parsed result
-- [ ] Emits events + records audit on every execution
-- [ ] Tests cover all paths including the `requires_ocr` branch, using `MockLlm`
+- [x] Returns `passed=False` for text shorter than `MIN_CHARS` (non-PDF files)
+- [x] Returns `passed=False, needs_agent_review=True` for non-Spanish text
+- [x] Returns `passed=True` for a valid Spanish text sample
+- [x] PDF with zero extracted text → `ContentValidationResult(passed=False, requires_ocr=True)` instead of rejection
+- [x] `LegitimacyDecision` is a Pydantic `BaseModel`
+- [x] `_slm_legitimacy_check()` calls `build_content_chain(llm)` with Phi-4-mini and returns parsed result
+- [x] Emits events + records audit on every execution
+- [x] Tests cover all paths including the `requires_ocr` branch, using `MockLlm`
 
 **Dependencies:** Tasks 7, 8, 11
 
@@ -855,11 +855,11 @@ Stage 2 OCR path (MarkItDown + LLaVA-phi-3-mini) rather than rejecting a valid s
 - `src/classiflow/ingesta/agents/agent3_content_validation.py`
 - `tests/ingesta/test_agent3.py`
 
-**Estimated scope:** M
+**Estimated scope:** M · **PR:** [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1)
 
 ### Checkpoint F
-- [ ] `uv run poe check` passes
-- [ ] Agents 1–3 callable end-to-end with `MockLlm`
+- [x] `uv run poe check` passes
+- [x] Agents 1–3 callable end-to-end with `MockLlm`
 
 ---
 
