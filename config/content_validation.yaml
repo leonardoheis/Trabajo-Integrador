@@ -1,9 +1,12 @@
 # Content validation thresholds and rules
 # Agent 3 (Content Validation) uses this config.
-min_text_length_chars: 50
-max_text_length_chars: 500000
+min_chars: 50
+max_chars: 500000
 
-# Language detection
+# PDFs with fewer extracted characters than this are treated as image-only and routed to OCR
+ocr_char_threshold: 10
+
+# Language detection — ISO 639-1 codes
 allowed_languages:
   - es   # Spanish
   - en   # English (fallback)

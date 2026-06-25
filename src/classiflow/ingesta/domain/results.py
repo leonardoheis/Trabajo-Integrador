@@ -29,6 +29,7 @@ class ContentValidationResult(BaseEntity):
     detected_language: str = ""
     char_count: int = 0
     needs_agent_review: bool = False
+    requires_ocr: bool = False
     rejection_reason: str = ""
 
 
