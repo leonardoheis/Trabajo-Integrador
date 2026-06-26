@@ -310,7 +310,7 @@ match = "*"
 [tool.semantic_release]
 commit_message = "chore(release): bump version and update changelog"
 version_source = "tag"
-version_variables = ["src/app/__init__.py:__version__"]
+version_variables = ["src/classiflow/__init__.py:__version__"]
 version_toml = [
     "pyproject.toml:project.version:nf",
 ]
