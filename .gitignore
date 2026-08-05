@@ -93,6 +93,9 @@ celerybeat.pid
 # ---- SageMath ----
 *.sage.py
 
+# ---- IDE / tooling ----
+.codegraph/
+
 # ---- Environments ----
 .env
 .env.*
