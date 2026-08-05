@@ -1,5 +1,16 @@
 # CLAUDE.md — Classiflow
 
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
+
+- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
+- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
+
+If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
+<!-- CODEGRAPH_END -->
+
 Classiflow is a multi-agent document classification system for Municipalidad de Rosario (Argentina).
 It ingests municipal documents from multiple sources, extracts and enriches their content, classifies
 them using LLM agents with confidence scoring, and exposes the results through a chat interface and
@@ -129,6 +140,55 @@ Hooks enforced on every commit (see `.pre-commit-config.yaml`):
 | `ruff-check` | Lint rules (exits non-zero if fixes were applied) |
 | `mypy` | Type correctness of `src/` |
 | `nbqa-mypy` | Type correctness of notebooks |
+
+## LangGraph agent structure
+
+Source: https://docs.langchain.com/oss/python/langgraph/application-structure
+
+The canonical LangGraph layout for a Python + pyproject.toml project is:
+
+```
+my-app/
+├── my_agent/
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── tools.py      # tools the graph can call
+│   │   ├── nodes.py      # node functions
+│   │   └── state.py      # graph state definition
+│   ├── __init__.py
+│   └── agent.py          # graph construction entrypoint
+├── .env
+├── langgraph.json         # LangGraph Platform config
+└── pyproject.toml
+```
+
+**How this maps to Classiflow's `ingesta/` package:**
+
+| Canonical | Classiflow equivalent | Notes |
+|---|---|---|
+| `agent.py` | `ingesta/coordinator.py` | builds and runs the LangGraph state machine |
+| `utils/state.py` | `ingesta/domain/state.py` | `JobState` TypedDict |
+| `utils/nodes.py` | `ingesta/agents/agent*.py` | one file per agent instead of one combined file |
+| `utils/tools.py` | `ingesta/llm_provider.py` + `ingesta/prompts/` | LLM singleton + prompt chains |
+
+Classiflow splits `nodes.py` into individual agent files — this is intentional and correct for
+this project's size. The `domain/` package plays the `utils/` role.
+
+**`langgraph.json` format** (add to repo root when deploying to LangGraph Platform):
+
+```json
+{
+  "dependencies": ["."],
+  "graphs": {
+    "ingesta": "./src/classiflow/ingesta/coordinator.py:coordinator"
+  },
+  "env": "./.env"
+}
+```
+
+Apply this structure to every new LangGraph agent added to the project.
+
+---
 
 ## Conventions
 
