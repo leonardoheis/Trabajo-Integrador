@@ -31,18 +31,18 @@ BATCH 5  ───────────────────────�
   T06  JWT auth middleware
 
 BATCH 6  ──────────────────────────────────────────────── sequential (needs T08)
-  T09  Agent 1 — File Reception
+  T09  Node 1 — File Reception
 
 BATCH 7  ──────────────────────────────────────────────── sequential (needs T09)
-  T10  Agent 2 — Format Validation (rule-based)
+  T10  Node 2 — Format Validation (rule-based)
 
 BATCH 8  ──────────────────────────────────────────────── parallel
   T11  LLM Provider singleton            (needs T01)
-  T14  Agent 4 — Duplicate Control       (needs T03 + T07 + T08)
+  T14  Node 4 — Duplicate Control        (needs T03 + T07 + T08)
 
 BATCH 9  ──────────────────────────────────────────────── parallel
-  T12  Agent 2 — SLM escalation path     (needs T10 + T11)
-  T13  Agent 3 — Content Validation      (needs T07 + T08 + T11)
+  T12  Node 2 — SLM escalation path      (needs T10 + T11)
+  T13  Node 3 — Content Validation       (needs T07 + T08 + T11)
 
 BATCH 10  ─────────────────────────────────────────────── sequential (needs T09+T12+T13+T14)
   T15  Coordinator — LangGraph
@@ -55,6 +55,9 @@ BATCH 12  ───────────────────────�
 
 BATCH 13  ─────────────────────────────────────────────── sequential (needs T17)
   T19  Docker build + push CI
+
+BATCH 14  ─────────────────────────────────────────────── parallel (needs T11 + nodes done)
+  T20  wandb integration — LLM tracing + per-node metrics
 ```
 
 ---
@@ -80,7 +83,7 @@ BATCH 13  ───────────────────────�
 ```bash
 # Verify
 uv run poe check
-python -c "from classiflow.api import app; from classiflow.ingesta import agents"
+python -c "from classiflow.api import app; from classiflow.ingesta import nodes"
 ```
 
 ---
@@ -186,7 +189,7 @@ uv run poe test tests/api/
 ### T07 · Shared domain + AuditService + EventBroadcaster
 **Branch:** `feat/shared-infra` · **Deps:** T03 · **Status:** `[x]` · **PR:** [#8](https://github.com/lgj2911/Trabajo-Integrador/pull/8)
 
-- [x] `shared/domain/job.py`: `AgentEvent(BaseModel)`, `JobStatus(str, Enum)`, `AgentEvent.to_sse()` method
+- [x] `shared/domain/job.py`: `NodeEvent(BaseModel)`, `JobStatus(str, Enum)`, `NodeEvent.to_sse()` method
 - [x] `shared/domain/user.py`: `User(BaseModel)`, `AuthToken(BaseModel)` — no `@dataclass`
 - [x] `shared/audit/service.py`: `AuditService.record(event)` → persists via `IAuditRepository` + loguru line
 - [x] `shared/events/broadcaster.py`: `emit()`, `subscribe()` async generator, `close()` with cleanup
@@ -219,12 +222,12 @@ python -c "from classiflow.ingesta.domain.results import FileReceptionResult; Fi
 
 ---
 
-### T09 · Agent 1 — File Reception
+### T09 · Node 1 — File Reception
 **Branch:** `feat/agent1` · **Deps:** T07 · T08 · **Status:** `[x]` · **PR:** [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13)
 
 - [x] `FileReceptionResult(passed=False)` for: missing file, empty file, size > limit
 - [x] `FileReceptionResult(passed=True)` with correct `sha256` + `detected_mime` for valid PDF
-- [x] Emits `agent_started` then `agent_passed`/`agent_failed` via broadcaster
+- [x] Emits `node_started` then `node_passed`/`node_failed` via broadcaster
 - [x] Calls `AuditService.record()` with `duration_ms` + `detail` on every run
 - [x] Constructor: `__init__(self, audit, broadcaster, mime_detector, max_file_size_bytes)` — `mime_detector` injected so tests run without libmagic; production uses `ingesta/mime.py:detect_mime`
 - [x] Tests use `InMemory*` — no DB, no filesystem side effects
@@ -234,12 +237,12 @@ python -c "from classiflow.ingesta.domain.results import FileReceptionResult; Fi
 ```bash
 # Verify
 uv run poe check
-uv run poe test tests/ingesta/test_agent1.py
+uv run poe test tests/ingesta/test_node1.py
 ```
 
 ---
 
-### T10 · Agent 2 — Format Validation (rule-based)
+### T10 · Node 2 — Format Validation (rule-based)
 **Branch:** `feat/agent2-rules` · **Deps:** T07 · T08 · T09 · **Status:** `[x]` · **PR:** [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15)
 
 - [x] `_rule_based_check()` → `ACCEPT` for `.pdf` (magic bytes `%PDF`)
@@ -254,7 +257,7 @@ uv run poe test tests/ingesta/test_agent1.py
 ```bash
 # Verify
 uv run poe check
-uv run poe test tests/ingesta/test_agent2.py -k "rule"
+uv run poe test tests/ingesta/test_node2.py -k "rule"
 ```
 
 ---
@@ -279,7 +282,7 @@ uv run poe test tests/ingesta/test_llm_provider.py
 
 ---
 
-### T12 · Agent 2 — SLM escalation path
+### T12 · Node 2 — SLM escalation path
 **Branch:** `feat/agent2-slm` · **Deps:** T10 · T11 · **Status:** `[x]` · **PR:** [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19)
 
 **Model:** Phi-4-mini (GGUF) via `get_llm_langchain()` singleton.
@@ -297,12 +300,12 @@ uv run poe test tests/ingesta/test_llm_provider.py
 ```bash
 # Verify
 uv run poe check
-uv run poe test tests/ingesta/test_agent2.py
+uv run poe test tests/ingesta/test_node2.py
 ```
 
 ---
 
-### T13 · Agent 3 — Content Validation
+### T13 · Node 3 — Content Validation
 **Branch:** `feat/agent3` · **Deps:** T07 · T08 · T11 · **Status:** `[x]` · **PR:** [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1)
 
 **Model:** Phi-4-mini (GGUF) via `get_llm_langchain()` singleton.
@@ -323,12 +326,12 @@ uv run poe test tests/ingesta/test_agent2.py
 ```bash
 # Verify
 uv run poe check
-uv run poe test tests/ingesta/test_agent3.py
+uv run poe test tests/ingesta/test_node3.py
 ```
 
 ---
 
-### T14 · Agent 4 — Duplicate Control
+### T14 · Node 4 — Duplicate Control
 **Branch:** `feat/agent4` · **Deps:** T03 · T07 · T08 · **Status:** `[ ]`
 
 - [ ] `config/duplicate_control.yaml` has similarity threshold
@@ -343,7 +346,7 @@ uv run poe test tests/ingesta/test_agent3.py
 ```bash
 # Verify
 uv run poe check
-uv run poe test tests/ingesta/test_agent4.py
+uv run poe test tests/ingesta/test_node4.py
 ```
 
 ---
@@ -352,11 +355,11 @@ uv run poe test tests/ingesta/test_agent4.py
 **Branch:** `feat/coordinator` · **Deps:** T09 · T12 · T13 · T14 · **Status:** `[ ]`
 
 - [ ] `JobState` TypedDict with all required fields
-- [ ] LangGraph: agent1 → agent2 → agent3 → agent4, conditional edges to `accept`/`reject`/`review`
+- [ ] LangGraph: node1 → node2 → node3 → node4, conditional edges to `accept`/`reject`/`review`
 - [ ] `handle_accept`, `handle_reject`, `handle_review` call `AuditService.record_routing()`
 - [ ] `pipeline_done` emitted on every terminal state
-- [ ] Integration test: valid PDF → all 4 agents → `accepted`
-- [ ] Integration test: empty file → rejected at agent 1
+- [ ] Integration test: valid PDF → all 4 nodes → `accepted`
+- [ ] Integration test: empty file → rejected at node 1
 - [ ] Uses `MockLlm` + `InMemory*`; no real model or DB
 - [ ] `uv run poe check` passes
 
@@ -396,7 +399,7 @@ uv run poe test tests/api/routes/test_health.py
 - [ ] `POST /pipeline/ingest` returns HTTP 202 + `job_id` within 100 ms
 - [ ] HTTP 401 without valid JWT on all routes
 - [ ] Background task starts coordinator without blocking the response
-- [ ] `GET /pipeline/{job_id}/events` streams `agent_started`/`agent_passed`/`agent_failed` per agent
+- [ ] `GET /pipeline/{job_id}/events` streams `node_started`/`node_passed`/`node_failed` per node
 - [ ] Final SSE event is `pipeline_done`; stream closes after
 - [ ] Client disconnect removes queue (`try/finally` in async generator)
 - [ ] HTTP 404 for unknown `job_id`
@@ -452,6 +455,40 @@ curl http://localhost:8000/health
 
 ---
 
+### T20 · wandb integration — LLM tracing + per-node metrics
+**Branch:** `feat/wandb` · **Deps:** T11 · T09–T14 · **Status:** `[ ]`
+
+**Strategy A — LangChain callback (zero node changes):**
+- [ ] `wandb>=0.17` added to `pyproject.toml`; `uv sync --dev` succeeds
+- [ ] `ingesta/llm_provider.py`: `get_llm_langchain()` accepts optional `callbacks` list; production default is `[WandbCallbackHandler(project="classiflow")]` when `WANDB_API_KEY` is set
+- [ ] `settings.py` has `WANDB_API_KEY: str = ""` and `WANDB_PROJECT: str = "classiflow"`
+- [ ] Every LLM call (nodes 2 & 3) logs: prompt text, raw output, latency, token count
+- [ ] `WANDB_API_KEY` unset → callbacks list is empty, no wandb import side-effects
+
+**Strategy B — per-node `wandb.log()` (richer metrics):**
+- [ ] Each node's `run()` calls `wandb.log({"node": self.name, "duration_ms": duration_ms, "passed": result.passed})` after audit
+- [ ] Node 3 logs additionally: `confidence`, `detected_language`
+- [ ] Node 4 logs additionally: `is_duplicate`, `duplicate_type`, `similarity_score`
+- [ ] Guarded by `if settings.WANDB_API_KEY` — no wandb traffic in tests
+
+**Tests:**
+- [ ] Strategy A: test that `WandbCallbackHandler` is in the callbacks list when `WANDB_API_KEY` is set
+- [ ] Strategy B: test that `wandb.log` is called with expected keys (mock `wandb.log`)
+- [ ] All existing tests unchanged (wandb disabled when `WANDB_API_KEY` is empty)
+- [ ] `uv run poe check` passes
+
+```bash
+# Verify
+WANDB_API_KEY=your_key uv run python -c "
+from classiflow.ingesta.llm_provider import get_llm_langchain
+from classiflow.settings import Settings
+llm = get_llm_langchain(Settings.node3_model_path)
+print(llm.callbacks)
+"
+```
+
+---
+
 ## Progress
 
 | Task | Description | Status |
@@ -464,16 +501,17 @@ curl http://localhost:8000/health
 | T08 | Ingesta domain models | `[x]` done — PR [#11](https://github.com/lgj2911/Trabajo-Integrador/pull/11) |
 | T05 | Google OAuth + whitelist | `[ ]` pending |
 | T06 | JWT auth middleware | `[ ]` pending |
-| T09 | Agent 1 — File Reception | `[x]` done — PR [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13) |
-| T10 | Agent 2 — Format Validation (rule-based) | `[x]` done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15) |
+| T09 | Node 1 — File Reception | `[x]` done — PR [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13) |
+| T10 | Node 2 — Format Validation (rule-based) | `[x]` done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15) |
 | T11 | LLM Provider singleton | `[x]` done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
-| T12 | Agent 2 — SLM escalation path | `[x]` done — PR [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19) |
-| T13 | Agent 3 — Content Validation | `[x]` done — PR [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1) |
-| T14 | Agent 4 — Duplicate Control | `[ ]` pending |
+| T12 | Node 2 — SLM escalation path | `[x]` done — PR [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19) |
+| T13 | Node 3 — Content Validation | `[x]` done — PR [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1) |
+| T14 | Node 4 — Duplicate Control | `[x]` done |
 | T15 | Coordinator — LangGraph | `[ ]` pending |
 | T16 | FastAPI app + health route | `[ ]` pending |
 | T17 | Pipeline endpoints + SSE stream | `[ ]` pending |
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
+| T20 | wandb integration — LLM tracing + per-node metrics | `[ ]` pending |
 
-**10 / 19 tasks complete · 1 skipped (T18)**
+**11 / 20 tasks complete · 1 skipped (T18)**
