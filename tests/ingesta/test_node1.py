@@ -3,7 +3,7 @@ import hashlib
 
 import pytest
 
-from classiflow.ingesta.agents.agent1_file_reception import FileReceptionAgent
+from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.shared.audit.service import AuditService
 from classiflow.shared.database.repositories.audit import InMemoryAuditRepository
 from classiflow.shared.domain.job import JobStatus
@@ -41,17 +41,17 @@ def broadcaster() -> EventBroadcaster:
 
 
 @pytest.fixture
-def agent(audit: AuditService, broadcaster: EventBroadcaster) -> FileReceptionAgent:
-    return FileReceptionAgent(audit=audit, broadcaster=broadcaster, mime_detector=_stub_mime)
+def node(audit: AuditService, broadcaster: EventBroadcaster) -> FileReceptionNode:
+    return FileReceptionNode(audit=audit, broadcaster=broadcaster, mime_detector=_stub_mime)
 
 
-class TestFileReceptionAgent:
+class TestFileReceptionNode:
     async def test_missing_file_fails(
         self,
-        agent: FileReceptionAgent,
+        node: FileReceptionNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await agent.run(_JOB_ID, _FILENAME, None)
+        result = await node.run(_JOB_ID, _FILENAME, None)
 
         assert not result.passed
         assert "No file" in result.rejection_reason
@@ -61,10 +61,10 @@ class TestFileReceptionAgent:
 
     async def test_empty_file_fails(
         self,
-        agent: FileReceptionAgent,
+        node: FileReceptionNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await agent.run(_JOB_ID, _FILENAME, b"")
+        result = await node.run(_JOB_ID, _FILENAME, b"")
 
         assert not result.passed
         assert "empty" in result.rejection_reason.lower()
@@ -77,13 +77,13 @@ class TestFileReceptionAgent:
         broadcaster: EventBroadcaster,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        small_limit_agent = FileReceptionAgent(
+        small_limit_node = FileReceptionNode(
             audit=audit,
             broadcaster=broadcaster,
             max_file_size_bytes=10,
             mime_detector=_stub_mime,
         )
-        result = await small_limit_agent.run(_JOB_ID, _FILENAME, b"x" * _OVERSIZED_CONTENT_SIZE)
+        result = await small_limit_node.run(_JOB_ID, _FILENAME, b"x" * _OVERSIZED_CONTENT_SIZE)
 
         assert not result.passed
         assert result.file_size_bytes == _OVERSIZED_CONTENT_SIZE
@@ -93,10 +93,10 @@ class TestFileReceptionAgent:
 
     async def test_valid_pdf_passes(
         self,
-        agent: FileReceptionAgent,
+        node: FileReceptionNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await agent.run(_JOB_ID, _FILENAME, _MINIMAL_PDF)
+        result = await node.run(_JOB_ID, _FILENAME, _MINIMAL_PDF)
 
         assert result.passed
         assert result.sha256 == hashlib.sha256(_MINIMAL_PDF).hexdigest()
@@ -108,7 +108,7 @@ class TestFileReceptionAgent:
 
     async def test_emits_started_then_passed(
         self,
-        agent: FileReceptionAgent,
+        node: FileReceptionNode,
         broadcaster: EventBroadcaster,
     ) -> None:
         events: list[object] = []
@@ -118,19 +118,19 @@ class TestFileReceptionAgent:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)  # yield so collect() starts subscribing before run() emits
-        await agent.run(_JOB_ID, _FILENAME, _MINIMAL_PDF)
+        await node.run(_JOB_ID, _FILENAME, _MINIMAL_PDF)
         await broadcaster.close(_JOB_ID)
         await collect_task
 
         assert len(events) == _STARTED_PLUS_OUTCOME_EVENTS
         assert events[0].status == JobStatus.STARTED  # type: ignore[union-attr]
-        assert events[0].agent == "agent1_file_reception"  # type: ignore[union-attr]
+        assert events[0].node == "node1_file_reception"  # type: ignore[union-attr]
         assert events[1].status == JobStatus.PASSED  # type: ignore[union-attr]
-        assert events[1].agent == "agent1_file_reception"  # type: ignore[union-attr]
+        assert events[1].node == "node1_file_reception"  # type: ignore[union-attr]
 
     async def test_emits_started_then_failed(
         self,
-        agent: FileReceptionAgent,
+        node: FileReceptionNode,
         broadcaster: EventBroadcaster,
     ) -> None:
         events: list[object] = []
@@ -140,7 +140,7 @@ class TestFileReceptionAgent:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)  # yield so collect() starts subscribing before run() emits
-        await agent.run(_JOB_ID, _FILENAME, None)
+        await node.run(_JOB_ID, _FILENAME, None)
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -150,10 +150,10 @@ class TestFileReceptionAgent:
 
     async def test_audit_records_duration(
         self,
-        agent: FileReceptionAgent,
+        node: FileReceptionNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        await agent.run(_JOB_ID, _FILENAME, _MINIMAL_PDF)
+        await node.run(_JOB_ID, _FILENAME, _MINIMAL_PDF)
 
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].duration_ms is not None

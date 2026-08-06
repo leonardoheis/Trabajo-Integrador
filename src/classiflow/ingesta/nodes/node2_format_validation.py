@@ -3,7 +3,6 @@ from pathlib import Path
 
 from pydantic import ConfigDict, Field
 
-from classiflow.ingesta.agents.base import BaseAgent
 from classiflow.ingesta.config import AllowedFormatsConfig, get_allowed_formats
 from classiflow.ingesta.domain.results import (
     FileReceptionResult,
@@ -11,24 +10,25 @@ from classiflow.ingesta.domain.results import (
     FormatValidationResult,
 )
 from classiflow.ingesta.llm_provider import get_llm_langchain
+from classiflow.ingesta.nodes.base import BaseNode
 from classiflow.ingesta.prompts.format_validation import FormatDecisionOutput, build_format_chain
 from classiflow.settings import Settings
 from classiflow.shared.audit.service import AuditService
 from classiflow.shared.database.repositories.audit import AuditDetail
-from classiflow.shared.domain.job import AgentEvent, JobStatus
+from classiflow.shared.domain.job import JobStatus, NodeEvent
 from classiflow.shared.events.broadcaster import EventBroadcaster
 
 
-class FormatValidationAgent(BaseAgent):
+class FormatValidationNode(BaseNode):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @property
     def name(self) -> str:
-        return "agent2_format_validation"
+        return "node2_format_validation"
 
     @property
     def model_path(self) -> str:
-        return Settings.agent2_model_path
+        return Settings.node2_model_path
 
     audit: AuditService
     broadcaster: EventBroadcaster
@@ -43,14 +43,14 @@ class FormatValidationAgent(BaseAgent):
         start = time.monotonic()
 
         await self.broadcaster.emit(
-            AgentEvent(job_id=job_id, agent=self.name, status=JobStatus.STARTED)
+            NodeEvent(job_id=job_id, node=self.name, status=JobStatus.STARTED)
         )
 
         result = self._validate(filename, reception)
         duration_ms = int((time.monotonic() - start) * 1000)
 
         status = JobStatus.PASSED if result.passed else JobStatus.FAILED
-        await self.broadcaster.emit(AgentEvent(job_id=job_id, agent=self.name, status=status))
+        await self.broadcaster.emit(NodeEvent(job_id=job_id, node=self.name, status=status))
 
         await self.audit.record(
             job_id,

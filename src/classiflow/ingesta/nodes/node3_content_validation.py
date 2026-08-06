@@ -4,10 +4,10 @@ from functools import lru_cache
 from lingua import Language, LanguageDetector, LanguageDetectorBuilder
 from pydantic import ConfigDict, Field
 
-from classiflow.ingesta.agents.base import BaseAgent
 from classiflow.ingesta.config_content import ContentValidationConfig, get_content_validation_config
 from classiflow.ingesta.domain.results import ContentValidationResult, FileReceptionResult
 from classiflow.ingesta.llm_provider import get_llm_langchain
+from classiflow.ingesta.nodes.base import BaseNode
 from classiflow.ingesta.prompts.content_validation import (
     LegitimacyDecisionOutput,
     build_content_chain,
@@ -15,7 +15,7 @@ from classiflow.ingesta.prompts.content_validation import (
 from classiflow.settings import Settings
 from classiflow.shared.audit.service import AuditService
 from classiflow.shared.database.repositories.audit import AuditDetail
-from classiflow.shared.domain.job import AgentEvent, JobStatus
+from classiflow.shared.domain.job import JobStatus, NodeEvent
 from classiflow.shared.events.broadcaster import EventBroadcaster
 
 _PDF_MIME = "application/pdf"
@@ -27,16 +27,16 @@ def _get_detector() -> LanguageDetector:
     return LanguageDetectorBuilder.from_all_languages().build()
 
 
-class ContentValidationAgent(BaseAgent):
+class ContentValidationNode(BaseNode):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @property
     def name(self) -> str:
-        return "agent3_content_validation"
+        return "node3_content_validation"
 
     @property
     def model_path(self) -> str:
-        return Settings.agent3_model_path
+        return Settings.node3_model_path
 
     audit: AuditService
     broadcaster: EventBroadcaster
@@ -52,14 +52,14 @@ class ContentValidationAgent(BaseAgent):
         start = time.monotonic()
 
         await self.broadcaster.emit(
-            AgentEvent(job_id=job_id, agent=self.name, status=JobStatus.STARTED)
+            NodeEvent(job_id=job_id, node=self.name, status=JobStatus.STARTED)
         )
 
         result = self._validate(text, reception)
         duration_ms = int((time.monotonic() - start) * 1000)
 
         status = JobStatus.PASSED if result.passed else JobStatus.FAILED
-        await self.broadcaster.emit(AgentEvent(job_id=job_id, agent=self.name, status=status))
+        await self.broadcaster.emit(NodeEvent(job_id=job_id, node=self.name, status=status))
 
         await self.audit.record(
             job_id,

@@ -2,10 +2,10 @@ import asyncio
 
 import pytest
 
-from classiflow.ingesta.agents.agent2_format_validation import FormatValidationAgent
 from classiflow.ingesta.config import AllowedFormatsConfig
 from classiflow.ingesta.domain.results import FileReceptionResult, FormatDecision
 from classiflow.ingesta.llm_provider import MockLlm
+from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.shared.audit.service import AuditService
 from classiflow.shared.database.repositories.audit import InMemoryAuditRepository
 from classiflow.shared.domain.job import JobStatus
@@ -61,53 +61,51 @@ def broadcaster() -> EventBroadcaster:
 
 
 @pytest.fixture
-def agent(audit: AuditService, broadcaster: EventBroadcaster) -> FormatValidationAgent:
-    return FormatValidationAgent(audit=audit, broadcaster=broadcaster, config=_CONFIG)
+def node(audit: AuditService, broadcaster: EventBroadcaster) -> FormatValidationNode:
+    return FormatValidationNode(audit=audit, broadcaster=broadcaster, config=_CONFIG)
 
 
 class TestRuleBasedCheck:
-    def test_pdf_with_matching_extension_is_accepted(self, agent: FormatValidationAgent) -> None:
-        result = agent._rule_based_check("sample.pdf", "application/pdf")  # noqa: SLF001
+    def test_pdf_with_matching_extension_is_accepted(self, node: FormatValidationNode) -> None:
+        result = node._rule_based_check("sample.pdf", "application/pdf")  # noqa: SLF001
         assert result == FormatDecision.ACCEPT
 
-    def test_html_mime_is_rejected(self, agent: FormatValidationAgent) -> None:
-        result = agent._rule_based_check("page.html", "text/html")  # noqa: SLF001
+    def test_html_mime_is_rejected(self, node: FormatValidationNode) -> None:
+        result = node._rule_based_check("page.html", "text/html")  # noqa: SLF001
         assert result == FormatDecision.REJECT
 
     def test_html_extension_is_rejected_even_with_unknown_mime(
-        self, agent: FormatValidationAgent
+        self, node: FormatValidationNode
     ) -> None:
-        result = agent._rule_based_check("file.html", "application/octet-stream")  # noqa: SLF001
+        result = node._rule_based_check("file.html", "application/octet-stream")  # noqa: SLF001
         assert result == FormatDecision.REJECT
 
-    def test_unknown_mime_triggers_manual_review(self, agent: FormatValidationAgent) -> None:
-        result = agent._rule_based_check("file.xyz", "application/x-unknown")  # noqa: SLF001
+    def test_unknown_mime_triggers_manual_review(self, node: FormatValidationNode) -> None:
+        result = node._rule_based_check("file.xyz", "application/x-unknown")  # noqa: SLF001
         assert result == FormatDecision.MANUAL_REVIEW
 
-    def test_mime_extension_mismatch_returns_none_for_slm(
-        self, agent: FormatValidationAgent
-    ) -> None:
+    def test_mime_extension_mismatch_returns_none_for_slm(self, node: FormatValidationNode) -> None:
         # PDF magic bytes but .docx extension → gray zone
-        result = agent._rule_based_check("document.docx", "application/pdf")  # noqa: SLF001
+        result = node._rule_based_check("document.docx", "application/pdf")  # noqa: SLF001
         assert result is None
 
-    def test_jpeg_with_both_valid_extensions(self, agent: FormatValidationAgent) -> None:
-        assert agent._rule_based_check("photo.jpg", "image/jpeg") == FormatDecision.ACCEPT  # noqa: SLF001
-        assert agent._rule_based_check("photo.jpeg", "image/jpeg") == FormatDecision.ACCEPT  # noqa: SLF001
+    def test_jpeg_with_both_valid_extensions(self, node: FormatValidationNode) -> None:
+        assert node._rule_based_check("photo.jpg", "image/jpeg") == FormatDecision.ACCEPT  # noqa: SLF001
+        assert node._rule_based_check("photo.jpeg", "image/jpeg") == FormatDecision.ACCEPT  # noqa: SLF001
 
-    def test_known_mismatch_is_accepted_without_slm(self, agent: FormatValidationAgent) -> None:
+    def test_known_mismatch_is_accepted_without_slm(self, node: FormatValidationNode) -> None:
         # libmagic detects DOCX as application/zip because DOCX is a ZIP archive
-        result = agent._rule_based_check("report.docx", "application/zip")  # noqa: SLF001
+        result = node._rule_based_check("report.docx", "application/zip")  # noqa: SLF001
         assert result == FormatDecision.ACCEPT
 
 
-class TestFormatValidationAgentRun:
+class TestFormatValidationNodeRun:
     async def test_pdf_passes(
         self,
-        agent: FormatValidationAgent,
+        node: FormatValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await agent.run(_JOB_ID, "sample.pdf", _reception("application/pdf"))
+        result = await node.run(_JOB_ID, "sample.pdf", _reception("application/pdf"))
 
         assert result.passed
         assert result.decision == FormatDecision.ACCEPT
@@ -117,10 +115,10 @@ class TestFormatValidationAgentRun:
 
     async def test_html_fails(
         self,
-        agent: FormatValidationAgent,
+        node: FormatValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await agent.run(_JOB_ID, "page.html", _reception("text/html"))
+        result = await node.run(_JOB_ID, "page.html", _reception("text/html"))
 
         assert not result.passed
         assert result.decision == FormatDecision.REJECT
@@ -129,10 +127,10 @@ class TestFormatValidationAgentRun:
 
     async def test_unknown_mime_fails_with_manual_review(
         self,
-        agent: FormatValidationAgent,
+        node: FormatValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await agent.run(_JOB_ID, "file.xyz", _reception("application/x-unknown"))
+        result = await node.run(_JOB_ID, "file.xyz", _reception("application/x-unknown"))
 
         assert not result.passed
         assert result.decision == FormatDecision.MANUAL_REVIEW
@@ -142,14 +140,14 @@ class TestFormatValidationAgentRun:
     async def test_slm_accept_on_mime_extension_mismatch(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        agent: FormatValidationAgent,
+        node: FormatValidationNode,
     ) -> None:
         accept_llm = MockLlm(response=_SLM_ACCEPT_RESPONSE)
         monkeypatch.setattr(
-            "classiflow.ingesta.agents.agent2_format_validation.get_llm_langchain",
+            "classiflow.ingesta.nodes.node2_format_validation.get_llm_langchain",
             lambda _path: accept_llm,
         )
-        result = await agent.run(_JOB_ID, "document.docx", _reception("application/pdf"))
+        result = await node.run(_JOB_ID, "document.docx", _reception("application/pdf"))
 
         assert result.passed
         assert result.decision == FormatDecision.ACCEPT
@@ -158,28 +156,28 @@ class TestFormatValidationAgentRun:
     async def test_slm_reject_on_mime_extension_mismatch(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        agent: FormatValidationAgent,
+        node: FormatValidationNode,
     ) -> None:
         reject_llm = MockLlm(response=_SLM_REJECT_RESPONSE)
         monkeypatch.setattr(
-            "classiflow.ingesta.agents.agent2_format_validation.get_llm_langchain",
+            "classiflow.ingesta.nodes.node2_format_validation.get_llm_langchain",
             lambda _path: reject_llm,
         )
-        result = await agent.run(_JOB_ID, "document.docx", _reception("application/pdf"))
+        result = await node.run(_JOB_ID, "document.docx", _reception("application/pdf"))
 
         assert not result.passed
         assert result.decision == FormatDecision.REJECT
         assert result.used_slm
         assert "SLM:" in result.rejection_reason
 
-    async def test_agent2_has_model_path(self, agent: FormatValidationAgent) -> None:
-        assert agent.model_path is not None
-        assert isinstance(agent.model_path, str)
-        assert agent.model_path.endswith(".gguf")
+    async def test_node2_has_model_path(self, node: FormatValidationNode) -> None:
+        assert node.model_path is not None
+        assert isinstance(node.model_path, str)
+        assert node.model_path.endswith(".gguf")
 
     async def test_emits_started_then_passed(
         self,
-        agent: FormatValidationAgent,
+        node: FormatValidationNode,
         broadcaster: EventBroadcaster,
     ) -> None:
         events: list[object] = []
@@ -189,7 +187,7 @@ class TestFormatValidationAgentRun:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)
-        await agent.run(_JOB_ID, "sample.pdf", _reception("application/pdf"))
+        await node.run(_JOB_ID, "sample.pdf", _reception("application/pdf"))
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -199,7 +197,7 @@ class TestFormatValidationAgentRun:
 
     async def test_emits_started_then_failed(
         self,
-        agent: FormatValidationAgent,
+        node: FormatValidationNode,
         broadcaster: EventBroadcaster,
     ) -> None:
         events: list[object] = []
@@ -209,7 +207,7 @@ class TestFormatValidationAgentRun:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)
-        await agent.run(_JOB_ID, "page.html", _reception("text/html"))
+        await node.run(_JOB_ID, "page.html", _reception("text/html"))
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -219,10 +217,10 @@ class TestFormatValidationAgentRun:
 
     async def test_audit_records_duration(
         self,
-        agent: FormatValidationAgent,
+        node: FormatValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        await agent.run(_JOB_ID, "sample.pdf", _reception("application/pdf"))
+        await node.run(_JOB_ID, "sample.pdf", _reception("application/pdf"))
 
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].duration_ms is not None
