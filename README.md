@@ -165,18 +165,26 @@ EasyOCR runs in Stage 2 (heavier, separate process — not built yet).
 │       │       ├── models.py       ORM models (6 tables)
 │       │       └── repositories/   Protocol interfaces + SQL and InMemory impls
 │       ├── ingesta/
-│       │   ├── config.py           AllowedFormatsConfig — loads allowed_formats.yaml
-│       │   ├── mime.py             MimeDetector callable — filetype-based MIME detection
-│       │   ├── llm_provider.py     get_llm() / get_llm_langchain() singletons + MockLlm
-│       │   ├── exceptions.py       LlmProviderError · ModelNotFoundError · ModelLoadError
+│       │   ├── config.py               AllowedFormatsConfig — loads allowed_formats.yaml
+│       │   ├── config_content.py       ContentValidationConfig — loads content_validation.yaml
+│       │   ├── config_duplicate.py     DuplicateControlConfig — loads duplicate_control.yaml
+│       │   ├── mime.py                 MimeDetector callable — filetype-based MIME detection
+│       │   ├── llm_provider.py         get_llm() / get_llm_langchain() singletons + MockLlm
+│       │   ├── exceptions.py           LlmProviderError · ModelNotFoundError · ModelLoadError
 │       │   ├── nodes/
-│       │   │   ├── base.py                     BaseNode abstract class
-│       │   │   ├── node1_file_reception.py      Size · SHA-256 · MIME detection
-│       │   │   ├── node2_format_validation.py   Rule-based ACCEPT/REJECT/MANUAL_REVIEW + SLM
-│       │   │   └── node3_content_validation.py  Length · language · legitimacy check
+│       │   │   ├── base.py                       BaseNode abstract class
+│       │   │   ├── node1_file_reception.py        Size · SHA-256 · MIME detection
+│       │   │   ├── node2_format_validation.py     Rule-based ACCEPT/REJECT/MANUAL_REVIEW + SLM
+│       │   │   ├── node3_content_validation.py    Length · language · SLM legitimacy check
+│       │   │   └── node4_duplicate_control.py     SHA-256 exact match + FAISS cosine similarity
 │       │   └── domain/
 │       │       ├── results.py      FileReceptionResult, FormatValidationResult, etc.
 │       │       └── state.py        JobState TypedDict (LangGraph coordinator state)
+│       ├── playground/
+│       │   ├── node1_file_reception.ipynb     End-to-end demo — Node 1
+│       │   ├── node2_format_validation.ipynb  End-to-end demo — Node 2
+│       │   ├── node3_content_validation.ipynb End-to-end demo — Node 3
+│       │   └── node4_duplicate_control.ipynb  End-to-end demo — Node 4
 │       └── api/                    FastAPI application (in progress)
 │           └── error_handlers/
 │               ├── types.py        ExceptionHandler type + EXCEPTION_HANDLERS registry
@@ -194,7 +202,7 @@ EasyOCR runs in Stage 2 (heavier, separate process — not built yet).
 
 ## Build Status
 
-10 / 19 tasks complete · 1 skipped (T18 CI — deferred)
+12 / 20 tasks complete · 1 skipped (T18 CI — deferred)
 
 | Task | Description | Status |
 |------|-------------|--------|
@@ -209,13 +217,15 @@ EasyOCR runs in Stage 2 (heavier, separate process — not built yet).
 | T11 | LLM Provider singleton | ✅ done |
 | T12 | Node 2 — SLM escalation path | ✅ done |
 | T13 | Node 3 — Content Validation | ✅ done |
+| T14 | Node 4 — Duplicate Control | ✅ done |
 | T05 | Google OAuth + whitelist | 🔲 pending |
 | T06 | JWT auth middleware | 🔲 pending |
-| T14 | Node 4 — Duplicate Control | 🔲 pending |
 | T15 | Coordinator — LangGraph | 🔲 pending |
 | T16 | FastAPI app + health route | 🔲 pending |
 | T17 | Pipeline endpoints + SSE stream | 🔲 pending |
 | T19 | Docker build + push | 🔲 pending |
+| T18 | GitHub Actions CI | ⏭ skipped |
+| T20 | wandb integration — LLM tracing + per-node metrics | 🔲 pending |
 
 Full task details and dependency graph: [tasks/todo.md](tasks/todo.md)
 

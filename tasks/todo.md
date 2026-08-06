@@ -332,16 +332,18 @@ uv run poe test tests/ingesta/test_node3.py
 ---
 
 ### T14 · Node 4 — Duplicate Control
-**Branch:** `feat/agent4` · **Deps:** T03 · T07 · T08 · **Status:** `[ ]`
+**Branch:** `feat/node4-duplicate-control` · **Deps:** T03 · T07 · T08 · **Status:** `[x]` · **PR:** [#4](https://github.com/leonardoheis/Trabajo-Integrador/pull/4)
 
-- [ ] `config/duplicate_control.yaml` has similarity threshold
-- [ ] SHA-256 match → `is_duplicate=True, duplicate_type="exact", similarity_score=1.0`
-- [ ] Cosine > threshold → `duplicate_type="semantic"`
-- [ ] New document → `is_duplicate=False`, hash saved via `IHashRepository`
-- [ ] Constructor: `__init__(self, hash_repo: IHashRepository, audit: AuditService, broadcaster: EventBroadcaster)`
-- [ ] Tests use `InMemoryHashRepository` + small FAISS index
-- [ ] `sentence-transformers` model load lazy (not at import time)
-- [ ] `uv run poe check` passes
+- [x] `config/duplicate_control.yaml` has similarity threshold
+- [x] SHA-256 match → `is_duplicate=True, duplicate_type="exact", similarity_score=1.0`
+- [x] Cosine > threshold → `duplicate_type="semantic"`
+- [x] New document → `is_duplicate=False`, hash saved via `IHashRepository`
+- [x] `EmbeddingStore` wraps FAISS `IndexFlatIP` with injectable `EmbedFn` for test isolation
+- [x] `IHashRepository` marked `@runtime_checkable` (required by Pydantic field validation)
+- [x] `sentence-transformers` model load lazy (`@lru_cache` on `_get_sentence_model()`)
+- [x] Tests use `InMemoryHashRepository` + 4-dim FAISS index with stub embed functions (7 tests)
+- [x] Playground notebook: `playground/node4_duplicate_control.ipynb`
+- [x] `uv run poe check` passes (182 tests)
 
 ```bash
 # Verify
@@ -506,7 +508,7 @@ print(llm.callbacks)
 | T11 | LLM Provider singleton | `[x]` done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
 | T12 | Node 2 — SLM escalation path | `[x]` done — PR [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19) |
 | T13 | Node 3 — Content Validation | `[x]` done — PR [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1) |
-| T14 | Node 4 — Duplicate Control | `[x]` done |
+| T14 | Node 4 — Duplicate Control | `[x]` done — PR [#4](https://github.com/leonardoheis/Trabajo-Integrador/pull/4) |
 | T15 | Coordinator — LangGraph | `[ ]` pending |
 | T16 | FastAPI app + health route | `[ ]` pending |
 | T17 | Pipeline endpoints + SSE stream | `[ ]` pending |
@@ -514,4 +516,4 @@ print(llm.callbacks)
 | T19 | Docker build + push | `[ ]` pending |
 | T20 | wandb integration — LLM tracing + per-node metrics | `[ ]` pending |
 
-**11 / 20 tasks complete · 1 skipped (T18)**
+**12 / 20 tasks complete · 1 skipped (T18)**
