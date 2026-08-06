@@ -19,7 +19,7 @@ async def test_record_persists_to_repo() -> None:
     records = await repo.list_for_job("job-1")
     assert len(records) == 1
     assert records[0].job_id == "job-1"
-    assert records[0].agent == "ingestion"
+    assert records[0].node == "ingestion"
     assert records[0].event == "started"
 
 

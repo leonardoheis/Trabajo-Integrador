@@ -13,7 +13,7 @@ class AuditService:
     async def record(
         self,
         job_id: str,
-        agent: str,
+        node: str,
         event: str,
         *,
         duration_ms: int | None = None,
@@ -21,17 +21,17 @@ class AuditService:
     ) -> None:
         if not job_id:
             raise MissingFieldError("job_id")  # noqa: EM101
-        if not agent:
-            raise MissingFieldError("agent")  # noqa: EM101
+        if not node:
+            raise MissingFieldError("node")  # noqa: EM101
         if not event:
             raise MissingFieldError("event")  # noqa: EM101
 
         audit_record = make_audit_record(
-            job_id, agent, event, duration_ms=duration_ms, detail=detail
+            job_id, node, event, duration_ms=duration_ms, detail=detail
         )
         try:
             await self._repo.save(audit_record)
         except SQLAlchemyError as exc:
-            raise PersistenceError(job_id, agent, event) from exc
+            raise PersistenceError(job_id, node, event) from exc
 
-        logger.info("audit | job={} agent={} event={}", job_id, agent, event)
+        logger.info("audit | job={} node={} event={}", job_id, node, event)

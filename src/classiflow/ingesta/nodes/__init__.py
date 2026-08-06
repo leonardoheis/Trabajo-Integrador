@@ -1,6 +1,6 @@
-from classiflow.ingesta.agents.agent1_file_reception import FileReceptionAgent
-from classiflow.ingesta.agents.agent3_content_validation import ContentValidationAgent
-from classiflow.ingesta.agents.base import BaseAgent
 from classiflow.ingesta.mime import MimeDetector
+from classiflow.ingesta.nodes.base import BaseNode
+from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
+from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 
-__all__ = ["BaseAgent", "ContentValidationAgent", "FileReceptionAgent", "MimeDetector"]
+__all__ = ["BaseNode", "ContentValidationNode", "FileReceptionNode", "MimeDetector"]

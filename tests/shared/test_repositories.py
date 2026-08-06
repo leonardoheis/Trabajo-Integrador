@@ -92,7 +92,7 @@ class TestSqlAuditRepository:
         await repo.save(rec)
         rows = await repo.list_for_job(_JOB)
         assert len(rows) == _ROWS_1
-        assert rows[0].agent == "agent1"
+        assert rows[0].node == "agent1"
 
     async def test_list_filters_by_job(self, session: AsyncSession) -> None:
         repo = SqlAuditRepository(session)
@@ -182,11 +182,11 @@ class TestInMemoryUserRepository:
 # ---------------------------------------------------------------------------
 
 
-def _step(order: int, agent: str = "agent1") -> DocumentStep:
+def _step(order: int, node: str = "node1") -> DocumentStep:
     return DocumentStep(
         job_id=_JOB,
         step_order=order,
-        agent=agent,
+        node=node,
         status="done",
         passed=True,
     )
@@ -216,7 +216,7 @@ class TestInMemoryDocumentStepsRepository:
 
     async def test_filters_by_job(self) -> None:
         repo = InMemoryDocumentStepsRepository()
-        s = DocumentStep(job_id="other", step_order=1, agent="a", status="done", passed=True)
+        s = DocumentStep(job_id="other", step_order=1, node="a", status="done", passed=True)
         await repo.save_step(s)
         assert await repo.steps_for_job(_JOB) == []
 

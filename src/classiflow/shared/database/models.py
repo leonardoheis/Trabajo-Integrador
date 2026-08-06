@@ -23,7 +23,7 @@ class AuditRecord(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    agent: Mapped[str] = mapped_column(String(100), nullable=False)
+    node: Mapped[str] = mapped_column(String(100), nullable=False)
     event: Mapped[str] = mapped_column(String(50), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -56,7 +56,7 @@ class Job(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
     )
-    failed_at_agent: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    failed_at_node: Mapped[str | None] = mapped_column(String(100), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_action_needed: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
@@ -76,7 +76,7 @@ class DocumentStep(Base):
         String(36), ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False, index=True
     )
     step_order: Mapped[int] = mapped_column(Integer, nullable=False)
-    agent: Mapped[str] = mapped_column(String(100), nullable=False)
+    node: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     passed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

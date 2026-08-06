@@ -19,7 +19,7 @@ class MissingFieldError(AuditError):
 @dataclass
 class PersistenceError(AuditError):
     job_id: str
-    agent: str
+    node: str
     event: str
 
     def __post_init__(self) -> None:
@@ -28,5 +28,5 @@ class PersistenceError(AuditError):
     def __str__(self) -> str:
         return (
             f"Failed to persist audit record for"
-            f" job={self.job_id} agent={self.agent} event={self.event}"
+            f" job={self.job_id} node={self.node} event={self.event}"
         )

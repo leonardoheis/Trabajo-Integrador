@@ -3,7 +3,7 @@ from abc import abstractmethod
 from pydantic import BaseModel
 
 
-class BaseAgent(BaseModel):
+class BaseNode(BaseModel):
     @property
     @abstractmethod
     def name(self) -> str: ...

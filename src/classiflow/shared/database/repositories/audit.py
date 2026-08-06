@@ -37,14 +37,14 @@ class InMemoryAuditRepository:
 
 def make_audit_record(
     job_id: str,
-    agent: str,
+    node: str,
     event: str,
     duration_ms: int | None = None,
     detail: AuditDetail | None = None,
 ) -> AuditRecord:
     return AuditRecord(
         job_id=job_id,
-        agent=agent,
+        node=node,
         event=event,
         duration_ms=duration_ms,
         detail=detail.model_dump() if detail else None,
