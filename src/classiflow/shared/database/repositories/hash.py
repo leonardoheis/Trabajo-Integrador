@@ -1,7 +1,15 @@
+from typing import Protocol, runtime_checkable
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.shared.database.models import HashRecord
+
+
+@runtime_checkable
+class IHashRepository(Protocol):
+    async def exists(self, sha256: str) -> bool: ...
+    async def save(self, sha256: str, job_id: str) -> None: ...
 
 
 class SqlHashRepository:

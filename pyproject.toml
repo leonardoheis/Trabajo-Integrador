@@ -147,7 +147,7 @@ warn_unused_configs = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["google.*", "filetype", "llama_cpp"]
+module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers"]
 ignore_missing_imports = true
 
 #########################
