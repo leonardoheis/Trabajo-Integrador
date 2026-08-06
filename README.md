@@ -54,14 +54,14 @@ Stage 1 is the first and only processing gate before a document enters the syste
 It determines whether a file is **safe, valid, and new** — it never classifies content.
 Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
 
-### How a file moves through the agents
+### How a file moves through the nodes
 
 ```
 [FILE UPLOAD]  ordenanza_2026.pdf
        │
        ▼
 ┌─────────────┐
-│   AGENT 1   │  File Reception
+│   NODE 1    │  File Reception
 │             │  · file present? not empty? size ≤ limit?
 │             │  · compute SHA-256
 │             │  · detect MIME type (python-magic)
@@ -70,7 +70,7 @@ Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
        │ passed=False ──────────────────────────────► REJECTED  (malformed / missing)
        ▼
 ┌─────────────┐
-│   AGENT 2   │  Format Validation
+│   NODE 2    │  Format Validation
 │             │  · magic bytes match MIME? extension consistent?
 │             │  · known-mismatches lookup table (config)
 │             │  · gray zone → Phi-4-mini SLM decides
@@ -81,30 +81,22 @@ Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
        │
        ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│   TEXT EXTRACTION   (Coordinator step — not a named agent)       │
+│   TEXT EXTRACTION   (Coordinator step — not a named node)        │
 │                                                                  │
-│   Attempt 1 — pdfplumber  (fast, selectable text)                │
-│       ├─ chars ≥ min_chars ──────────────────────────────────► ✓ │
-│       ├─ 0 < chars < min_chars                                   │
-│       │       Attempt 2 — MarkItDown  (tables, columns,          │
-│       │                   bad encodings, complex layouts)        │
-│       │           ├─ chars ≥ min_chars ──────────────────────► ✓ │
-│       │           └─ still insufficient ──────────────────────► OCR │
-│       └─ empty (0 chars) ──────────────────────────────────────► OCR │
+│   Attempt 1 — MarkItDown  (tables, columns, bad encodings)       │
+│       ├─ chars ≥ min_chars (50) ─────────────────────────────► ✓ │
+│       └─ chars < min_chars ──────────────────────────────────► OCR │
 │                                                                  │
 │   OCR path  (Stage 2 — not built yet)                            │
-│       Attempt 3 — EasyOCR  (fast, CPU, clean scans)              │
-│           ├─ confidence ≥ threshold, chars ≥ min_chars ────────► ✓ │
-│           └─ low confidence / insufficient                       │
-│                   Attempt 4 — LLaVA-phi-3-mini via MarkItDown    │
-│                       ├─ got text ─────────────────────────────► ✓ │
-│                       └─ still empty ──────────────────────────► REJECTED (unreadable) │
+│       Attempt 2 — EasyOCR  (fast, CPU, clean scans)              │
+│           ├─ chars ≥ min_usable (20) ──────────────────────────► ✓ │
+│           └─ chars < min_usable ───────────────────────────────► REJECTED (unreadable) │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
        │  text: str
        ▼
 ┌─────────────┐
-│   AGENT 3   │  Content Validation
+│   NODE 3    │  Content Validation
 │             │  · length ≥ min_chars?
 │             │  · language = Spanish? (lingua detector)
 │             │  · SLM legitimacy check (Phi-4-mini)
@@ -115,7 +107,7 @@ Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
        │ passed=False (not legitimate) ────────────► REJECTED or REVIEW QUEUE
        ▼
 ┌─────────────┐
-│   AGENT 4   │  Duplicate Control
+│   NODE 4    │  Duplicate Control
 │             │  · SHA-256 exact match → exact duplicate
 │             │  · cosine similarity > threshold → near-duplicate
 │             │  · new document → save hash
@@ -129,22 +121,20 @@ Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
 
 | Attempt | Tool | Trigger | Notes |
 |---------|------|---------|-------|
-| 1 | **pdfplumber** | always | Fast, no model. Works on most digital PDFs. |
-| 2 | **MarkItDown** | pdfplumber < min\_chars | Handles tables, columns, bad font encodings. Still needs selectable text — not pixel OCR. |
-| 3 | **EasyOCR** | text still insufficient | Pixel-level OCR, CPU-only, good for clean scans. |
-| 4 | **LLaVA-phi-3-mini** | EasyOCR low confidence | Multimodal LLM (∼2.3 GB GGUF). Last resort for complex layouts, handwriting, mixed pages. |
+| 1 | **MarkItDown** | always | Handles tables, columns, bad encodings, complex layouts. No model needed. |
+| 2 | **EasyOCR** | `len(text) < 50` | Pixel-level OCR, CPU-only, good for clean scans. Fails job if `len(text) < 20`. |
 
-MarkItDown and pdfplumber run inside the Stage 1 Coordinator (no model needed, fast).
-EasyOCR and LLaVA run in Stage 2 (heavier, separate process).
+MarkItDown runs inside the Stage 1 Coordinator (no model needed, fast).
+EasyOCR runs in Stage 2 (heavier, separate process — not built yet).
 
 ### Routing outcomes
 
 | Outcome | Meaning | Next step |
 |---------|---------|-----------|
-| `ACCEPTED` | All 4 agents passed | Stage 2 pipeline |
-| `REJECTED` | Hard failure at any agent | Audit log, no retry |
+| `ACCEPTED` | All 4 nodes passed | Stage 2 pipeline |
+| `REJECTED` | Hard failure at any node | Audit log, no retry |
 | `REVIEW QUEUE` | Ambiguous result | Human reviewer decides |
-| `REQUIRES_OCR` | Empty text from digital extraction | Stage 2 OCR path |
+| `REQUIRES_OCR` | Insufficient text from MarkItDown | Stage 2 EasyOCR path |
 
 ## Repository Structure
 
@@ -166,7 +156,7 @@ EasyOCR and LLaVA run in Stage 2 (heavier, separate process).
 │       │   ├── audit/
 │       │   │   └── service.py      AuditService — wraps IAuditRepository + loguru
 │       │   ├── domain/
-│       │   │   ├── job.py          AgentEvent, JobStatus
+│       │   │   ├── job.py          NodeEvent, JobStatus
 │       │   │   └── user.py         User, AuthToken
 │       │   ├── events/
 │       │   │   └── broadcaster.py  EventBroadcaster — asyncio.Queue per job_id
@@ -179,9 +169,11 @@ EasyOCR and LLaVA run in Stage 2 (heavier, separate process).
 │       │   ├── mime.py             MimeDetector callable — filetype-based MIME detection
 │       │   ├── llm_provider.py     get_llm() / get_llm_langchain() singletons + MockLlm
 │       │   ├── exceptions.py       LlmProviderError · ModelNotFoundError · ModelLoadError
-│       │   ├── agents/
-│       │   │   ├── agent1_file_reception.py    Size · SHA-256 · MIME detection
-│       │   │   └── agent2_format_validation.py Rule-based ACCEPT/REJECT/MANUAL_REVIEW
+│       │   ├── nodes/
+│       │   │   ├── base.py                     BaseNode abstract class
+│       │   │   ├── node1_file_reception.py      Size · SHA-256 · MIME detection
+│       │   │   ├── node2_format_validation.py   Rule-based ACCEPT/REJECT/MANUAL_REVIEW + SLM
+│       │   │   └── node3_content_validation.py  Length · language · legitimacy check
 │       │   └── domain/
 │       │       ├── results.py      FileReceptionResult, FormatValidationResult, etc.
 │       │       └── state.py        JobState TypedDict (LangGraph coordinator state)
@@ -191,7 +183,8 @@ EasyOCR and LLaVA run in Stage 2 (heavier, separate process).
 │               └── llm.py          LlmErrorBody (Pydantic) + handlers for LLM errors
 ├── alembic/                        Database migrations
 │   └── versions/
-│       └── 0001_initial_schema.py  Initial schema — all 6 tables
+│       ├── 0001_initial_schema.py  Initial schema — all 6 tables
+│       └── 0002_rename_agent_to_node.py  Rename agent columns to node
 ├── tasks/
 │   ├── plan.md                     Full implementation plan
 │   └── todo.md                     Task tracker
@@ -211,14 +204,14 @@ EasyOCR and LLaVA run in Stage 2 (heavier, separate process).
 | T04 | JWT utilities | ✅ done |
 | T07 | Shared domain + AuditService + EventBroadcaster | ✅ done |
 | T08 | Ingesta domain models | ✅ done |
-| T09 | Agent 1 — File Reception | ✅ done |
-| T10 | Agent 2 — Format Validation (rule-based) | ✅ done |
+| T09 | Node 1 — File Reception | ✅ done |
+| T10 | Node 2 — Format Validation (rule-based) | ✅ done |
 | T11 | LLM Provider singleton | ✅ done |
-| T12 | Agent 2 — SLM escalation path | ✅ done |
-| T13 | Agent 3 — Content Validation | ✅ done |
+| T12 | Node 2 — SLM escalation path | ✅ done |
+| T13 | Node 3 — Content Validation | ✅ done |
 | T05 | Google OAuth + whitelist | 🔲 pending |
 | T06 | JWT auth middleware | 🔲 pending |
-| T14 | Agent 4 — Duplicate Control | 🔲 pending |
+| T14 | Node 4 — Duplicate Control | 🔲 pending |
 | T15 | Coordinator — LangGraph | 🔲 pending |
 | T16 | FastAPI app + health route | 🔲 pending |
 | T17 | Pipeline endpoints + SSE stream | 🔲 pending |
@@ -230,10 +223,10 @@ Full task details and dependency graph: [tasks/todo.md](tasks/todo.md)
 
 - **SQLAlchemy 2.0 async** (`Mapped[]` annotations, `async_sessionmaker`, `aiosqlite` for local dev)
 - **Repository pattern** — Protocol interfaces; `Sql*` for production, `InMemory*` for tests
-- **LangGraph** — 4-agent sequential pipeline (File Reception → Format Validation → Content Validation → Duplicate Control)
-- **FastAPI + SSE** — `POST /pipeline/ingest` triggers background task; `GET /pipeline/{job_id}/events` streams agent state
+- **LangGraph** — 4-node sequential pipeline (File Reception → Format Validation → Content Validation → Duplicate Control)
+- **FastAPI + SSE** — `POST /pipeline/ingest` triggers background task; `GET /pipeline/{job_id}/events` streams node state
 - **`dependency-injector`** — `DeclarativeContainer` + `@inject` + `Provide[Container.*]`; `TestContainer` swaps all `Sql*` repos with `InMemory*`
-- **Document tracking** — `document_steps` records per-agent path; `human_decisions` records reviewer actions; review queue via `GET /pipeline/review-queue`
+- **Document tracking** — `document_steps` records per-node path; `human_decisions` records reviewer actions; review queue via `GET /pipeline/review-queue`
 - **Alembic async migrations** — `asyncio.run()` pattern in `env.py`; single connection string swap to move from SQLite to PostgreSQL
 
 ## Document Categories
@@ -290,6 +283,6 @@ uv run poe test    # unit tests only
 ### Running the migrations
 
 ```bash
-uv run alembic upgrade head   # apply all migrations to classiflow.db
+uv run alembic upgrade head   # apply all migrations to data/classiflow.db
 uv run alembic downgrade -1   # roll back one revision
 ```
