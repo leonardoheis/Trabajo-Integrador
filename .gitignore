@@ -150,6 +150,8 @@ checkpoints/
 *.onnx
 *.pb
 *.tflite
+*.gguf
+*.ggml
 saved_model/
 
 # ---- Experiment tracking ----
@@ -183,3 +185,10 @@ desktop.ini
 # ---- Un-ignore models directory and all its contents ----
 !models/
 !models/**
+
+# ---- Samples (local test files) ----
+samples/
+
+# ---- Claude Code / tooling (local only) ----
+.claude/worktrees/
+.codegraph/
