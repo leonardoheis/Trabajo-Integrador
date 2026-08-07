@@ -1,6 +1,8 @@
 allowed_mime_types:
   - application/pdf
   - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+  - application/octet-stream
   - image/jpeg
   - image/png
   - image/tiff
@@ -12,6 +14,7 @@ allowed_extensions:
   - .jpeg
   - .png
   - .tiff
+  - .xlsx
 
 # Explicitly rejected — never accepted regardless of magic bytes
 disabled_mime_types:
@@ -35,6 +38,8 @@ mime_to_extensions:
     - .png
   image/tiff:
     - .tiff
+  application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+    - .xlsx
 
 max_file_size_mb: 50
 

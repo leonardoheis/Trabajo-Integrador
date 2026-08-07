@@ -11,6 +11,7 @@ class ContentValidationConfig(BaseModel):
     min_chars: int
     max_chars: int
     ocr_char_threshold: int = 10
+    excerpt_len: int = 500
     allowed_languages: list[str]
     slm_confidence_threshold: float = 0.75
 

@@ -69,6 +69,16 @@ def node(audit: AuditService, broadcaster: EventBroadcaster) -> ContentValidatio
     return ContentValidationNode(audit=audit, broadcaster=broadcaster, config=_CONFIG)
 
 
+@pytest.fixture
+def spanish_node(audit: AuditService, broadcaster: EventBroadcaster) -> ContentValidationNode:
+    return ContentValidationNode(
+        audit=audit,
+        broadcaster=broadcaster,
+        config=_CONFIG,
+        language_detector=_MockDetector("es"),
+    )
+
+
 class TestContentValidationNodeValidate:
     def test_image_only_pdf_sets_requires_ocr(self, node: ContentValidationNode) -> None:
         result = node._validate("", _PDF_RECEPTION)  # noqa: SLF001
@@ -93,14 +103,16 @@ class TestContentValidationNodeValidate:
 
     def test_non_allowed_language_triggers_review(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-        node: ContentValidationNode,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
     ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation._get_detector",
-            lambda: _MockDetector("fr"),
+        french_node = ContentValidationNode(
+            audit=audit,
+            broadcaster=broadcaster,
+            config=_CONFIG,
+            language_detector=_MockDetector("fr"),
         )
-        result = node._validate(_SPANISH_TEXT, _PDF_RECEPTION)  # noqa: SLF001
+        result = french_node._validate(_SPANISH_TEXT, _PDF_RECEPTION)  # noqa: SLF001
         assert not result.passed
         assert result.needs_agent_review
         assert result.detected_language == "fr"
@@ -110,18 +122,14 @@ class TestContentValidationNodeRun:
     async def test_valid_spanish_passes(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        node: ContentValidationNode,
+        spanish_node: ContentValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation._get_detector",
-            lambda: _MockDetector("es"),
-        )
         monkeypatch.setattr(
             "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
             lambda _path: MockLlm(response=_SLM_LEGITIMATE),
         )
-        result = await node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
+        result = await spanish_node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
 
         assert result.passed
         assert result.detected_language == "es"
@@ -152,17 +160,13 @@ class TestContentValidationNodeRun:
     async def test_slm_rejects_illegitimate_content(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        node: ContentValidationNode,
+        spanish_node: ContentValidationNode,
     ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation._get_detector",
-            lambda: _MockDetector("es"),
-        )
         monkeypatch.setattr(
             "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
             lambda _path: MockLlm(response=_SLM_NOT_LEGITIMATE),
         )
-        result = await node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
+        result = await spanish_node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
 
         assert not result.passed
         assert result.needs_agent_review
@@ -171,13 +175,9 @@ class TestContentValidationNodeRun:
     async def test_emits_started_then_passed(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        node: ContentValidationNode,
+        spanish_node: ContentValidationNode,
         broadcaster: EventBroadcaster,
     ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation._get_detector",
-            lambda: _MockDetector("es"),
-        )
         monkeypatch.setattr(
             "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
             lambda _path: MockLlm(response=_SLM_LEGITIMATE),
@@ -189,7 +189,7 @@ class TestContentValidationNodeRun:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)
-        await node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
+        await spanish_node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -200,18 +200,14 @@ class TestContentValidationNodeRun:
     async def test_audit_records_duration(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        node: ContentValidationNode,
+        spanish_node: ContentValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation._get_detector",
-            lambda: _MockDetector("es"),
-        )
         monkeypatch.setattr(
             "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
             lambda _path: MockLlm(response=_SLM_LEGITIMATE),
         )
-        await node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
+        await spanish_node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
 
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].duration_ms is not None

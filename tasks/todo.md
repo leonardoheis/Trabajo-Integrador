@@ -491,6 +491,36 @@ print(llm.callbacks)
 
 ---
 
+### T21 · Text extraction — MarkItDown + PaddleOCR fallback
+**Branch:** `feat/text-extraction` · **Deps:** T15 · **Status:** `[ ]`
+
+Add a real `text_extractor` to the coordinator that tries MarkItDown first and falls back to PaddleOCR for image-heavy PDFs, replacing the current UTF-8 decode stub.
+
+**Dependencies to add (`pyproject.toml`):**
+- [ ] `markitdown[pdf]>=0.1` (text extraction from PDF/DOCX/XLSX)
+- [ ] `paddlepaddle>=2.6` + `paddleocr>=2.8` (OCR engine)
+
+**New file `src/classiflow/ingesta/extract.py`:**
+- [ ] `MIN_TEXT_FOR_OCR: int = 50` — if MarkItDown yields fewer chars, fall back to OCR
+- [ ] `MIN_USABLE_TEXT: int = 20` — if still below after OCR, return `""` (Node 3 rejects as image-only)
+- [ ] `extract_document(file_bytes: bytes, filename: str) -> str` — public entry point
+  - Writes bytes to a temp file (MarkItDown requires a path)
+  - Tries `MarkItDown().convert(path).text_content`
+  - If `len(text) < MIN_TEXT_FOR_OCR`: initializes `PaddleOCR(lang="es")` and runs on each page rendered via `fitz` at 200 dpi
+  - Returns cleaned, stripped text (or `""` on total failure)
+- [ ] `_get_ocr() -> PaddleOCR` — `@lru_cache(maxsize=1)` singleton (same pattern as `_get_detector`)
+
+**Coordinator wiring (`src/classiflow/ingesta/coordinator.py`):**
+- [ ] Default `text_extractor` changed from UTF-8 stub to `extract_document`
+
+**Tests (`tests/ingesta/test_extract.py`):**
+- [ ] `test_markitdown_sufficient_text` — mock MarkItDown returning ≥ 50 chars; OCR not called
+- [ ] `test_ocr_fallback_when_text_thin` — mock MarkItDown returning < 50 chars; OCR mock called
+- [ ] `test_both_fail_returns_empty` — both raise; result is `""`
+- [ ] `uv run poe check` passes
+
+---
+
 ## Progress
 
 | Task | Description | Status |
@@ -515,5 +545,6 @@ print(llm.callbacks)
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
 | T20 | wandb integration — LLM tracing + per-node metrics | `[ ]` pending |
+| T21 | Text extraction — MarkItDown + PaddleOCR fallback | `[ ]` pending |
 
-**12 / 20 tasks complete · 1 skipped (T18)**
+**12 / 21 tasks complete · 1 skipped (T18)**

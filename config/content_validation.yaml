@@ -1,10 +1,11 @@
 # Content validation thresholds and rules
 # Agent 3 (Content Validation) uses this config.
-min_chars: 50
+min_chars: 30
 max_chars: 500000
 
 # PDFs with fewer extracted characters than this are treated as image-only and routed to OCR
-ocr_char_threshold: 10
+ocr_char_threshold: 50
+excerpt_len: 500
 
 # Language detection — ISO 639-1 codes
 allowed_languages:
@@ -12,4 +13,4 @@ allowed_languages:
   - en   # English (fallback)
 
 # SLM confidence threshold below which a human review is triggered
-slm_confidence_threshold: 0.75
+slm_confidence_threshold: 0.85

@@ -1,4 +1,5 @@
-from .base import BaseEntity
+from typing import TypedDict
+
 from .results import (
     ContentValidationResult,
     DuplicateControlResult,
@@ -7,13 +8,17 @@ from .results import (
 )
 
 
-class JobState(BaseEntity):
-    job_id: str | None = None
-    filename: str | None = None
-    file_bytes: bytes | None = None
-    reception: FileReceptionResult | None = None
-    format_validation: FormatValidationResult | None = None
-    content_validation: ContentValidationResult | None = None
-    duplicate_control: DuplicateControlResult | None = None
-    final_status: str | None = None
-    rejection_reason: str | None = None
+class _JobStateRequired(TypedDict):
+    job_id: str
+    filename: str
+    file_bytes: bytes | None
+
+
+class JobState(_JobStateRequired, total=False):
+    text: str
+    reception: FileReceptionResult | None
+    format_validation: FormatValidationResult | None
+    content_validation: ContentValidationResult | None
+    duplicate_control: DuplicateControlResult | None
+    final_status: str | None
+    rejection_reason: str | None
