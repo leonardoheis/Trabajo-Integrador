@@ -1,0 +1,12 @@
+# Duplicate detection configuration
+# Node 4 (Duplicate Control) uses this config.
+hash_algorithm: sha256
+
+# Action when a duplicate is detected
+on_duplicate: reject   # reject | flag_for_review
+
+# Grace period — same hash within this window is always rejected
+dedup_window_days: 0   # 0 = no time window, always reject
+
+# Cosine similarity threshold for near-duplicate detection (0–1)
+cosine_similarity_threshold: 0.85

@@ -1,0 +1,54 @@
+allowed_mime_types:
+  - application/pdf
+  - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+  - application/octet-stream
+  - image/jpeg
+  - image/png
+  - image/tiff
+
+allowed_extensions:
+  - .pdf
+  - .docx
+  - .jpg
+  - .jpeg
+  - .png
+  - .tiff
+  - .xlsx
+
+# Explicitly rejected — never accepted regardless of magic bytes
+disabled_mime_types:
+  - text/html
+  - application/xhtml+xml
+
+disabled_extensions:
+  - .html
+  - .htm
+
+# Maps each allowed MIME to its expected extensions — mismatches are gray zone
+mime_to_extensions:
+  application/pdf:
+    - .pdf
+  application/vnd.openxmlformats-officedocument.wordprocessingml.document:
+    - .docx
+  image/jpeg:
+    - .jpg
+    - .jpeg
+  image/png:
+    - .png
+  image/tiff:
+    - .tiff
+  application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+    - .xlsx
+
+max_file_size_mb: 50
+
+# Known acceptable MIME/extension pairs where libmagic detects a different MIME
+# than the canonical one for the extension but the file is still valid.
+# Example: DOCX files are ZIP archives internally — libmagic often reports application/zip.
+known_mismatches:
+  application/zip:
+    - .docx
+  image/pjpeg:
+    - .jpg
+    - .jpeg

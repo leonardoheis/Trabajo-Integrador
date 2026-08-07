@@ -46,6 +46,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
+tests/reports/
 
 # ---- Translations ----
 *.mo
@@ -58,6 +59,9 @@ db.sqlite3
 db.sqlite3-journal
 instance/
 .webassets-cache
+
+# ---- SQLite dev databases ----
+*.db
 
 # ---- Scrapy ----
 .scrapy
@@ -88,6 +92,9 @@ celerybeat.pid
 
 # ---- SageMath ----
 *.sage.py
+
+# ---- IDE / tooling ----
+.codegraph/
 
 # ---- Environments ----
 .env
@@ -148,6 +155,7 @@ checkpoints/
 *.pth
 *.ckpt
 *.onnx
+*.gguf
 *.pb
 *.tflite
 *.gguf
@@ -192,3 +200,7 @@ samples/
 # ---- Claude Code / tooling (local only) ----
 .claude/worktrees/
 .codegraph/
+src/classiflow/playground/samples/
+
+# ---- Claude Code worktrees (local working directories, never committed) ----
+.claude/worktrees/
