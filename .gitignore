@@ -158,6 +158,8 @@ checkpoints/
 *.gguf
 *.pb
 *.tflite
+*.gguf
+*.ggml
 saved_model/
 
 # ---- Experiment tracking ----
@@ -188,6 +190,16 @@ desktop.ini
 # Secrets
 .env
 
+# ---- Un-ignore models directory and all its contents ----
+!models/
+!models/**
+
+# ---- Samples (local test files) ----
+samples/
+
+# ---- Claude Code / tooling (local only) ----
+.claude/worktrees/
+.codegraph/
 src/classiflow/playground/samples/
 
 # ---- Claude Code worktrees (local working directories, never committed) ----
