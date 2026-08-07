@@ -24,7 +24,7 @@ Respond with valid JSON only."""
 
 class FormatDecisionOutput(BaseModel):
     decision: FormatDecision
-    confidence: float
+    confidence: float | None = None
     reasoning: str = ""
 
 

@@ -181,10 +181,12 @@ EasyOCR runs in Stage 2 (heavier, separate process — not built yet).
 │       │       ├── results.py      FileReceptionResult, FormatValidationResult, etc.
 │       │       └── state.py        JobState TypedDict (LangGraph coordinator state)
 │       ├── playground/
-│       │   ├── node1_file_reception.ipynb     End-to-end demo — Node 1
-│       │   ├── node2_format_validation.ipynb  End-to-end demo — Node 2
-│       │   ├── node3_content_validation.ipynb End-to-end demo — Node 3
-│       │   └── node4_duplicate_control.ipynb  End-to-end demo — Node 4
+│       │   └── stage1/
+│       │       ├── node1_file_reception.ipynb     End-to-end demo — Node 1
+│       │       ├── node2_format_validation.ipynb  End-to-end demo — Node 2
+│       │       ├── node3_content_validation.ipynb End-to-end demo — Node 3
+│       │       ├── node4_duplicate_control.ipynb  End-to-end demo — Node 4
+│       │       └── coordinator.ipynb              Full 4-node pipeline via LangGraph
 │       └── api/                    FastAPI application (in progress)
 │           └── error_handlers/
 │               ├── types.py        ExceptionHandler type + EXCEPTION_HANDLERS registry

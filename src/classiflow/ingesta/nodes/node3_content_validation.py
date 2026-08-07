@@ -1,7 +1,8 @@
 import time
 from functools import lru_cache
+from typing import Protocol, runtime_checkable
 
-from lingua import Language, LanguageDetector, LanguageDetectorBuilder
+from lingua import LanguageDetector, LanguageDetectorBuilder
 from pydantic import ConfigDict, Field
 
 from classiflow.ingesta.config_content import ContentValidationConfig, get_content_validation_config
@@ -19,7 +20,21 @@ from classiflow.shared.domain.job import JobStatus, NodeEvent
 from classiflow.shared.events.broadcaster import EventBroadcaster
 
 _PDF_MIME = "application/pdf"
-_EXCERPT_LEN = 500
+
+
+class _IsoCode(Protocol):
+    @property
+    def name(self) -> str: ...
+
+
+class _Language(Protocol):
+    @property
+    def iso_code_639_1(self) -> _IsoCode: ...
+
+
+@runtime_checkable
+class _LanguageDetector(Protocol):
+    def detect_language_of(self, text: str) -> _Language | None: ...
 
 
 @lru_cache(maxsize=1)
@@ -41,6 +56,7 @@ class ContentValidationNode(BaseNode):
     audit: AuditService
     broadcaster: EventBroadcaster
     config: ContentValidationConfig = Field(default_factory=get_content_validation_config)
+    language_detector: _LanguageDetector = Field(default_factory=_get_detector)
 
     async def run(
         self,
@@ -109,9 +125,8 @@ class ContentValidationNode(BaseNode):
 
         return self._slm_legitimacy_check(text, detected_language, char_count)
 
-    @staticmethod
-    def _detect_language(text: str) -> str:
-        language: Language | None = _get_detector().detect_language_of(text[:_EXCERPT_LEN])
+    def _detect_language(self, text: str) -> str:
+        language = self.language_detector.detect_language_of(text[: self.config.excerpt_len])
         if language is None:
             return "unknown"
         return language.iso_code_639_1.name.lower()
@@ -121,7 +136,7 @@ class ContentValidationNode(BaseNode):
     ) -> ContentValidationResult:
         llm = get_llm_langchain(self.model_path)
         output: LegitimacyDecisionOutput = build_content_chain(llm).invoke({
-            "text_excerpt": text[:_EXCERPT_LEN],
+            "text_excerpt": text[: self.config.excerpt_len],
             "detected_language": detected_language,
         })
         if output.is_legitimate:

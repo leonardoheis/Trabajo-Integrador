@@ -122,6 +122,7 @@ line-ending = "auto"
 [tool.ruff.lint.per-file-ignores]
 "notebooks/*.ipynb" = ["F401"]
 "src/classiflow/playground/*.ipynb" = ["T201", "F401"]  # playground: print() is intentional output
+"src/classiflow/playground/**/*.ipynb" = ["T201", "F401"]
 "tests/**/*.py" = ["PLR6301"]  # pytest class methods don't need to use self
 
 #########################
