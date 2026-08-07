@@ -186,6 +186,9 @@ desktop.ini
 !models/
 !models/**
 
+# ---- Samples (local test files) ----
+samples/
+
 # ---- Claude Code / tooling (local only) ----
 .claude/worktrees/
 .codegraph/
