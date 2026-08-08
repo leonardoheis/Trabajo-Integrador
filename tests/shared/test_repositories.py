@@ -5,24 +5,24 @@ from collections.abc import AsyncGenerator
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from classiflow.shared.database.base import Base
-from classiflow.shared.database.models import AllowedUser, DocumentStep, HumanDecision, Job
-from classiflow.shared.database.repositories.audit import (
+from classiflow.database.base import Base
+from classiflow.database.models import AllowedUser, DocumentStep, HumanDecision, Job
+from classiflow.database.repositories.audit import (
     InMemoryAuditRepository,
     SqlAuditRepository,
     make_audit_record,
 )
-from classiflow.shared.database.repositories.document_steps import (
+from classiflow.database.repositories.document_steps import (
     InMemoryDocumentStepsRepository,
     SqlDocumentStepsRepository,
 )
-from classiflow.shared.database.repositories.hash import InMemoryHashRepository, SqlHashRepository
-from classiflow.shared.database.repositories.human_decision import (
+from classiflow.database.repositories.hash import InMemoryHashRepository, SqlHashRepository
+from classiflow.database.repositories.human_decision import (
     InMemoryHumanDecisionRepository,
     SqlHumanDecisionRepository,
 )
-from classiflow.shared.database.repositories.job import InMemoryJobRepository, SqlJobRepository
-from classiflow.shared.database.repositories.user import InMemoryUserRepository, SqlUserRepository
+from classiflow.database.repositories.job import InMemoryJobRepository, SqlJobRepository
+from classiflow.database.repositories.user import InMemoryUserRepository, SqlUserRepository
 
 pytestmark = pytest.mark.anyio
 

@@ -2,14 +2,16 @@ import asyncio
 
 import pytest
 
+from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.domain.job import JobStatus
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config import AllowedFormatsConfig
+from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import FileReceptionResult, FormatDecision
 from classiflow.ingesta.llm_provider import MockLlm
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import InMemoryAuditRepository
-from classiflow.shared.domain.job import JobStatus
-from classiflow.shared.events.broadcaster import EventBroadcaster
+from classiflow.ingesta.prompts.format_validation import build_format_chain
+from classiflow.services.audit.service import AuditService
 
 _SLM_ACCEPT_RESPONSE = '{"decision": "accept", "confidence": 0.9, "reasoning": "valid format"}'
 _SLM_REJECT_RESPONSE = '{"decision": "reject", "confidence": 0.85, "reasoning": "binary content"}'
@@ -105,7 +107,8 @@ class TestFormatValidationNodeRun:
         node: FormatValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await node.run(_JOB_ID, "sample.pdf", _reception("application/pdf"))
+        ctx = JobContext(job_id=_JOB_ID, filename="sample.pdf")
+        result = await node.run(ctx, _reception("application/pdf"))
 
         assert result.passed
         assert result.decision == FormatDecision.ACCEPT
@@ -118,7 +121,8 @@ class TestFormatValidationNodeRun:
         node: FormatValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await node.run(_JOB_ID, "page.html", _reception("text/html"))
+        ctx = JobContext(job_id=_JOB_ID, filename="page.html")
+        result = await node.run(ctx, _reception("text/html"))
 
         assert not result.passed
         assert result.decision == FormatDecision.REJECT
@@ -130,7 +134,8 @@ class TestFormatValidationNodeRun:
         node: FormatValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await node.run(_JOB_ID, "file.xyz", _reception("application/x-unknown"))
+        ctx = JobContext(job_id=_JOB_ID, filename="file.xyz")
+        result = await node.run(ctx, _reception("application/x-unknown"))
 
         assert not result.passed
         assert result.decision == FormatDecision.MANUAL_REVIEW
@@ -139,15 +144,17 @@ class TestFormatValidationNodeRun:
 
     async def test_slm_accept_on_mime_extension_mismatch(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-        node: FormatValidationNode,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
     ) -> None:
-        accept_llm = MockLlm(response=_SLM_ACCEPT_RESPONSE)
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node2_format_validation.get_llm_langchain",
-            lambda _path: accept_llm,
+        slm_node = FormatValidationNode(
+            audit=audit,
+            broadcaster=broadcaster,
+            config=_CONFIG,
+            format_chain=build_format_chain(MockLlm(response=_SLM_ACCEPT_RESPONSE)),
         )
-        result = await node.run(_JOB_ID, "document.docx", _reception("application/pdf"))
+        ctx = JobContext(job_id=_JOB_ID, filename="document.docx")
+        result = await slm_node.run(ctx, _reception("application/pdf"))
 
         assert result.passed
         assert result.decision == FormatDecision.ACCEPT
@@ -155,25 +162,22 @@ class TestFormatValidationNodeRun:
 
     async def test_slm_reject_on_mime_extension_mismatch(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-        node: FormatValidationNode,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
     ) -> None:
-        reject_llm = MockLlm(response=_SLM_REJECT_RESPONSE)
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node2_format_validation.get_llm_langchain",
-            lambda _path: reject_llm,
+        slm_node = FormatValidationNode(
+            audit=audit,
+            broadcaster=broadcaster,
+            config=_CONFIG,
+            format_chain=build_format_chain(MockLlm(response=_SLM_REJECT_RESPONSE)),
         )
-        result = await node.run(_JOB_ID, "document.docx", _reception("application/pdf"))
+        ctx = JobContext(job_id=_JOB_ID, filename="document.docx")
+        result = await slm_node.run(ctx, _reception("application/pdf"))
 
         assert not result.passed
         assert result.decision == FormatDecision.REJECT
         assert result.used_slm
         assert "SLM:" in result.rejection_reason
-
-    async def test_node2_has_model_path(self, node: FormatValidationNode) -> None:
-        assert node.model_path is not None
-        assert isinstance(node.model_path, str)
-        assert node.model_path.endswith(".gguf")
 
     async def test_emits_started_then_passed(
         self,
@@ -187,7 +191,8 @@ class TestFormatValidationNodeRun:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)
-        await node.run(_JOB_ID, "sample.pdf", _reception("application/pdf"))
+        ctx = JobContext(job_id=_JOB_ID, filename="sample.pdf")
+        await node.run(ctx, _reception("application/pdf"))
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -207,7 +212,8 @@ class TestFormatValidationNodeRun:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)
-        await node.run(_JOB_ID, "page.html", _reception("text/html"))
+        ctx = JobContext(job_id=_JOB_ID, filename="page.html")
+        await node.run(ctx, _reception("text/html"))
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -220,7 +226,8 @@ class TestFormatValidationNodeRun:
         node: FormatValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        await node.run(_JOB_ID, "sample.pdf", _reception("application/pdf"))
+        ctx = JobContext(job_id=_JOB_ID, filename="sample.pdf")
+        await node.run(ctx, _reception("application/pdf"))
 
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].duration_ms is not None

@@ -1,7 +1,7 @@
 import pytest
 
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import AuditDetail, InMemoryAuditRepository
+from classiflow.database.repositories.audit import AuditDetail, InMemoryAuditRepository
+from classiflow.services.audit.service import AuditService
 
 pytestmark = pytest.mark.anyio
 
