@@ -19,6 +19,7 @@ pytestmark = pytest.mark.usefixtures("_jwt_secret")
 _ALLOWED_EMAIL = "allowed@classiflow.dev"
 _BLOCKED_EMAIL = "blocked@classiflow.dev"
 _CALLBACK_EMAIL = "callback@classiflow.dev"
+_TEST_STATE = "test-csrf-state"
 
 
 @pytest.fixture
@@ -46,17 +47,21 @@ def _mock_transport(email: str = _ALLOWED_EMAIL) -> httpx.MockTransport:
 class TestGetAuthorizationUrl:
     def test_points_to_google(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(Settings, "GOOGLE_CLIENT_ID", "my-client")
-        assert "accounts.google.com" in get_authorization_url()
+        assert "accounts.google.com" in get_authorization_url(_TEST_STATE)
 
     def test_contains_client_id(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(Settings, "GOOGLE_CLIENT_ID", "my-client")
-        assert "my-client" in get_authorization_url()
+        assert "my-client" in get_authorization_url(_TEST_STATE)
 
     def test_requests_email_scope(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(Settings, "GOOGLE_CLIENT_ID", "x")
-        url = get_authorization_url()
-        assert "openid" in url
+        url = get_authorization_url(_TEST_STATE)
         assert "email" in url
+        assert "profile" in url
+
+    def test_includes_state(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(Settings, "GOOGLE_CLIENT_ID", "x")
+        assert _TEST_STATE in get_authorization_url(_TEST_STATE)
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +104,28 @@ class TestExchangeCode:
             async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
                 await exchange_code("code", user_repo, http=http)
 
+    async def test_raises_oauth_error_on_missing_access_token(
+        self, user_repo: InMemoryUserRepository
+    ) -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(httpx.codes.OK, json={})
+
+        with pytest.raises(OAuthError, match="Malformed token"):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+                await exchange_code("code", user_repo, http=http)
+
+    async def test_raises_oauth_error_on_missing_email(
+        self, user_repo: InMemoryUserRepository
+    ) -> None:
+        def handler(_request: httpx.Request) -> httpx.Response:
+            if "googleapis.com/token" in str(_request.url):
+                return httpx.Response(httpx.codes.OK, json={"access_token": "tok"})
+            return httpx.Response(httpx.codes.OK, json={})
+
+        with pytest.raises(OAuthError, match="Malformed userinfo"):
+            async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+                await exchange_code("code", user_repo, http=http)
+
 
 # ---------------------------------------------------------------------------
 # AuthService
@@ -138,6 +165,19 @@ class TestAuthLoginEndpoint:
         assert response.status_code == HTTPStatus.FOUND
         assert "accounts.google.com" in response.headers["location"]
 
+    def test_sets_state_cookie(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(Settings, "GOOGLE_CLIENT_ID", "test-id")
+        response = client.get("/auth/login", follow_redirects=False)
+        assert "oauth_state" in response.cookies
+
+    def test_state_in_redirect_url(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(Settings, "GOOGLE_CLIENT_ID", "test-id")
+        response = client.get("/auth/login", follow_redirects=False)
+        state = response.cookies["oauth_state"]
+        assert state in response.headers["location"]
+
 
 # ---------------------------------------------------------------------------
 # /auth/callback endpoint
@@ -145,6 +185,9 @@ class TestAuthLoginEndpoint:
 
 
 class TestAuthCallbackEndpoint:
+    def _state_header(self, state: str = _TEST_STATE) -> dict[str, str]:
+        return {"Cookie": f"oauth_state={state}"}
+
     def test_callback_returns_bearer_token(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -153,7 +196,10 @@ class TestAuthCallbackEndpoint:
             "classiflow.api.routes.auth.endpoints.exchange_code",
             AsyncMock(return_value=AuthToken(access_token=expected_jwt)),
         )
-        response = client.get("/auth/callback?code=google-code")
+        response = client.get(
+            f"/auth/callback?code=google-code&state={_TEST_STATE}",
+            headers=self._state_header(),
+        )
         assert response.status_code == HTTPStatus.OK
         result = AuthToken.model_validate(response.json())
         assert decode_token(result.access_token).sub == _CALLBACK_EMAIL
@@ -165,5 +211,19 @@ class TestAuthCallbackEndpoint:
             "classiflow.api.routes.auth.endpoints.exchange_code",
             AsyncMock(side_effect=NotAllowedError(email="stranger@test.com")),
         )
-        response = client.get("/auth/callback?code=google-code")
+        response = client.get(
+            f"/auth/callback?code=google-code&state={_TEST_STATE}",
+            headers=self._state_header(),
+        )
         assert response.status_code == HTTPStatus.FORBIDDEN
+
+    def test_callback_missing_state_cookie_returns_400(self, client: TestClient) -> None:
+        response = client.get(f"/auth/callback?code=google-code&state={_TEST_STATE}")
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_callback_mismatched_state_returns_400(self, client: TestClient) -> None:
+        response = client.get(
+            f"/auth/callback?code=google-code&state={_TEST_STATE}",
+            headers=self._state_header("different-state"),
+        )
+        assert response.status_code == HTTPStatus.BAD_REQUEST

@@ -1,9 +1,8 @@
 from pathlib import Path
 from typing import Protocol, cast, runtime_checkable
 
-from pydantic import Field
-
 from classiflow.database.repositories.audit import AuditDetail
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config import AllowedFormatsConfig, get_allowed_formats
 from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import (
@@ -14,6 +13,7 @@ from classiflow.ingesta.domain.results import (
 from classiflow.ingesta.llm_provider import get_llm_langchain
 from classiflow.ingesta.nodes.base import BaseNode
 from classiflow.ingesta.prompts.format_validation import FormatDecisionOutput, build_format_chain
+from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
 
 
@@ -27,8 +27,17 @@ class FormatValidationNode(BaseNode):
     def name(self) -> str:
         return "node2_format_validation"
 
-    config: AllowedFormatsConfig = Field(default_factory=get_allowed_formats)
-    format_chain: _FormatChain | None = None
+    def __init__(
+        self,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
+        *,
+        config: AllowedFormatsConfig | None = None,
+        format_chain: "_FormatChain | None" = None,
+    ) -> None:
+        super().__init__(audit, broadcaster)
+        self.config: AllowedFormatsConfig = config if config is not None else get_allowed_formats()
+        self.format_chain: _FormatChain | None = format_chain
 
     async def run(self, ctx: JobContext, reception: FileReceptionResult) -> FormatValidationResult:
         start = await self._emit_started(ctx)

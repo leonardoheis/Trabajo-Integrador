@@ -1,13 +1,13 @@
 import hashlib
 
-from pydantic import Field
-
 from classiflow.database.repositories.audit import AuditDetail
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config import get_allowed_formats
 from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import FileReceptionResult
 from classiflow.ingesta.mime import MimeDetector, detect_mime
 from classiflow.ingesta.nodes.base import BaseNode
+from classiflow.services.audit.service import AuditService
 
 
 class FileReceptionNode(BaseNode):
@@ -15,10 +15,21 @@ class FileReceptionNode(BaseNode):
     def name(self) -> str:
         return "node1_file_reception"
 
-    mime_detector: MimeDetector = detect_mime
-    max_file_size_bytes: int = Field(
-        default_factory=lambda: get_allowed_formats().max_file_size_bytes
-    )
+    def __init__(
+        self,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
+        *,
+        mime_detector: MimeDetector = detect_mime,
+        max_file_size_bytes: int | None = None,
+    ) -> None:
+        super().__init__(audit, broadcaster)
+        self.mime_detector = mime_detector
+        self.max_file_size_bytes: int = (
+            max_file_size_bytes
+            if max_file_size_bytes is not None
+            else get_allowed_formats().max_file_size_bytes
+        )
 
     async def run(self, ctx: JobContext, file_bytes: bytes | None) -> FileReceptionResult:
         start = await self._emit_started(ctx)

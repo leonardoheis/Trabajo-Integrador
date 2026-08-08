@@ -13,13 +13,14 @@ _GOOGLE_GRANT_URL = "https://oauth2.googleapis.com/token"
 _USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
 
-def get_authorization_url() -> str:
+def get_authorization_url(state: str) -> str:
     params = {
         "client_id": Settings.GOOGLE_CLIENT_ID,
         "redirect_uri": Settings.GOOGLE_REDIRECT_URI,
         "response_type": "code",
-        "scope": "openid email",
+        "scope": "email profile",
         "access_type": "offline",
+        "state": state,
     }
     return f"{_AUTH_URL}?{urlencode(params)}"
 
@@ -38,7 +39,10 @@ async def _fetch_email(client: httpx.AsyncClient, code: str) -> str:
     if token_resp.status_code != httpx.codes.OK:
         raise OAuthError(message=f"token endpoint returned {token_resp.status_code}")
 
-    google_access: str = token_resp.json()["access_token"]
+    try:
+        google_access: str = token_resp.json()["access_token"]
+    except (KeyError, ValueError) as exc:
+        raise OAuthError(message="Malformed token response from Google") from exc
 
     info_resp = await client.get(
         _USERINFO_URL,
@@ -47,7 +51,10 @@ async def _fetch_email(client: httpx.AsyncClient, code: str) -> str:
     if info_resp.status_code != httpx.codes.OK:
         raise OAuthError(message=f"userinfo endpoint returned {info_resp.status_code}")
 
-    return str(info_resp.json()["email"])
+    try:
+        return str(info_resp.json()["email"])
+    except (KeyError, ValueError) as exc:
+        raise OAuthError(message="Malformed userinfo response from Google") from exc
 
 
 async def exchange_code(

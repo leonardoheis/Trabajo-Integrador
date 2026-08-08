@@ -341,7 +341,7 @@ pythonpath = ["."]
 anyio_mode = "auto"
 
 [tool.coverage.run]
-omit = ["notebooks/conftest.py","scrapper/downloader.py"]
+omit = ["notebooks/conftest.py", "scrapper/*"]
 
 [tool.poe.tasks]
 lint = { shell = "ruff check . && ruff format --check ." }

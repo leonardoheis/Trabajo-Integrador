@@ -1,8 +1,6 @@
 import time
 from abc import abstractmethod
 
-from pydantic import BaseModel, ConfigDict
-
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.domain.job import JobStatus, NodeEvent
 from classiflow.events.broadcaster import EventBroadcaster
@@ -10,11 +8,10 @@ from classiflow.ingesta.domain.context import JobContext
 from classiflow.services.audit.service import AuditService
 
 
-class BaseNode(BaseModel):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    audit: AuditService
-    broadcaster: EventBroadcaster
+class BaseNode:
+    def __init__(self, audit: AuditService, broadcaster: EventBroadcaster) -> None:
+        self.audit = audit
+        self.broadcaster = broadcaster
 
     @property
     @abstractmethod

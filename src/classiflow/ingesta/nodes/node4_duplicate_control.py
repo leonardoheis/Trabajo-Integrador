@@ -5,15 +5,16 @@ from typing import Protocol
 import faiss
 import numpy as np
 import numpy.typing as npt
-from pydantic import Field
 from sentence_transformers import SentenceTransformer
 
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.database.repositories.hash import IHashRepository
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_duplicate import DuplicateControlConfig, get_duplicate_control_config
 from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import DuplicateControlResult
 from classiflow.ingesta.nodes.base import BaseNode
+from classiflow.services.audit.service import AuditService
 
 _EMBED_DIM = 384
 _MODEL_NAME = "all-MiniLM-L6-v2"
@@ -73,9 +74,21 @@ class DuplicateControlNode(BaseNode):
     def name(self) -> str:
         return "node4_duplicate_control"
 
-    hash_repo: IHashRepository
-    embedding_store: EmbeddingStore = Field(default_factory=EmbeddingStore)
-    config: DuplicateControlConfig = Field(default_factory=get_duplicate_control_config)
+    def __init__(
+        self,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
+        hash_repo: IHashRepository,
+        *,
+        embedding_store: EmbeddingStore | None = None,
+        config: DuplicateControlConfig | None = None,
+    ) -> None:
+        super().__init__(audit, broadcaster)
+        self.hash_repo = hash_repo
+        self.embedding_store = embedding_store if embedding_store is not None else EmbeddingStore()
+        self.config: DuplicateControlConfig = (
+            config if config is not None else get_duplicate_control_config()
+        )
 
     async def run(self, ctx: JobContext, sha256: str, text: str) -> DuplicateControlResult:
         start = await self._emit_started(ctx)

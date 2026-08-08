@@ -2,9 +2,9 @@ from functools import lru_cache
 from typing import Protocol, cast, runtime_checkable
 
 from lingua import LanguageDetector, LanguageDetectorBuilder
-from pydantic import Field
 
 from classiflow.database.repositories.audit import AuditDetail
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_content import ContentValidationConfig, get_content_validation_config
 from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import ContentValidationResult, FileReceptionResult
@@ -14,6 +14,7 @@ from classiflow.ingesta.prompts.content_validation import (
     LegitimacyDecisionOutput,
     build_content_chain,
 )
+from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
 
 _PDF_MIME = "application/pdf"
@@ -49,9 +50,23 @@ class ContentValidationNode(BaseNode):
     def name(self) -> str:
         return "node3_content_validation"
 
-    config: ContentValidationConfig = Field(default_factory=get_content_validation_config)
-    language_detector: _LanguageDetector = Field(default_factory=_get_detector)
-    content_chain: _ContentChain | None = None
+    def __init__(
+        self,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
+        *,
+        config: ContentValidationConfig | None = None,
+        language_detector: "_LanguageDetector | None" = None,
+        content_chain: "_ContentChain | None" = None,
+    ) -> None:
+        super().__init__(audit, broadcaster)
+        self.config: ContentValidationConfig = (
+            config if config is not None else get_content_validation_config()
+        )
+        self.language_detector: _LanguageDetector = (
+            language_detector if language_detector is not None else _get_detector()
+        )
+        self.content_chain: _ContentChain | None = content_chain
 
     async def run(
         self,
