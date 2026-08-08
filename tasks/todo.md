@@ -376,7 +376,7 @@ uv run poe test tests/ingesta/test_coordinator.py
 ---
 
 ### T16 · FastAPI app + health route
-**Branch:** `feat/fastapi-app` · **Deps:** T01 · **Status:** `[x]` · **PR:** pending
+**Branch:** `feat/fastapi-app` · **Deps:** T01 · **Status:** `[x]` · **PR:** [#8](https://github.com/leonardoheis/Trabajo-Integrador/pull/8)
 
 - [x] `dependency-injector>=4.41` in `pyproject.toml`
 - [x] `injections/__init__.py`: `configure_container()` with `@cache`
