@@ -1,9 +1,11 @@
 import uvicorn
 
+from classiflow.injections import configure_container
 from classiflow.settings import Settings
 
 
 def run_api() -> None:
+    configure_container()
     uvicorn.run(
         "classiflow.api.app:create_app",
         factory=True,
