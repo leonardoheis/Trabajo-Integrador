@@ -1,9 +1,10 @@
-import time
 from pathlib import Path
+from typing import Protocol, cast, runtime_checkable
 
-from pydantic import ConfigDict, Field
-
+from classiflow.database.repositories.audit import AuditDetail
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config import AllowedFormatsConfig, get_allowed_formats
+from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import (
     FileReceptionResult,
     FormatDecision,
@@ -12,53 +13,41 @@ from classiflow.ingesta.domain.results import (
 from classiflow.ingesta.llm_provider import get_llm_langchain
 from classiflow.ingesta.nodes.base import BaseNode
 from classiflow.ingesta.prompts.format_validation import FormatDecisionOutput, build_format_chain
+from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import AuditDetail
-from classiflow.shared.domain.job import JobStatus, NodeEvent
-from classiflow.shared.events.broadcaster import EventBroadcaster
+
+
+@runtime_checkable
+class _FormatChain(Protocol):
+    def invoke(self, inp: dict[str, str], **kwargs: object) -> FormatDecisionOutput: ...
 
 
 class FormatValidationNode(BaseNode):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
     @property
     def name(self) -> str:
         return "node2_format_validation"
 
-    @property
-    def model_path(self) -> str:
-        return Settings.node2_model_path
-
-    audit: AuditService
-    broadcaster: EventBroadcaster
-    config: AllowedFormatsConfig = Field(default_factory=get_allowed_formats)
-
-    async def run(
+    def __init__(
         self,
-        job_id: str,
-        filename: str,
-        reception: FileReceptionResult,
-    ) -> FormatValidationResult:
-        start = time.monotonic()
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
+        *,
+        config: AllowedFormatsConfig | None = None,
+        format_chain: "_FormatChain | None" = None,
+    ) -> None:
+        super().__init__(audit, broadcaster)
+        self.config: AllowedFormatsConfig = config if config is not None else get_allowed_formats()
+        self.format_chain: _FormatChain | None = format_chain
 
-        await self.broadcaster.emit(
-            NodeEvent(job_id=job_id, node=self.name, status=JobStatus.STARTED)
-        )
-
-        result = self._validate(filename, reception)
-        duration_ms = int((time.monotonic() - start) * 1000)
-
-        status = JobStatus.PASSED if result.passed else JobStatus.FAILED
-        await self.broadcaster.emit(NodeEvent(job_id=job_id, node=self.name, status=status))
-
-        await self.audit.record(
-            job_id,
-            self.name,
-            status.value,
-            duration_ms=duration_ms,
+    async def run(self, ctx: JobContext, reception: FileReceptionResult) -> FormatValidationResult:
+        start = await self._emit_started(ctx)
+        result = self._validate(ctx.filename, reception)
+        await self._emit_and_audit(
+            ctx,
+            start,
+            passed=result.passed,
             detail=AuditDetail.model_validate({
-                "filename": filename,
+                "filename": ctx.filename,
                 "detected_mime": reception.detected_mime,
                 "decision": result.decision.value,
                 "used_slm": result.used_slm,
@@ -66,7 +55,6 @@ class FormatValidationNode(BaseNode):
                 "rejection_reason": result.rejection_reason,
             }),
         )
-
         return result
 
     def _validate(self, filename: str, reception: FileReceptionResult) -> FormatValidationResult:
@@ -114,8 +102,14 @@ class FormatValidationNode(BaseNode):
         return FormatDecision.ACCEPT
 
     def _slm_check(self, filename: str, reception: FileReceptionResult) -> FormatValidationResult:
-        llm = get_llm_langchain(self.model_path)
-        output: FormatDecisionOutput = build_format_chain(llm).invoke({
+        if self.format_chain is not None:
+            chain: _FormatChain = self.format_chain
+        else:
+            chain = cast(
+                "_FormatChain",
+                build_format_chain(get_llm_langchain(Settings.node2_model_path)),
+            )
+        output: FormatDecisionOutput = chain.invoke({
             "filename": filename,
             "detected_mime": reception.detected_mime,
         })

@@ -1,14 +1,15 @@
 from dependency_injector import containers, providers
 
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.base import get_session
-from classiflow.shared.database.repositories.audit import SqlAuditRepository
-from classiflow.shared.database.repositories.document_steps import SqlDocumentStepsRepository
-from classiflow.shared.database.repositories.hash import SqlHashRepository
-from classiflow.shared.database.repositories.human_decision import SqlHumanDecisionRepository
-from classiflow.shared.database.repositories.job import SqlJobRepository
-from classiflow.shared.database.repositories.user import SqlUserRepository
-from classiflow.shared.events.broadcaster import EventBroadcaster
+from classiflow.database.base import get_session
+from classiflow.database.repositories.audit import SqlAuditRepository
+from classiflow.database.repositories.document_steps import SqlDocumentStepsRepository
+from classiflow.database.repositories.hash import SqlHashRepository
+from classiflow.database.repositories.human_decision import SqlHumanDecisionRepository
+from classiflow.database.repositories.job import SqlJobRepository
+from classiflow.database.repositories.user import SqlUserRepository
+from classiflow.events.broadcaster import EventBroadcaster
+from classiflow.services.audit.service import AuditService
+from classiflow.services.auth.service import AuthService
 
 
 class Container(containers.DeclarativeContainer):
@@ -22,4 +23,5 @@ class Container(containers.DeclarativeContainer):
     job_repo = providers.Factory(SqlJobRepository, session=db_session)
 
     audit_service = providers.Factory(AuditService, repo=audit_repo)
+    auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)

@@ -3,11 +3,12 @@ import hashlib
 
 import pytest
 
+from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.domain.job import JobStatus
+from classiflow.events.broadcaster import EventBroadcaster
+from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import InMemoryAuditRepository
-from classiflow.shared.domain.job import JobStatus
-from classiflow.shared.events.broadcaster import EventBroadcaster
+from classiflow.services.audit.service import AuditService
 
 _MINIMAL_PDF = (
     b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
@@ -19,6 +20,8 @@ _PDF_MIME = "application/pdf"
 _OVERSIZED_CONTENT_SIZE = 11
 _SHA256_HEX_LENGTH = 64
 _STARTED_PLUS_OUTCOME_EVENTS = 2
+
+_CTX = JobContext(job_id=_JOB_ID, filename=_FILENAME)
 
 
 def _stub_mime(_data: bytes) -> str:
@@ -51,7 +54,7 @@ class TestFileReceptionNode:
         node: FileReceptionNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await node.run(_JOB_ID, _FILENAME, None)
+        result = await node.run(_CTX, None)
 
         assert not result.passed
         assert "No file" in result.rejection_reason
@@ -64,7 +67,7 @@ class TestFileReceptionNode:
         node: FileReceptionNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await node.run(_JOB_ID, _FILENAME, b"")
+        result = await node.run(_CTX, b"")
 
         assert not result.passed
         assert "empty" in result.rejection_reason.lower()
@@ -83,7 +86,7 @@ class TestFileReceptionNode:
             max_file_size_bytes=10,
             mime_detector=_stub_mime,
         )
-        result = await small_limit_node.run(_JOB_ID, _FILENAME, b"x" * _OVERSIZED_CONTENT_SIZE)
+        result = await small_limit_node.run(_CTX, b"x" * _OVERSIZED_CONTENT_SIZE)
 
         assert not result.passed
         assert result.file_size_bytes == _OVERSIZED_CONTENT_SIZE
@@ -96,7 +99,7 @@ class TestFileReceptionNode:
         node: FileReceptionNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await node.run(_JOB_ID, _FILENAME, _MINIMAL_PDF)
+        result = await node.run(_CTX, _MINIMAL_PDF)
 
         assert result.passed
         assert result.sha256 == hashlib.sha256(_MINIMAL_PDF).hexdigest()
@@ -118,7 +121,7 @@ class TestFileReceptionNode:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)  # yield so collect() starts subscribing before run() emits
-        await node.run(_JOB_ID, _FILENAME, _MINIMAL_PDF)
+        await node.run(_CTX, _MINIMAL_PDF)
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -140,7 +143,7 @@ class TestFileReceptionNode:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)  # yield so collect() starts subscribing before run() emits
-        await node.run(_JOB_ID, _FILENAME, None)
+        await node.run(_CTX, None)
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -153,7 +156,7 @@ class TestFileReceptionNode:
         node: FileReceptionNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        await node.run(_JOB_ID, _FILENAME, _MINIMAL_PDF)
+        await node.run(_CTX, _MINIMAL_PDF)
 
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].duration_ms is not None

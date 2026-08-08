@@ -1,6 +1,6 @@
 from enum import Enum
 
-from .base import BaseEntity
+from classiflow.domain.base import BaseEntity
 
 
 class FormatDecision(str, Enum):

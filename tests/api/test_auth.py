@@ -3,8 +3,8 @@ from datetime import datetime, timedelta, timezone
 import jwt
 import pytest
 
+from classiflow.services.auth import AuthError, decode_token, encode_token
 from classiflow.settings import Settings
-from classiflow.shared.auth import AuthError, decode_token, encode_token
 
 pytestmark = pytest.mark.usefixtures("_jwt_secret")
 

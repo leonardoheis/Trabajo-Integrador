@@ -1,4 +1,3 @@
-import time
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Protocol
@@ -6,17 +5,16 @@ from typing import Protocol
 import faiss
 import numpy as np
 import numpy.typing as npt
-from pydantic import ConfigDict, Field
 from sentence_transformers import SentenceTransformer
 
+from classiflow.database.repositories.audit import AuditDetail
+from classiflow.database.repositories.hash import IHashRepository
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_duplicate import DuplicateControlConfig, get_duplicate_control_config
+from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import DuplicateControlResult
 from classiflow.ingesta.nodes.base import BaseNode
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import AuditDetail
-from classiflow.shared.database.repositories.hash import IHashRepository
-from classiflow.shared.domain.job import JobStatus, NodeEvent
-from classiflow.shared.events.broadcaster import EventBroadcaster
+from classiflow.services.audit.service import AuditService
 
 _EMBED_DIM = 384
 _MODEL_NAME = "all-MiniLM-L6-v2"
@@ -72,44 +70,35 @@ class EmbeddingStore:
 
 
 class DuplicateControlNode(BaseNode):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
     @property
     def name(self) -> str:
         return "node4_duplicate_control"
 
-    hash_repo: IHashRepository
-    audit: AuditService
-    broadcaster: EventBroadcaster
-    embedding_store: EmbeddingStore = Field(default_factory=EmbeddingStore)
-    config: DuplicateControlConfig = Field(default_factory=get_duplicate_control_config)
-
-    async def run(
+    def __init__(
         self,
-        job_id: str,
-        filename: str,
-        sha256: str,
-        text: str,
-    ) -> DuplicateControlResult:
-        start = time.monotonic()
-
-        await self.broadcaster.emit(
-            NodeEvent(job_id=job_id, node=self.name, status=JobStatus.STARTED)
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
+        hash_repo: IHashRepository,
+        *,
+        embedding_store: EmbeddingStore | None = None,
+        config: DuplicateControlConfig | None = None,
+    ) -> None:
+        super().__init__(audit, broadcaster)
+        self.hash_repo = hash_repo
+        self.embedding_store = embedding_store if embedding_store is not None else EmbeddingStore()
+        self.config: DuplicateControlConfig = (
+            config if config is not None else get_duplicate_control_config()
         )
 
-        result = await self._check(job_id, sha256, text)
-        duration_ms = int((time.monotonic() - start) * 1000)
-
-        status = JobStatus.PASSED if result.passed else JobStatus.FAILED
-        await self.broadcaster.emit(NodeEvent(job_id=job_id, node=self.name, status=status))
-
-        await self.audit.record(
-            job_id,
-            self.name,
-            status.value,
-            duration_ms=duration_ms,
+    async def run(self, ctx: JobContext, sha256: str, text: str) -> DuplicateControlResult:
+        start = await self._emit_started(ctx)
+        result = await self._check(ctx, sha256, text)
+        await self._emit_and_audit(
+            ctx,
+            start,
+            passed=result.passed,
             detail=AuditDetail.model_validate({
-                "filename": filename,
+                "filename": ctx.filename,
                 "sha256": sha256,
                 "is_duplicate": result.is_duplicate,
                 "duplicate_type": result.duplicate_type,
@@ -118,10 +107,9 @@ class DuplicateControlNode(BaseNode):
                 "rejection_reason": result.rejection_reason,
             }),
         )
-
         return result
 
-    async def _check(self, job_id: str, sha256: str, text: str) -> DuplicateControlResult:
+    async def _check(self, ctx: JobContext, sha256: str, text: str) -> DuplicateControlResult:
         if await self.hash_repo.exists(sha256):
             return DuplicateControlResult(
                 passed=False,
@@ -141,6 +129,6 @@ class DuplicateControlNode(BaseNode):
                 rejection_reason=f"Near-duplicate: cosine similarity {similarity:.3f}",
             )
 
-        await self.hash_repo.save(sha256, job_id)
+        await self.hash_repo.save(sha256, ctx.job_id)
         self.embedding_store.add(text)
         return DuplicateControlResult(passed=True, is_duplicate=False)

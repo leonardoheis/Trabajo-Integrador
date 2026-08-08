@@ -133,6 +133,7 @@ line-ending = "auto"
 strict = true
 follow_imports = "normal"
 python_version = "3.10"
+mypy_path = ["src"]
 plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
 
 disallow_any_unimported = true
@@ -340,7 +341,7 @@ pythonpath = ["."]
 anyio_mode = "auto"
 
 [tool.coverage.run]
-omit = ["notebooks/conftest.py","scrapper/downloader.py"]
+omit = ["notebooks/conftest.py", "scrapper/*"]
 
 [tool.poe.tasks]
 lint = { shell = "ruff check . && ruff format --check ." }
