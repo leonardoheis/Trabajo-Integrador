@@ -1,10 +1,13 @@
 from fastapi import FastAPI
 
+from classiflow.injections import configure_container
+
 from .error_handlers import EXCEPTION_HANDLERS
 from .routes import ROUTERS
 
 
 def create_app() -> FastAPI:
+    configure_container()
     app = FastAPI(title="Classiflow")
 
     for router in ROUTERS:

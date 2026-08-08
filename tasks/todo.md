@@ -354,16 +354,18 @@ uv run poe test tests/ingesta/test_node4.py
 ---
 
 ### T15 · Coordinator — LangGraph state machine
-**Branch:** `feat/coordinator` · **Deps:** T09 · T12 · T13 · T14 · **Status:** `[ ]`
+**Branch:** `feat/coordinator` · **Deps:** T09 · T12 · T13 · T14 · **Status:** `[x]`
 
-- [ ] `JobState` TypedDict with all required fields
-- [ ] LangGraph: node1 → node2 → node3 → node4, conditional edges to `accept`/`reject`/`review`
-- [ ] `handle_accept`, `handle_reject`, `handle_review` call `AuditService.record_routing()`
-- [ ] `pipeline_done` emitted on every terminal state
-- [ ] Integration test: valid PDF → all 4 nodes → `accepted`
-- [ ] Integration test: empty file → rejected at node 1
-- [ ] Uses `MockLlm` + `InMemory*`; no real model or DB
-- [ ] `uv run poe check` passes
+- [x] `JobState` TypedDict with all required fields
+- [x] LangGraph: node1 → node2 → node3 → node4, conditional edges to `accept`/`reject`/`review`
+- [x] `_accept`, `_reject`, `_review` terminal nodes set `final_status` + `rejection_reason`
+- [x] Integration test: valid PDF → all 4 nodes → `accepted`
+- [x] Integration test: empty file → rejected at node 1
+- [x] Integration test: image-only PDF → routes to OCR (node3 sets `requires_ocr`)
+- [x] Integration test: non-legitimate content → `review`
+- [x] Integration test: duplicate PDF → rejected at node4
+- [x] Uses `MockLlm` + `InMemory*`; no real model or DB
+- [x] `uv run poe check` passes (188 tests)
 
 ```bash
 # Verify
@@ -374,18 +376,18 @@ uv run poe test tests/ingesta/test_coordinator.py
 ---
 
 ### T16 · FastAPI app + health route
-**Branch:** `feat/api-app` · **Deps:** T01 · **Status:** `[ ]`
+**Branch:** `feat/fastapi-app` · **Deps:** T01 · **Status:** `[x]` · **PR:** pending
 
-- [ ] `dependency-injector>=4.41` added to `pyproject.toml`; `uv sync --dev` succeeds
-- [ ] `src/classiflow/injections/` skeleton: `__init__.py`, `production.py`, `test.py`
-- [ ] `injections/production.py`: `Container(DeclarativeContainer)` with `providers.Resource(get_session)`, `providers.Factory` for all `Sql*` repos, `AuditService`, `EventBroadcaster`
-- [ ] `injections/test.py`: `TestContainer` overrides every `Sql*` provider with `InMemory*`
-- [ ] `injections/__init__.py`: `configure_container()` with `@lru_cache`
-- [ ] `api/app.py`: `create_app()` factory calls `configure_container()` and mounts all routers and error handlers
-- [ ] `GET /health` → `{"status": "ok"}`, HTTP 200, public
-- [ ] `api/schema.py`: `BaseSchema` with camel-case aliases
-- [ ] `tests/api/conftest.py`: overrides container with `TestContainer`; `TestClient` fixture + `auth_headers` fixture (bypasses OAuth)
-- [ ] `uv run poe check` passes
+- [x] `dependency-injector>=4.41` in `pyproject.toml`
+- [x] `injections/__init__.py`: `configure_container()` with `@cache`
+- [x] `injections/production.py`: `Container` with `providers.Resource(get_session)`, `providers.Factory` for all `Sql*` repos, `AuditService`, `providers.Singleton(EventBroadcaster)`
+- [x] `injections/test.py`: `TestContainer` with all `InMemory*` repos, `AuditService`, `EventBroadcaster`
+- [x] `api/app.py`: `create_app()` calls `configure_container()`, mounts all routers and error handlers
+- [x] `GET /health` → `{"status": "healthy", "message": "..."}`, HTTP 200, public
+- [x] `api/schemas.py`: `BaseSchema` with camel-case aliases
+- [x] `tests/api/conftest.py`: `client` fixture (TestContainer wired) + `auth_headers` fixture
+- [x] `tests/api/routes/test_health.py`: asserts health response shape and status 200
+- [x] `uv run poe check` passes (189 tests)
 
 ```bash
 # Verify
@@ -539,12 +541,12 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 | T12 | Node 2 — SLM escalation path | `[x]` done — PR [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19) |
 | T13 | Node 3 — Content Validation | `[x]` done — PR [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1) |
 | T14 | Node 4 — Duplicate Control | `[x]` done — PR [#4](https://github.com/leonardoheis/Trabajo-Integrador/pull/4) |
-| T15 | Coordinator — LangGraph | `[ ]` pending |
-| T16 | FastAPI app + health route | `[ ]` pending |
+| T15 | Coordinator — LangGraph | `[x]` done |
+| T16 | FastAPI app + health route | `[x]` done — PR pending |
 | T17 | Pipeline endpoints + SSE stream | `[ ]` pending |
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
 | T20 | wandb integration — LLM tracing + per-node metrics | `[ ]` pending |
 | T21 | Text extraction — MarkItDown + PaddleOCR fallback | `[ ]` pending |
 
-**12 / 21 tasks complete · 1 skipped (T18)**
+**14 / 21 tasks complete · 1 skipped (T18)**

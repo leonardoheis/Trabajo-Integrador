@@ -93,9 +93,6 @@ celerybeat.pid
 # ---- SageMath ----
 *.sage.py
 
-# ---- IDE / tooling ----
-.codegraph/
-
 # ---- Environments ----
 .env
 .env.*
@@ -156,6 +153,7 @@ checkpoints/
 *.ckpt
 *.onnx
 *.gguf
+*.ggml
 *.pb
 *.tflite
 saved_model/
