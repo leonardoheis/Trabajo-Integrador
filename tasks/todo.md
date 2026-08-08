@@ -542,7 +542,7 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 | T13 | Node 3 — Content Validation | `[x]` done — PR [#1](https://github.com/leonardoheis/Trabajo-Integrador/pull/1) |
 | T14 | Node 4 — Duplicate Control | `[x]` done — PR [#4](https://github.com/leonardoheis/Trabajo-Integrador/pull/4) |
 | T15 | Coordinator — LangGraph | `[x]` done |
-| T16 | FastAPI app + health route | `[x]` done — PR pending |
+| T16 | FastAPI app + health route | `[x]` done — PR [#8](https://github.com/leonardoheis/Trabajo-Integrador/pull/8) |
 | T17 | Pipeline endpoints + SSE stream | `[ ]` pending |
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
