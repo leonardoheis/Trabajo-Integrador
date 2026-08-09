@@ -257,10 +257,11 @@ Claude prepares and verifies changes but **never** runs `git commit`, `git push`
 
 Before opening a PR, Claude must:
 1. Implement the changes in a worktree branch.
-2. Verify `uv run poe lint`, `uv run poe typecheck`, and all relevant tests pass.
-3. Present a **change summary**: each file (new/modified), what changed, and test results.
-4. Ask: *"Do you authorize the PR creation?"*
-5. Wait for explicit authorization (e.g. "authorize", "yes", "go ahead") before running any `git commit`, `git push`, or `gh pr create` command.
+2. Run `uv run poe check` — all steps (lint, typecheck, nbtest, coverage) must pass.
+3. Run `uv run --all-groups pre-commit run --all-files` — all hooks must pass.
+4. Present a **change summary**: each file (new/modified), what changed, and test results.
+5. Ask: *"Do you authorize the PR creation?"*
+6. Wait for explicit authorization (e.g. "authorize", "yes", "go ahead") before running any `git commit`, `git push`, or `gh pr create` command.
 
 Saying "execute task X" or "implement and make a PR" is **not** authorization — the user must explicitly approve after reviewing the summary.
 
