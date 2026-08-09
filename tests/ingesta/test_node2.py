@@ -69,35 +69,35 @@ def node(audit: AuditService, broadcaster: EventBroadcaster) -> FormatValidation
 
 class TestRuleBasedCheck:
     def test_pdf_with_matching_extension_is_accepted(self, node: FormatValidationNode) -> None:
-        result = node._rule_based_check("sample.pdf", "application/pdf")  # noqa: SLF001
+        result = node.rule_based_check("sample.pdf", "application/pdf")
         assert result == FormatDecision.ACCEPT
 
     def test_html_mime_is_rejected(self, node: FormatValidationNode) -> None:
-        result = node._rule_based_check("page.html", "text/html")  # noqa: SLF001
+        result = node.rule_based_check("page.html", "text/html")
         assert result == FormatDecision.REJECT
 
     def test_html_extension_is_rejected_even_with_unknown_mime(
         self, node: FormatValidationNode
     ) -> None:
-        result = node._rule_based_check("file.html", "application/octet-stream")  # noqa: SLF001
+        result = node.rule_based_check("file.html", "application/octet-stream")
         assert result == FormatDecision.REJECT
 
     def test_unknown_mime_triggers_manual_review(self, node: FormatValidationNode) -> None:
-        result = node._rule_based_check("file.xyz", "application/x-unknown")  # noqa: SLF001
+        result = node.rule_based_check("file.xyz", "application/x-unknown")
         assert result == FormatDecision.MANUAL_REVIEW
 
     def test_mime_extension_mismatch_returns_none_for_slm(self, node: FormatValidationNode) -> None:
         # PDF magic bytes but .docx extension → gray zone
-        result = node._rule_based_check("document.docx", "application/pdf")  # noqa: SLF001
+        result = node.rule_based_check("document.docx", "application/pdf")
         assert result is None
 
     def test_jpeg_with_both_valid_extensions(self, node: FormatValidationNode) -> None:
-        assert node._rule_based_check("photo.jpg", "image/jpeg") == FormatDecision.ACCEPT  # noqa: SLF001
-        assert node._rule_based_check("photo.jpeg", "image/jpeg") == FormatDecision.ACCEPT  # noqa: SLF001
+        assert node.rule_based_check("photo.jpg", "image/jpeg") == FormatDecision.ACCEPT
+        assert node.rule_based_check("photo.jpeg", "image/jpeg") == FormatDecision.ACCEPT
 
     def test_known_mismatch_is_accepted_without_slm(self, node: FormatValidationNode) -> None:
         # libmagic detects DOCX as application/zip because DOCX is a ZIP archive
-        result = node._rule_based_check("report.docx", "application/zip")  # noqa: SLF001
+        result = node.rule_based_check("report.docx", "application/zip")
         assert result == FormatDecision.ACCEPT
 
 

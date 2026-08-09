@@ -7,7 +7,7 @@ from alembic import context
 
 from classiflow.settings import Settings
 from classiflow.database.base import Base
-import classiflow.database.models  # noqa: F401 — registers all ORM models
+import classiflow.database.models  # registers all ORM models
 
 config = context.config
 if config.config_file_name is not None:

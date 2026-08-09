@@ -110,6 +110,9 @@ ignore = [
     "ANN401",
     "COM812",
     "ASYNC119", # false positive: standard FastAPI async generator dependency pattern
+    "S104",     # 0.0.0.0 binding is intentional for containerized deployment
+    "S105",     # "bearer" is an OAuth2 spec string, not a hardcoded secret
+    "EM101",    # field name strings in @dataclass exceptions are not message literals
 ]
 
 [tool.ruff.format]

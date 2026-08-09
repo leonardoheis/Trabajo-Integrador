@@ -8,4 +8,4 @@ class User(BaseModel):
 
 class AuthToken(BaseModel):
     access_token: str
-    token_type: str = "bearer"  # noqa: S105
+    token_type: str = "bearer"

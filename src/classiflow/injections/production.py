@@ -1,3 +1,5 @@
+from functools import cache
+
 from dependency_injector import containers, providers
 
 from classiflow.database.base import get_session
@@ -25,3 +27,10 @@ class Container(containers.DeclarativeContainer):
     audit_service = providers.Factory(AuditService, repo=audit_repo)
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
+
+
+@cache
+def configure_container() -> Container:
+    container = Container()
+    container.wire(packages=["classiflow"])
+    return container
