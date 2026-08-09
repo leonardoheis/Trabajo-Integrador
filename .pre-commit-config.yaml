@@ -8,10 +8,6 @@ repos:
       - id: check-yaml
       - id: debug-statements
 
-  - repo: https://github.com/asottile/reorder-python-imports
-    rev: v3.13.0
-    hooks:
-      - id: reorder-python-imports
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 0.10.7
@@ -24,25 +20,26 @@ repos:
       - id: gitleaks
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.12
+    rev: v0.15.17
     hooks:
       - id: ruff-format
       - id: ruff-check
         args: [--exit-non-zero-on-fix]
 
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.19.1
+  - repo: local
     hooks:
       - id: mypy
-        args: [--ignore-missing-imports]
+        name: mypy
+        language: system
+        entry: uv run mypy src
+        pass_filenames: false
         files: ^src/
-
-  - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.9.1
-    hooks:
       - id: nbqa-mypy
-        additional_dependencies: [mypy]
-        args: [--ignore-missing-imports]
+        name: nbqa-mypy
+        language: system
+        entry: uv run nbqa mypy notebooks
+        pass_filenames: false
+        files: ^notebooks/
 
   - repo: https://gitlab.com/vojko.pribudic.foss/pre-commit-update
     rev: v0.9.0
@@ -54,5 +51,5 @@ repos:
     rev: v2.3.0
     hooks:
       - id: codespell
-        files: ^(src|tests|config|scrapper)/
         stages: [pre-commit]
+        exclude: ^(scrapper/|src/classiflow/playground/|documents/|\.claude/)

@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 
 import aiofiles
 import aiohttp
+import weasyprint
 from bs4 import BeautifulSoup
 from tqdm.asyncio import tqdm
 
@@ -656,8 +657,6 @@ async def html_to_pdf_file(
     try:
 
         def _convert() -> None:
-            import weasyprint  # noqa: PLC0415
-
             dest_path.parent.mkdir(parents=True, exist_ok=True)
             weasyprint.HTML(string=html, base_url=final_url).write_pdf(str(dest_path))
 

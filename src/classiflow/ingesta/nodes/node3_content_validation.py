@@ -75,7 +75,7 @@ class ContentValidationNode(BaseNode):
         reception: FileReceptionResult,
     ) -> ContentValidationResult:
         start = await self._emit_started(ctx)
-        result = self._validate(text, reception)
+        result = self.validate(text, reception)
         await self._emit_and_audit(
             ctx,
             start,
@@ -92,7 +92,7 @@ class ContentValidationNode(BaseNode):
         )
         return result
 
-    def _validate(self, text: str, reception: FileReceptionResult) -> ContentValidationResult:
+    def validate(self, text: str, reception: FileReceptionResult) -> ContentValidationResult:
         char_count = len(text)
 
         if char_count < self.config.ocr_char_threshold and reception.detected_mime == _PDF_MIME:

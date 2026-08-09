@@ -20,11 +20,11 @@ class AuditService:
         detail: AuditDetail | None = None,
     ) -> None:
         if not job_id:
-            raise MissingFieldError("job_id")  # noqa: EM101
+            raise MissingFieldError("job_id")
         if not node:
-            raise MissingFieldError("node")  # noqa: EM101
+            raise MissingFieldError("node")
         if not event:
-            raise MissingFieldError("event")  # noqa: EM101
+            raise MissingFieldError("event")
 
         audit_record = make_audit_record(
             job_id, node, event, duration_ms=duration_ms, detail=detail

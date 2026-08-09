@@ -41,7 +41,7 @@ class FormatValidationNode(BaseNode):
 
     async def run(self, ctx: JobContext, reception: FileReceptionResult) -> FormatValidationResult:
         start = await self._emit_started(ctx)
-        result = self._validate(ctx.filename, reception)
+        result = self.validate(ctx.filename, reception)
         await self._emit_and_audit(
             ctx,
             start,
@@ -57,8 +57,8 @@ class FormatValidationNode(BaseNode):
         )
         return result
 
-    def _validate(self, filename: str, reception: FileReceptionResult) -> FormatValidationResult:
-        decision = self._rule_based_check(filename, reception.detected_mime)
+    def validate(self, filename: str, reception: FileReceptionResult) -> FormatValidationResult:
+        decision = self.rule_based_check(filename, reception.detected_mime)
 
         if decision is None:
             return self._slm_check(filename, reception)
@@ -81,7 +81,7 @@ class FormatValidationNode(BaseNode):
             ),
         )
 
-    def _rule_based_check(self, filename: str, detected_mime: str) -> FormatDecision | None:
+    def rule_based_check(self, filename: str, detected_mime: str) -> FormatDecision | None:
         extension = Path(filename).suffix.lower()
 
         if (

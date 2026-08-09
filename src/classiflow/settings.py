@@ -11,7 +11,7 @@ _DEFAULT_MODEL = str(
 
 class _Settings(BaseSettings):
     API_PORT: int = 8000
-    HOST: str = "0.0.0.0"  # nosec  # noqa: S104
+    HOST: str = "0.0.0.0"  # nosec
 
     model_config = SettingsConfigDict(
         env_file=".env",

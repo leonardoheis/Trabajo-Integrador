@@ -83,24 +83,24 @@ def spanish_node(audit: AuditService, broadcaster: EventBroadcaster) -> ContentV
 
 class TestContentValidationNodeValidate:
     def test_image_only_pdf_sets_requires_ocr(self, node: ContentValidationNode) -> None:
-        result = node._validate("", _PDF_RECEPTION)  # noqa: SLF001
+        result = node.validate("", _PDF_RECEPTION)
         assert not result.passed
         assert result.requires_ocr
 
     def test_empty_non_pdf_does_not_set_requires_ocr(self, node: ContentValidationNode) -> None:
-        result = node._validate("", _DOCX_RECEPTION)  # noqa: SLF001
+        result = node.validate("", _DOCX_RECEPTION)
         assert not result.passed
         assert not result.requires_ocr
 
     def test_text_shorter_than_min_chars_fails(self, node: ContentValidationNode) -> None:
-        result = node._validate(_SHORT_TEXT, _PDF_RECEPTION)  # noqa: SLF001
+        result = node.validate(_SHORT_TEXT, _PDF_RECEPTION)
         assert not result.passed
         assert not result.requires_ocr
         assert not result.needs_agent_review
         assert "too short" in result.rejection_reason
 
     def test_char_count_is_recorded(self, node: ContentValidationNode) -> None:
-        result = node._validate(_SHORT_TEXT, _PDF_RECEPTION)  # noqa: SLF001
+        result = node.validate(_SHORT_TEXT, _PDF_RECEPTION)
         assert result.char_count == len(_SHORT_TEXT)
 
     def test_non_allowed_language_triggers_review(
@@ -114,7 +114,7 @@ class TestContentValidationNodeValidate:
             config=_CONFIG,
             language_detector=_MockDetector("fr"),
         )
-        result = french_node._validate(_SPANISH_TEXT, _PDF_RECEPTION)  # noqa: SLF001
+        result = french_node.validate(_SPANISH_TEXT, _PDF_RECEPTION)
         assert not result.passed
         assert result.needs_agent_review
         assert result.detected_language == "fr"
@@ -249,5 +249,5 @@ class _MockDetector:
     def __init__(self, iso_code: str) -> None:
         self._iso_code = iso_code
 
-    def detect_language_of(self, text: str) -> "_MockLanguage | None":  # noqa: ARG002
+    def detect_language_of(self, _text: str) -> "_MockLanguage | None":
         return _MockLanguage(_MockIsoCode(self._iso_code))

@@ -10,19 +10,19 @@ class LlmErrorBody(BaseModel):
     detail: str
 
 
-def handle_model_not_found(request: Request, exc: Exception) -> JSONResponse:  # noqa: ARG001
+def handle_model_not_found(_request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, ModelNotFoundError)
     body = LlmErrorBody(error="ModelNotFoundError", detail=str(exc))
     return JSONResponse(status_code=503, content=body.model_dump())
 
 
-def handle_model_load_error(request: Request, exc: Exception) -> JSONResponse:  # noqa: ARG001
+def handle_model_load_error(_request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, ModelLoadError)
     body = LlmErrorBody(error="ModelLoadError", detail=str(exc))
     return JSONResponse(status_code=503, content=body.model_dump())
 
 
-def handle_llm_provider_error(request: Request, exc: Exception) -> JSONResponse:  # noqa: ARG001
+def handle_llm_provider_error(_request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, LlmProviderError)
     body = LlmErrorBody(error=type(exc).__name__, detail=str(exc))
     return JSONResponse(status_code=503, content=body.model_dump())

@@ -1,3 +1,4 @@
+import contextlib
 import json
 import re
 
@@ -29,10 +30,8 @@ class LegitimacyDecisionOutput(BaseModel):
 
 def _extract(text: str) -> LegitimacyDecisionOutput:
     for m in _JSON_RE.finditer(text):
-        try:
+        with contextlib.suppress(json.JSONDecodeError, ValueError):
             return LegitimacyDecisionOutput.model_validate(json.loads(m.group()))
-        except (json.JSONDecodeError, ValueError):  # noqa: PERF203
-            continue
     msg = f"No valid JSON object found in LLM output: {text!r}"
     raise ValueError(msg)
 
