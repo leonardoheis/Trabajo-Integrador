@@ -110,6 +110,9 @@ ignore = [
     "ANN401",
     "COM812",
     "ASYNC119", # false positive: standard FastAPI async generator dependency pattern
+    "S104",     # 0.0.0.0 binding is intentional for containerized deployment
+    "S105",     # "bearer" is an OAuth2 spec string, not a hardcoded secret
+    "EM101",    # field name strings in @dataclass exceptions are not message literals
 ]
 
 [tool.ruff.format]
@@ -133,6 +136,7 @@ line-ending = "auto"
 strict = true
 follow_imports = "normal"
 python_version = "3.10"
+mypy_path = ["src"]
 plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
 
 disallow_any_unimported = true
@@ -340,7 +344,7 @@ pythonpath = ["."]
 anyio_mode = "auto"
 
 [tool.coverage.run]
-omit = ["notebooks/conftest.py","scrapper/downloader.py"]
+omit = ["notebooks/conftest.py", "scrapper/*"]
 
 [tool.poe.tasks]
 lint = { shell = "ruff check . && ruff format --check ." }

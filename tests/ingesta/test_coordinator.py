@@ -5,16 +5,16 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
+from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.database.repositories.hash import InMemoryHashRepository
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
 from classiflow.ingesta.llm_provider import MockLlm
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import InMemoryAuditRepository
-from classiflow.shared.database.repositories.hash import InMemoryHashRepository
-from classiflow.shared.events.broadcaster import EventBroadcaster
+from classiflow.services.audit.service import AuditService
 
 if TYPE_CHECKING:
     from classiflow.ingesta.domain.state import JobState

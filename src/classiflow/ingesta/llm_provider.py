@@ -13,14 +13,20 @@ from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
 class MockLlm(BaseLLM):
     response: str = Field(default='{"decision": "accept", "confidence": 0.95}')
 
-    def _generate(
+    def _generate(  # type: ignore[override]  # BaseLLM declares **kwargs: Any; omitting it here is intentional
         self,
         prompts: list[str],
-        stop: list[str] | None = None,  # noqa: ARG002
-        run_manager: CallbackManagerForLLMRun | None = None,  # noqa: ARG002
-        **kwargs: object,  # noqa: ARG002
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
     ) -> LLMResult:
-        return LLMResult(generations=[[Generation(text=self.response)] for _ in prompts])
+        text = self.response
+        if stop:
+            for token in stop:
+                if token in text:
+                    text = text[: text.index(token)]
+        if run_manager:
+            run_manager.on_llm_new_token(text)
+        return LLMResult(generations=[[Generation(text=text)] for _ in prompts])
 
     @property
     def _llm_type(self) -> str:

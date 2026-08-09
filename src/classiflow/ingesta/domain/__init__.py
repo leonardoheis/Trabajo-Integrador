@@ -1,4 +1,6 @@
-from .base import BaseEntity
+from classiflow.domain.base import BaseEntity
+
+from .context import JobContext
 from .results import (
     ContentValidationResult,
     DuplicateControlResult,
@@ -15,5 +17,6 @@ __all__ = [
     "FileReceptionResult",
     "FormatDecision",
     "FormatValidationResult",
+    "JobContext",
     "JobState",
 ]

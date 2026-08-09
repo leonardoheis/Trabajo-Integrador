@@ -16,9 +16,9 @@ class _JobStateRequired(TypedDict):
 
 class JobState(_JobStateRequired, total=False):
     text: str
-    reception: FileReceptionResult | None
-    format_validation: FormatValidationResult | None
-    content_validation: ContentValidationResult | None
-    duplicate_control: DuplicateControlResult | None
-    final_status: str | None
-    rejection_reason: str | None
+    reception: FileReceptionResult
+    format_validation: FormatValidationResult
+    content_validation: ContentValidationResult
+    duplicate_control: DuplicateControlResult
+    final_status: str
+    rejection_reason: str

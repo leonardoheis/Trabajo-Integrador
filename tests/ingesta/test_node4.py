@@ -4,12 +4,13 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
+from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.database.repositories.hash import InMemoryHashRepository
+from classiflow.domain.job import JobStatus
+from classiflow.events.broadcaster import EventBroadcaster
+from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import InMemoryAuditRepository
-from classiflow.shared.database.repositories.hash import InMemoryHashRepository
-from classiflow.shared.domain.job import JobStatus
-from classiflow.shared.events.broadcaster import EventBroadcaster
+from classiflow.services.audit.service import AuditService
 
 _DIM = 4
 _JOB_ID = "test-job-004"
@@ -19,6 +20,8 @@ _TEXT_A = "Municipal ordinance about urban planning."
 _TEXT_B = "Another ordinance about city planning."
 _STARTED_PLUS_OUTCOME = 2
 _COSINE_THRESHOLD = 0.85
+
+_CTX = JobContext(job_id=_JOB_ID, filename=_FILENAME)
 
 
 def _stub_embed_fixed(_text: str) -> npt.NDArray[np.float32]:
@@ -78,7 +81,7 @@ class TestDuplicateControlNode:
     ) -> None:
         await hash_repo.save(_SHA256, "previous-job")
 
-        result = await node.run(_JOB_ID, _FILENAME, _SHA256, _TEXT_A)
+        result = await node.run(_CTX, _SHA256, _TEXT_A)
 
         assert not result.passed
         assert result.is_duplicate
@@ -95,7 +98,7 @@ class TestDuplicateControlNode:
     ) -> None:
         store.add(_TEXT_A)  # pre-populate: [1,0,0,0]
 
-        result = await node.run(_JOB_ID, _FILENAME, _SHA256, _TEXT_B)
+        result = await node.run(_CTX, _SHA256, _TEXT_B)
 
         assert not result.passed
         assert result.is_duplicate
@@ -110,7 +113,7 @@ class TestDuplicateControlNode:
         hash_repo: InMemoryHashRepository,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await node.run(_JOB_ID, _FILENAME, _SHA256, _TEXT_A)
+        result = await node.run(_CTX, _SHA256, _TEXT_A)
 
         assert result.passed
         assert not result.is_duplicate
@@ -141,7 +144,7 @@ class TestDuplicateControlNode:
             broadcaster=broadcaster,
             embedding_store=store_b,
         )
-        result = await node_b.run(_JOB_ID, _FILENAME, _SHA256, _TEXT_B)
+        result = await node_b.run(_CTX, _SHA256, _TEXT_B)
 
         assert result.passed
         assert not result.is_duplicate
@@ -158,7 +161,7 @@ class TestDuplicateControlNode:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)
-        await node.run(_JOB_ID, _FILENAME, _SHA256, _TEXT_A)
+        await node.run(_CTX, _SHA256, _TEXT_A)
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -182,7 +185,7 @@ class TestDuplicateControlNode:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)
-        await node.run(_JOB_ID, _FILENAME, _SHA256, _TEXT_A)
+        await node.run(_CTX, _SHA256, _TEXT_A)
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -194,7 +197,7 @@ class TestDuplicateControlNode:
         node: DuplicateControlNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        await node.run(_JOB_ID, _FILENAME, _SHA256, _TEXT_A)
+        await node.run(_CTX, _SHA256, _TEXT_A)
 
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].duration_ms is not None

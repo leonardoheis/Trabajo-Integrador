@@ -3,14 +3,16 @@ from dataclasses import dataclass
 
 import pytest
 
+from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.domain.job import JobStatus
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_content import ContentValidationConfig
+from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import FileReceptionResult
 from classiflow.ingesta.llm_provider import MockLlm
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import InMemoryAuditRepository
-from classiflow.shared.domain.job import JobStatus
-from classiflow.shared.events.broadcaster import EventBroadcaster
+from classiflow.ingesta.prompts.content_validation import build_content_chain
+from classiflow.services.audit.service import AuditService
 
 _JOB_ID = "test-job-003"
 _STARTED_PLUS_OUTCOME_EVENTS = 2
@@ -81,24 +83,24 @@ def spanish_node(audit: AuditService, broadcaster: EventBroadcaster) -> ContentV
 
 class TestContentValidationNodeValidate:
     def test_image_only_pdf_sets_requires_ocr(self, node: ContentValidationNode) -> None:
-        result = node._validate("", _PDF_RECEPTION)  # noqa: SLF001
+        result = node.validate("", _PDF_RECEPTION)
         assert not result.passed
         assert result.requires_ocr
 
     def test_empty_non_pdf_does_not_set_requires_ocr(self, node: ContentValidationNode) -> None:
-        result = node._validate("", _DOCX_RECEPTION)  # noqa: SLF001
+        result = node.validate("", _DOCX_RECEPTION)
         assert not result.passed
         assert not result.requires_ocr
 
     def test_text_shorter_than_min_chars_fails(self, node: ContentValidationNode) -> None:
-        result = node._validate(_SHORT_TEXT, _PDF_RECEPTION)  # noqa: SLF001
+        result = node.validate(_SHORT_TEXT, _PDF_RECEPTION)
         assert not result.passed
         assert not result.requires_ocr
         assert not result.needs_agent_review
         assert "too short" in result.rejection_reason
 
     def test_char_count_is_recorded(self, node: ContentValidationNode) -> None:
-        result = node._validate(_SHORT_TEXT, _PDF_RECEPTION)  # noqa: SLF001
+        result = node.validate(_SHORT_TEXT, _PDF_RECEPTION)
         assert result.char_count == len(_SHORT_TEXT)
 
     def test_non_allowed_language_triggers_review(
@@ -112,7 +114,7 @@ class TestContentValidationNodeValidate:
             config=_CONFIG,
             language_detector=_MockDetector("fr"),
         )
-        result = french_node._validate(_SPANISH_TEXT, _PDF_RECEPTION)  # noqa: SLF001
+        result = french_node.validate(_SPANISH_TEXT, _PDF_RECEPTION)
         assert not result.passed
         assert result.needs_agent_review
         assert result.detected_language == "fr"
@@ -121,15 +123,19 @@ class TestContentValidationNodeValidate:
 class TestContentValidationNodeRun:
     async def test_valid_spanish_passes(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-        spanish_node: ContentValidationNode,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
-            lambda _path: MockLlm(response=_SLM_LEGITIMATE),
+        node = ContentValidationNode(
+            audit=audit,
+            broadcaster=broadcaster,
+            config=_CONFIG,
+            language_detector=_MockDetector("es"),
+            content_chain=build_content_chain(MockLlm(response=_SLM_LEGITIMATE)),
         )
-        result = await spanish_node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        result = await node.run(ctx, _SPANISH_TEXT, _PDF_RECEPTION)
 
         assert result.passed
         assert result.detected_language == "es"
@@ -141,7 +147,8 @@ class TestContentValidationNodeRun:
         node: ContentValidationNode,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        result = await node.run(_JOB_ID, "scan.pdf", "", _PDF_RECEPTION)
+        ctx = JobContext(job_id=_JOB_ID, filename="scan.pdf")
+        result = await node.run(ctx, "", _PDF_RECEPTION)
 
         assert not result.passed
         assert result.requires_ocr
@@ -152,21 +159,26 @@ class TestContentValidationNodeRun:
         self,
         node: ContentValidationNode,
     ) -> None:
-        result = await node.run(_JOB_ID, "doc.pdf", _SHORT_TEXT, _PDF_RECEPTION)
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        result = await node.run(ctx, _SHORT_TEXT, _PDF_RECEPTION)
 
         assert not result.passed
         assert not result.requires_ocr
 
     async def test_slm_rejects_illegitimate_content(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-        spanish_node: ContentValidationNode,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
     ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
-            lambda _path: MockLlm(response=_SLM_NOT_LEGITIMATE),
+        node = ContentValidationNode(
+            audit=audit,
+            broadcaster=broadcaster,
+            config=_CONFIG,
+            language_detector=_MockDetector("es"),
+            content_chain=build_content_chain(MockLlm(response=_SLM_NOT_LEGITIMATE)),
         )
-        result = await spanish_node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        result = await node.run(ctx, _SPANISH_TEXT, _PDF_RECEPTION)
 
         assert not result.passed
         assert result.needs_agent_review
@@ -174,13 +186,15 @@ class TestContentValidationNodeRun:
 
     async def test_emits_started_then_passed(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-        spanish_node: ContentValidationNode,
+        audit: AuditService,
         broadcaster: EventBroadcaster,
     ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
-            lambda _path: MockLlm(response=_SLM_LEGITIMATE),
+        node = ContentValidationNode(
+            audit=audit,
+            broadcaster=broadcaster,
+            config=_CONFIG,
+            language_detector=_MockDetector("es"),
+            content_chain=build_content_chain(MockLlm(response=_SLM_LEGITIMATE)),
         )
         events: list[object] = []
 
@@ -189,7 +203,8 @@ class TestContentValidationNodeRun:
 
         collect_task = asyncio.create_task(collect())
         await asyncio.sleep(0)
-        await spanish_node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        await node.run(ctx, _SPANISH_TEXT, _PDF_RECEPTION)
         await broadcaster.close(_JOB_ID)
         await collect_task
 
@@ -199,24 +214,23 @@ class TestContentValidationNodeRun:
 
     async def test_audit_records_duration(
         self,
-        monkeypatch: pytest.MonkeyPatch,
-        spanish_node: ContentValidationNode,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
         audit_repo: InMemoryAuditRepository,
     ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
-            lambda _path: MockLlm(response=_SLM_LEGITIMATE),
+        node = ContentValidationNode(
+            audit=audit,
+            broadcaster=broadcaster,
+            config=_CONFIG,
+            language_detector=_MockDetector("es"),
+            content_chain=build_content_chain(MockLlm(response=_SLM_LEGITIMATE)),
         )
-        await spanish_node.run(_JOB_ID, "doc.pdf", _SPANISH_TEXT, _PDF_RECEPTION)
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        await node.run(ctx, _SPANISH_TEXT, _PDF_RECEPTION)
 
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].duration_ms is not None
         assert records[0].duration_ms >= 0
-
-    async def test_node3_has_model_path(self, node: ContentValidationNode) -> None:
-        assert node.model_path is not None
-        assert isinstance(node.model_path, str)
-        assert node.model_path.endswith(".gguf")
 
 
 @dataclass
@@ -235,5 +249,5 @@ class _MockDetector:
     def __init__(self, iso_code: str) -> None:
         self._iso_code = iso_code
 
-    def detect_language_of(self, text: str) -> "_MockLanguage | None":  # noqa: ARG002
+    def detect_language_of(self, _text: str) -> "_MockLanguage | None":
         return _MockLanguage(_MockIsoCode(self._iso_code))

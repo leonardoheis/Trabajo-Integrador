@@ -11,7 +11,7 @@ _DEFAULT_MODEL = str(
 
 class _Settings(BaseSettings):
     API_PORT: int = 8000
-    HOST: str = "0.0.0.0"  # nosec  # noqa: S104
+    HOST: str = "0.0.0.0"  # nosec
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -24,6 +24,12 @@ class _Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     NODE2_MODEL_PATH: str = _DEFAULT_MODEL
     NODE3_MODEL_PATH: str = _DEFAULT_MODEL
+
+    GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    GOOGLE_REDIRECT_URI: str = os.getenv(
+        "GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/callback"
+    )
 
     @property
     def database_url(self) -> str:

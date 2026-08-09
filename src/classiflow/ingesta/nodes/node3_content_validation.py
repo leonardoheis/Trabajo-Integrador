@@ -1,11 +1,12 @@
-import time
 from functools import lru_cache
-from typing import Protocol, runtime_checkable
+from typing import Protocol, cast, runtime_checkable
 
 from lingua import LanguageDetector, LanguageDetectorBuilder
-from pydantic import ConfigDict, Field
 
+from classiflow.database.repositories.audit import AuditDetail
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_content import ContentValidationConfig, get_content_validation_config
+from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import ContentValidationResult, FileReceptionResult
 from classiflow.ingesta.llm_provider import get_llm_langchain
 from classiflow.ingesta.nodes.base import BaseNode
@@ -13,11 +14,8 @@ from classiflow.ingesta.prompts.content_validation import (
     LegitimacyDecisionOutput,
     build_content_chain,
 )
+from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import AuditDetail
-from classiflow.shared.domain.job import JobStatus, NodeEvent
-from classiflow.shared.events.broadcaster import EventBroadcaster
 
 _PDF_MIME = "application/pdf"
 
@@ -37,53 +35,53 @@ class _LanguageDetector(Protocol):
     def detect_language_of(self, text: str) -> _Language | None: ...
 
 
+@runtime_checkable
+class _ContentChain(Protocol):
+    def invoke(self, inp: dict[str, str], **kwargs: object) -> LegitimacyDecisionOutput: ...
+
+
 @lru_cache(maxsize=1)
 def _get_detector() -> LanguageDetector:
     return LanguageDetectorBuilder.from_all_languages().build()
 
 
 class ContentValidationNode(BaseNode):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
     @property
     def name(self) -> str:
         return "node3_content_validation"
 
-    @property
-    def model_path(self) -> str:
-        return Settings.node3_model_path
-
-    audit: AuditService
-    broadcaster: EventBroadcaster
-    config: ContentValidationConfig = Field(default_factory=get_content_validation_config)
-    language_detector: _LanguageDetector = Field(default_factory=_get_detector)
+    def __init__(
+        self,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
+        *,
+        config: ContentValidationConfig | None = None,
+        language_detector: "_LanguageDetector | None" = None,
+        content_chain: "_ContentChain | None" = None,
+    ) -> None:
+        super().__init__(audit, broadcaster)
+        self.config: ContentValidationConfig = (
+            config if config is not None else get_content_validation_config()
+        )
+        self.language_detector: _LanguageDetector = (
+            language_detector if language_detector is not None else _get_detector()
+        )
+        self.content_chain: _ContentChain | None = content_chain
 
     async def run(
         self,
-        job_id: str,
-        filename: str,
+        ctx: JobContext,
         text: str,
         reception: FileReceptionResult,
     ) -> ContentValidationResult:
-        start = time.monotonic()
-
-        await self.broadcaster.emit(
-            NodeEvent(job_id=job_id, node=self.name, status=JobStatus.STARTED)
-        )
-
-        result = self._validate(text, reception)
-        duration_ms = int((time.monotonic() - start) * 1000)
-
-        status = JobStatus.PASSED if result.passed else JobStatus.FAILED
-        await self.broadcaster.emit(NodeEvent(job_id=job_id, node=self.name, status=status))
-
-        await self.audit.record(
-            job_id,
-            self.name,
-            status.value,
-            duration_ms=duration_ms,
+        start = await self._emit_started(ctx)
+        result = self.validate(text, reception)
+        await self._emit_and_audit(
+            ctx,
+            start,
+            passed=result.passed,
             detail=AuditDetail.model_validate({
-                "filename": filename,
+                "filename": ctx.filename,
                 "char_count": result.char_count,
                 "detected_language": result.detected_language,
                 "requires_ocr": result.requires_ocr,
@@ -92,10 +90,9 @@ class ContentValidationNode(BaseNode):
                 "rejection_reason": result.rejection_reason,
             }),
         )
-
         return result
 
-    def _validate(self, text: str, reception: FileReceptionResult) -> ContentValidationResult:
+    def validate(self, text: str, reception: FileReceptionResult) -> ContentValidationResult:
         char_count = len(text)
 
         if char_count < self.config.ocr_char_threshold and reception.detected_mime == _PDF_MIME:
@@ -134,8 +131,14 @@ class ContentValidationNode(BaseNode):
     def _slm_legitimacy_check(
         self, text: str, detected_language: str, char_count: int
     ) -> ContentValidationResult:
-        llm = get_llm_langchain(self.model_path)
-        output: LegitimacyDecisionOutput = build_content_chain(llm).invoke({
+        if self.content_chain is not None:
+            chain: _ContentChain = self.content_chain
+        else:
+            chain = cast(
+                "_ContentChain",
+                build_content_chain(get_llm_langchain(Settings.node3_model_path)),
+            )
+        output: LegitimacyDecisionOutput = chain.invoke({
             "text_excerpt": text[: self.config.excerpt_len],
             "detected_language": detected_language,
         })

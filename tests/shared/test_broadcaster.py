@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from classiflow.shared.domain.job import JobStatus, NodeEvent
-from classiflow.shared.events.broadcaster import EventBroadcaster
+from classiflow.domain.job import JobStatus, NodeEvent
+from classiflow.events.broadcaster import EventBroadcaster
 
 pytestmark = pytest.mark.anyio
 

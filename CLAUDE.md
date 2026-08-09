@@ -197,6 +197,14 @@ Apply this structure to every new LangGraph agent added to the project.
 - All comments, docstrings, and commit messages are in English.
 - Line length: 100. Quote style: double. (Configured in `[tool.ruff]`.)
 - Type annotations required on all functions in `src/` (mypy strict).
+- **Never use `from __future__ import annotations`** — quote forward references explicitly
+  (`"MyType"`) instead. Only acceptable for true circular cross-file import cycles.
+- **Never use `from typing import TYPE_CHECKING`** unless the import causes a real circular
+  dependency. Stdlib and cheap third-party imports go at the top level unconditionally.
+- **Never use `Any`** — it disables mypy checking. Use `TypedDict`, `BaseModel`, `object`,
+  or an explicit `Union` instead. The only acceptable exception is overriding a third-party
+  method that declares `**kwargs: Any` in its signature (and even then, prefer removing
+  `**kwargs` from the override if the mock/subclass does not forward them).
 
 ### Exception style
 
@@ -225,8 +233,6 @@ Rules:
 - `__post_init__` **must** call `super().__init__(str(self))` so `str(exc)` and logging work.
 - Raise the specific subclass, never the base class directly.
 - Use `try/except SpecificInfraError` (never bare `except` or `except Exception`).
-- For `raise SomeError("literal")` that triggers ruff EM101, add `# noqa: EM101` — the
-  spirit of the rule is already satisfied because the message is inside the exception class.
 - Full rationale: `.claude/learnings.md`
 
 ### `__init__.py` content

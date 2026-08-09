@@ -4,6 +4,7 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
+from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import (
     ContentValidationResult,
     DuplicateControlResult,
@@ -75,13 +76,13 @@ def build_coordinator(
     text_extractor: TextExtractFn = lambda b: b.decode("utf-8", errors="replace"),
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
     async def _node1(state: JobState) -> dict[str, Any]:
-        result = await node1.run(state["job_id"], state["filename"], state.get("file_bytes"))
+        ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
+        result = await node1.run(ctx, state.get("file_bytes"))
         return {"reception": result}
 
     async def _node2(state: JobState) -> dict[str, Any]:
-        r = state.get("reception")
-        assert r is not None
-        result = await node2.run(state["job_id"], state["filename"], r)
+        ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
+        result = await node2.run(ctx, state["reception"])
         return {"format_validation": result}
 
     def _extract(state: JobState) -> dict[str, Any]:
@@ -89,17 +90,13 @@ def build_coordinator(
         return {"text": text_extractor(file_bytes)}
 
     async def _node3(state: JobState) -> dict[str, Any]:
-        r = state.get("reception")
-        assert r is not None
-        result = await node3.run(state["job_id"], state["filename"], state.get("text", ""), r)
+        ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
+        result = await node3.run(ctx, state.get("text", ""), state["reception"])
         return {"content_validation": result}
 
     async def _node4(state: JobState) -> dict[str, Any]:
-        r = state.get("reception")
-        assert r is not None
-        result = await node4.run(
-            state["job_id"], state["filename"], r.sha256, state.get("text", "")
-        )
+        ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
+        result = await node4.run(ctx, state["reception"].sha256, state.get("text", ""))
         return {"duplicate_control": result}
 
     def _accept(_state: JobState) -> dict[str, Any]:

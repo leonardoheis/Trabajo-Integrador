@@ -1,55 +1,45 @@
 import hashlib
-import time
 
-from pydantic import ConfigDict
-
+from classiflow.database.repositories.audit import AuditDetail
+from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config import get_allowed_formats
+from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import FileReceptionResult
 from classiflow.ingesta.mime import MimeDetector, detect_mime
 from classiflow.ingesta.nodes.base import BaseNode
-from classiflow.shared.audit.service import AuditService
-from classiflow.shared.database.repositories.audit import AuditDetail
-from classiflow.shared.domain.job import JobStatus, NodeEvent
-from classiflow.shared.events.broadcaster import EventBroadcaster
+from classiflow.services.audit.service import AuditService
 
 
 class FileReceptionNode(BaseNode):
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
     @property
     def name(self) -> str:
         return "node1_file_reception"
 
-    audit: AuditService
-    broadcaster: EventBroadcaster
-    mime_detector: MimeDetector = detect_mime
-    max_file_size_bytes: int = get_allowed_formats().max_file_size_bytes
-
-    async def run(
+    def __init__(
         self,
-        job_id: str,
-        filename: str,
-        file_bytes: bytes | None,
-    ) -> FileReceptionResult:
-        start = time.monotonic()
-
-        await self.broadcaster.emit(
-            NodeEvent(job_id=job_id, node=self.name, status=JobStatus.STARTED)
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
+        *,
+        mime_detector: MimeDetector = detect_mime,
+        max_file_size_bytes: int | None = None,
+    ) -> None:
+        super().__init__(audit, broadcaster)
+        self.mime_detector = mime_detector
+        self.max_file_size_bytes: int = (
+            max_file_size_bytes
+            if max_file_size_bytes is not None
+            else get_allowed_formats().max_file_size_bytes
         )
 
+    async def run(self, ctx: JobContext, file_bytes: bytes | None) -> FileReceptionResult:
+        start = await self._emit_started(ctx)
         result = self._receive(file_bytes)
-        duration_ms = int((time.monotonic() - start) * 1000)
-
-        status = JobStatus.PASSED if result.passed else JobStatus.FAILED
-        await self.broadcaster.emit(NodeEvent(job_id=job_id, node=self.name, status=status))
-
-        await self.audit.record(
-            job_id,
-            self.name,
-            status.value,
-            duration_ms=duration_ms,
+        await self._emit_and_audit(
+            ctx,
+            start,
+            passed=result.passed,
             detail=AuditDetail.model_validate({
-                "filename": filename,
+                "filename": ctx.filename,
                 "sha256": result.sha256,
                 "detected_mime": result.detected_mime,
                 "file_size_bytes": result.file_size_bytes,
@@ -57,7 +47,6 @@ class FileReceptionNode(BaseNode):
                 "rejection_reason": result.rejection_reason,
             }),
         )
-
         return result
 
     def _receive(self, file_bytes: bytes | None) -> FileReceptionResult:

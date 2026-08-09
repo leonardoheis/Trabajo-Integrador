@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from alembic import context
 
 from classiflow.settings import Settings
-from classiflow.shared.database.base import Base
-import classiflow.shared.database.models  # noqa: F401 — registers all ORM models
+from classiflow.database.base import Base
+import classiflow.database.models  # registers all ORM models
 
 config = context.config
 if config.config_file_name is not None:
