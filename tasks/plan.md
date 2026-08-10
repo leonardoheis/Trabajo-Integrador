@@ -586,60 +586,79 @@ expiry come from `settings`. Uses **PyJWT** (ships `py.typed`; replaced `python-
 
 **Estimated scope:** S
 
-### Task 5: Google OAuth flow + whitelist check
+### Task 5: Google OAuth flow + whitelist check ✅ done — PR [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9)
 
-**Description:** Implement `shared/auth/oauth.py` with two functions:
-`get_authorization_url()` (returns the Google redirect URL) and
-`exchange_code(code)` (exchanges the OAuth code for a Google user profile, checks
-`IUserRepository`, issues a JWT). Implement `api/routes/auth/endpoints.py`.
+**Description:** Implement `services/auth/oauth.py` with two functions:
+`get_authorization_url(state)` (returns the Google redirect URL) and
+`exchange_code(code, user_repo, http=...)` (exchanges the OAuth code for a Google user
+profile, checks `IUserRepository`, issues a JWT). Implement `api/routes/auth/endpoints.py`.
+
+> **Note:** this PR also carried an unplanned package refactor — the old `shared/` package
+> was split into top-level `domain/`, `services/`, `database/`, `events/`, `injections/`.
+> File paths below reflect the actual (post-refactor) locations, not the original plan.
 
 **Acceptance criteria:**
-- [ ] `GET /auth/login` redirects to Google with correct `scope=email profile`
-- [ ] `GET /auth/callback?code=X` exchanges the code, verifies the email against `allowed_users`
-- [ ] Returns HTTP 403 if the email is not in the whitelist or is blocked
-- [ ] Returns `TokenResponse(access_token=<JWT>, token_type="bearer")` on success
-- [ ] OAuth flow is tested using `httpx.MockTransport` (no real Google call in tests)
-- [ ] `IUserRepository` is injected — tests use `InMemoryUserRepository`
+- [x] `GET /auth/login` redirects to Google with correct `scope=email profile`, sets a
+  signed httpOnly `oauth_state` cookie (CSRF protection — added beyond original spec)
+- [x] `GET /auth/callback?code=X&state=Y` verifies the state cookie, exchanges the code,
+  verifies the email against `allowed_users`
+- [x] Returns HTTP 400 on missing/mismatched CSRF state, HTTP 403 if the email is not in
+  the whitelist or is blocked
+- [x] Returns `AuthToken(access_token=<JWT>)` on success
+- [x] OAuth flow is tested using `httpx.MockTransport` (no real Google call in tests)
+- [x] `IUserRepository` is injected — tests use `InMemoryUserRepository`
 
 **Dependencies:** Tasks 3, 4
 
-**Files touched:**
-- `src/classiflow/shared/auth/oauth.py`
+**Files touched (actual):**
+- `src/classiflow/services/auth/oauth.py`
+- `src/classiflow/services/auth/exceptions.py` (`OAuthError`, `NotAllowedError`)
 - `src/classiflow/api/routes/auth/endpoints.py`
-- `src/classiflow/api/routes/auth/schemas.py`
 - `src/classiflow/api/error_handlers/auth.py`
-- `tests/api/routes/test_auth.py`
+- `tests/api/routes/test_auth_oauth.py`
 
 **Estimated scope:** M
 
-### Task 6: JWT middleware
+### Task 6: JWT auth dependency ✅ done — PR [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9)
 
-**Description:** Implement `api/middleware/auth.py` as a FastAPI dependency (not Starlette
-middleware) so it can be applied per-router. Protected routes declare
-`CurrentUser = Annotated[User, Depends(Provide[Container.current_user])]` and decorate
-endpoint functions with `@inject`.
+**Description:** Implement `AuthService.verify_token()` + `api/dependencies.py` as a FastAPI
+dependency (not Starlette middleware) so it can be applied per-route. Protected routes will
+declare `CurrentUser = Annotated[User, Depends(get_current_user)]` (implemented via
+`dependency_injector` `@inject`/`Provide`, not a bare `Depends(Provide[...])` alias as
+originally sketched).
+
+> **Note:** the standalone `api/middleware/auth.py` file from the original plan was dropped
+> in favor of putting `get_current_user` directly in `api/dependencies.py` — same behavior,
+> one fewer file.
 
 **Acceptance criteria:**
-- [ ] `require_auth` extracts the `Authorization: Bearer <token>` header
-- [ ] Returns HTTP 401 if header is missing or token is invalid
-- [ ] Returns the decoded `User` domain object on success
-- [ ] `/health` and `/auth/*` routes are explicitly public (no `require_auth` dependency)
-- [ ] `CurrentUser` alias uses `Provide[Container.current_user]`; endpoint uses `@inject`
-- [ ] Tests verify 401 on missing token, 401 on expired token, 200 on valid token
+- [x] `get_current_user` extracts the `Authorization: Bearer <token>` header via `HTTPBearer`
+- [x] `AuthService.verify_token` raises `AuthError` (→ HTTP 401, see `error_handlers/auth.py`)
+  on invalid/expired token, `NotAllowedError` (→ HTTP 403) if the user is no longer whitelisted
+- [x] Returns the decoded `User` domain object on success
+- [x] `/health` and `/auth/*` routes are public today by construction (no route declares
+  `CurrentUser` yet — see caveat below)
+- [x] `CurrentUser = Annotated[User, Depends(get_current_user)]` defined; wired through DI
+- [ ] Tests verify 401 on missing token, 401 on expired token, 200 on valid token **against a
+  real protected endpoint** — no such endpoint exists yet. `AuthService`/`decode_token` are
+  unit-tested directly (`tests/api/test_auth.py`, `tests/api/routes/test_auth_oauth.py`); the
+  end-to-end 401/200 route check lands naturally with **T17**, the first task to put
+  `CurrentUser` on a real endpoint.
 
 **Dependencies:** Tasks 4, 5
 
-**Files touched:**
-- `src/classiflow/api/middleware/auth.py`
+**Files touched (actual):**
 - `src/classiflow/api/dependencies.py`
-- `tests/api/conftest.py`  (add `auth_headers` fixture)
+- `src/classiflow/services/auth/service.py` (`AuthService.verify_token`)
+- `src/classiflow/api/error_handlers/auth.py`
 
 **Estimated scope:** S
 
 ### Checkpoint C
-- [ ] `uv run poe check` passes
-- [ ] Auth flow tests pass (no real Google calls)
-- [ ] Protected route rejects unauthenticated requests
+- [x] `uv run poe check` passes
+- [x] Auth flow tests pass (no real Google calls)
+- [ ] Protected route rejects unauthenticated requests — no protected route exists yet;
+  verify this once T17 adds the first `CurrentUser`-gated endpoint
 
 ---
 
@@ -865,38 +884,40 @@ Stage 2 OCR path (MarkItDown → EasyOCR fallback) rather than rejecting a valid
 
 ## Phase 7: Duplicate Control
 
-### Task 14: Agent 4 — Duplicate Control
+### Task 14: Node 4 — Duplicate Control ✅ done — PR [#4](https://github.com/leonardoheis/Trabajo-Integrador/pull/4)
 
-**Description:** Implement `agent4_duplicate_control.py` with two-layer detection: exact
+**Description:** Implement `node4_duplicate_control.py` with two-layer detection: exact
 SHA-256 via `IHashRepository`, and semantic near-duplicate via `sentence-transformers` + FAISS.
 
 **Acceptance criteria:**
-- [ ] Layer 1: SHA-256 match → `DuplicateControlResult(is_duplicate=True, duplicate_type="exact")`
-- [ ] Layer 2: cosine similarity > threshold → `duplicate_type="semantic"`
-- [ ] New document → `is_duplicate=False`, hash saved via `IHashRepository`
-- [ ] Constructor: `__init__(self, hash_repo: IHashRepository, audit: AuditService, broadcaster: EventBroadcaster)`
-- [ ] Tests use `InMemoryHashRepository`; no DB required
-- [ ] `sentence-transformers` model load is lazy (not at import time)
-- [ ] Emits events + records audit on every execution
+- [x] Layer 1: SHA-256 match → `DuplicateControlResult(is_duplicate=True, duplicate_type="exact")`
+- [x] Layer 2: cosine similarity > threshold → `duplicate_type="semantic"`
+- [x] New document → `is_duplicate=False`, hash saved via `IHashRepository`
+- [x] Constructor takes injected `hash_repo`, `audit`, `broadcaster`, plus an injectable
+  `EmbeddingStore` (FAISS `IndexFlatIP` wrapper) for test isolation
+- [x] Tests use `InMemoryHashRepository`; no DB required
+- [x] `sentence-transformers` model load is lazy (`@lru_cache` on `_get_sentence_model()`)
+- [x] Emits events + records audit on every execution
 
 **Dependencies:** Tasks 3, 7, 8
 
 **Files touched:**
 - `config/duplicate_control.yaml`
-- `src/classiflow/ingesta/agents/agent4_duplicate_control.py`
-- `tests/ingesta/test_agent4.py`
+- `src/classiflow/ingesta/nodes/node4_duplicate_control.py`
+- `tests/ingesta/test_node4.py`
+- `playground/node4_duplicate_control.ipynb`
 
 **Estimated scope:** M
 
-### Checkpoint G
-- [ ] `uv run poe check` passes
-- [ ] All four agent tests pass
+### Checkpoint G ✅ done
+- [x] `uv run poe check` passes
+- [x] All four node tests pass
 
 ---
 
 ## Phase 8: Orchestration
 
-### Task 15: Coordinator — LangGraph state machine
+### Task 15: Coordinator — LangGraph state machine ✅ done
 
 **Description:** Implement `coordinator.py`. Defines `JobState`, one graph node per agent,
 and conditional edges. Injects all dependencies at construction. Terminal states write to
@@ -917,13 +938,13 @@ job_start ───►│ agent1 ──► agent2 ──► agent3 ──► age
 ```
 
 **Acceptance criteria:**
-- [ ] `JobState` TypedDict has all required fields
-- [ ] Graph edges match the routing diagram above
-- [ ] `handle_accept`, `handle_reject`, `handle_review` each call `AuditService.record_routing()`
-- [ ] `pipeline_done` event emitted on every terminal state
-- [ ] End-to-end integration test: valid PDF → all 4 agents pass → `accepted`
-- [ ] End-to-end test: empty file → rejected at agent 1 → `rejected`
-- [ ] Uses `MockLlm` and `InMemory*` repos; no real model or DB required
+- [x] `JobState` TypedDict has all required fields
+- [x] Graph edges match the routing diagram above (conditional edges to `accept`/`reject`/`review`)
+- [x] `_accept`, `_reject`, `_review` terminal nodes set `final_status` + `rejection_reason`
+- [x] `pipeline_done` event emitted on every terminal state
+- [x] End-to-end integration test: valid PDF → all 4 nodes pass → `accepted`
+- [x] End-to-end test: empty file → rejected at node 1 → `rejected`
+- [x] Uses `MockLlm` and `InMemory*` repos; no real model or DB required
 
 **Dependencies:** Tasks 9, 12, 13, 14
 
@@ -937,21 +958,21 @@ job_start ───►│ agent1 ──► agent2 ──► agent3 ──► age
 
 ## Phase 9: API Layer
 
-### Task 16: FastAPI application + health route
+### Task 16: FastAPI application + health route ✅ done — PR [#8](https://github.com/leonardoheis/Trabajo-Integrador/pull/8)
 
 **Description:** Implement `api/app.py` (factory function), `api/schema.py` (BaseSchema),
 error handlers, `routes/health/endpoints.py`, and the dependency-injector containers.
 
 **Acceptance criteria:**
-- [ ] `create_app()` returns a `FastAPI` instance with all routers and error handlers mounted
-- [ ] `create_app()` calls `configure_container()` to wire the `Container` to `api.routes`
-- [ ] `GET /health` returns `{"status": "ok"}` and HTTP 200 (public, no auth)
-- [ ] `BaseSchema` uses `alias_generator=to_camel`, `populate_by_name=True`
-- [ ] `injections/production.py`: `Container(DeclarativeContainer)` wires `Sql*` repos + `AuditService` + `EventBroadcaster`
-- [ ] `injections/test.py`: `TestContainer` overrides every `Sql*` provider with `InMemory*`
-- [ ] `tests/api/conftest.py` uses `TestContainer`; `@inject` resolves without real DB
-- [ ] `dependency-injector>=4.41` added to `pyproject.toml`
-- [ ] Tests pass with `TestClient`
+- [x] `create_app()` returns a `FastAPI` instance with all routers and error handlers mounted
+- [x] `create_app()` calls `configure_container()` to wire the `Container` to `api.routes`
+- [x] `GET /health` returns `{"status": "healthy", "message": "..."}` and HTTP 200 (public, no auth)
+- [x] `BaseSchema` uses `alias_generator=to_camel`, `populate_by_name=True`
+- [x] `injections/production.py`: `Container(DeclarativeContainer)` wires `Sql*` repos + `AuditService` + `EventBroadcaster`
+- [x] `injections/test.py`: `TestContainer` overrides every `Sql*` provider with `InMemory*`
+- [x] `tests/api/conftest.py` uses `TestContainer`; `@inject` resolves without real DB
+- [x] `dependency-injector>=4.41` added to `pyproject.toml`
+- [x] Tests pass with `TestClient`
 
 **Dependencies:** Task 1
 

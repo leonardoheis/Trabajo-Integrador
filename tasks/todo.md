@@ -24,11 +24,11 @@ BATCH 3  ───────────────────────�
   T07  Shared domain + AuditService + EventBroadcaster
 
 BATCH 4  ──────────────────────────────────────────────── parallel
-  T05  Google OAuth + whitelist          (needs T03 + T04)
+  T05  Google OAuth + whitelist          (needs T03 + T04)          [x] done
   T08  Ingesta domain models             (needs T07)
 
 BATCH 5  ──────────────────────────────────────────────── sequential (needs T04 + T05)
-  T06  JWT auth middleware
+  T06  JWT auth dependency               [x] done
 
 BATCH 6  ──────────────────────────────────────────────── sequential (needs T08)
   T09  Node 1 — File Reception
@@ -150,33 +150,43 @@ uv run poe test tests/api/test_auth.py
 ---
 
 ### T05 · Google OAuth flow + whitelist check
-**Branch:** `feat/oauth` · **Deps:** T03 · T04 · **Status:** `[ ]`
+**Branch:** `feat/oauth` · **Deps:** T03 · T04 · **Status:** `[x]` · **PR:** [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9)
 
-- [ ] `shared/auth/oauth.py`: `get_authorization_url()` and `exchange_code(code, user_repo)`
-- [ ] `GET /auth/login` redirects to Google with `scope=email profile`
-- [ ] `GET /auth/callback?code=X` exchanges code, checks `allowed_users`, returns JWT
-- [ ] HTTP 403 if email not in whitelist or is blocked
-- [ ] Tests use `httpx.MockTransport` — no real Google call
-- [ ] `uv run poe check` passes
+- [x] `services/auth/oauth.py`: `get_authorization_url(state)` and `exchange_code(code, user_repo, http=...)`
+  (path is `services/auth/`, not `shared/auth/` — see package refactor note on T06)
+- [x] `GET /auth/login` redirects to Google with `scope=email profile`, sets signed httpOnly
+  `oauth_state` cookie for CSRF protection (added beyond original spec)
+- [x] `GET /auth/callback?code=X&state=Y` verifies CSRF state, exchanges code, checks
+  `allowed_users`, returns JWT
+- [x] HTTP 400 on missing/mismatched CSRF state, HTTP 403 if email not in whitelist or is blocked
+- [x] Tests use `httpx.MockTransport` — no real Google call
+- [x] `uv run poe check` passes
 
 ```bash
 # Verify
 uv run poe check
-uv run poe test tests/api/routes/test_auth.py
+uv run poe test tests/api/routes/test_auth_oauth.py
 ```
 
 ---
 
-### T06 · JWT auth middleware
-**Branch:** `feat/auth-middleware` · **Deps:** T04 · T05 · **Status:** `[ ]`
+### T06 · JWT auth dependency
+**Branch:** `feat/oauth` (shipped together with T05) · **Deps:** T04 · T05 · **Status:** `[x]` · **PR:** [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9)
 
-- [ ] `api/middleware/auth.py`: `require_auth` function returning `User` (registered in `Container`)
-- [ ] `CurrentUser = Annotated[User, Depends(Provide[Container.current_user])]` in `dependencies.py`
-- [ ] Endpoint functions that use `CurrentUser` decorated with `@inject`
-- [ ] HTTP 401 on missing header, invalid token, or expired token
-- [ ] `/health` and `/auth/*` explicitly public (no `CurrentUser` dependency)
-- [ ] Tests: 401 missing, 401 expired, 200 valid
-- [ ] `uv run poe check` passes
+> **Package refactor note (this PR):** `shared/` was split into top-level `domain/`,
+> `services/`, `database/`, `events/`, `injections/`. Any older task card referencing
+> `shared/...` paths now maps to one of these.
+
+- [x] `api/dependencies.py`: `get_current_user` (FastAPI dependency, not Starlette middleware)
+  returns `User` via `AuthService.verify_token`, registered through `Container`
+- [x] `CurrentUser = Annotated[User, Depends(get_current_user)]` in `dependencies.py`
+- [x] Endpoint functions that use `CurrentUser` decorated with `@inject`
+- [x] `AuthError` → HTTP 401, `NotAllowedError` → HTTP 403 (`error_handlers/auth.py`)
+- [x] `/health` and `/auth/*` are public today (no route declares `CurrentUser` yet)
+- [ ] Tests: 401 missing, 401 expired, 200 valid — **no protected endpoint exists yet** to
+  assert this against end-to-end; `AuthService.verify_token`/`decode_token` are unit-tested
+  directly. Add the route-level 401/200 test when **T17** puts `CurrentUser` on a real endpoint.
+- [x] `uv run poe check` passes
 
 ```bash
 # Verify
@@ -533,8 +543,8 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 | T04 | JWT utilities | `[x]` done — PR [#7](https://github.com/lgj2911/Trabajo-Integrador/pull/7) |
 | T07 | Shared domain + AuditService + EventBroadcaster | `[x]` done — PR [#8](https://github.com/lgj2911/Trabajo-Integrador/pull/8) |
 | T08 | Ingesta domain models | `[x]` done — PR [#11](https://github.com/lgj2911/Trabajo-Integrador/pull/11) |
-| T05 | Google OAuth + whitelist | `[ ]` pending |
-| T06 | JWT auth middleware | `[ ]` pending |
+| T05 | Google OAuth + whitelist | `[x]` done — PR [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9) |
+| T06 | JWT auth dependency | `[x]` done — PR [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9) (route-level 401/200 test deferred to T17) |
 | T09 | Node 1 — File Reception | `[x]` done — PR [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13) |
 | T10 | Node 2 — Format Validation (rule-based) | `[x]` done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15) |
 | T11 | LLM Provider singleton | `[x]` done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
@@ -549,4 +559,7 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 | T20 | wandb integration — LLM tracing + per-node metrics | `[ ]` pending |
 | T21 | Text extraction — MarkItDown + PaddleOCR fallback | `[ ]` pending |
 
-**14 / 21 tasks complete · 1 skipped (T18)**
+**16 / 21 tasks complete · 1 skipped (T18)**
+
+**Next up: T17 · Pipeline endpoints + SSE stream + review queue** — all its dependencies
+(T06, T15, T16) are now done. This is the next task to pick up.
