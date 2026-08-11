@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.database.models import Job
+from classiflow.domain.repositories import UNSET, UnsetType
 
 
 class SqlJobRepository:
@@ -16,10 +17,24 @@ class SqlJobRepository:
         result = await self._session.execute(select(Job).where(Job.job_id == job_id))
         return result.scalar_one_or_none()
 
-    async def update_status(self, job_id: str, status: str) -> None:
+    async def update_status(
+        self,
+        job_id: str,
+        status: str,
+        *,
+        rejection_reason: str | UnsetType | None = UNSET,
+        failed_at_node: str | UnsetType | None = UNSET,
+        review_action_needed: str | UnsetType | None = UNSET,
+    ) -> None:
         job = await self.find_by_job_id(job_id)
         if job is not None:
             job.status = status
+            if not isinstance(rejection_reason, UnsetType):
+                job.rejection_reason = rejection_reason
+            if not isinstance(failed_at_node, UnsetType):
+                job.failed_at_node = failed_at_node
+            if not isinstance(review_action_needed, UnsetType):
+                job.review_action_needed = review_action_needed
             await self._session.flush()
 
     async def list_all(self) -> list[Job]:
@@ -37,10 +52,24 @@ class InMemoryJobRepository:
     async def find_by_job_id(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
 
-    async def update_status(self, job_id: str, status: str) -> None:
+    async def update_status(
+        self,
+        job_id: str,
+        status: str,
+        *,
+        rejection_reason: str | UnsetType | None = UNSET,
+        failed_at_node: str | UnsetType | None = UNSET,
+        review_action_needed: str | UnsetType | None = UNSET,
+    ) -> None:
         job = self._jobs.get(job_id)
         if job is not None:
             job.status = status
+            if not isinstance(rejection_reason, UnsetType):
+                job.rejection_reason = rejection_reason
+            if not isinstance(failed_at_node, UnsetType):
+                job.failed_at_node = failed_at_node
+            if not isinstance(review_action_needed, UnsetType):
+                job.review_action_needed = review_action_needed
 
     async def list_all(self) -> list[Job]:
         return list(self._jobs.values())

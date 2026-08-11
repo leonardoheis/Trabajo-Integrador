@@ -10,8 +10,14 @@ from classiflow.database.repositories.human_decision import SqlHumanDecisionRepo
 from classiflow.database.repositories.job import SqlJobRepository
 from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.events.broadcaster import EventBroadcaster
+from classiflow.ingesta.coordinator import build_coordinator, utf8_decode_extractor
+from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
+from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
+from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
+from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
+from classiflow.services.pipeline.service import PipelineService
 
 
 class Container(containers.DeclarativeContainer):
@@ -27,6 +33,29 @@ class Container(containers.DeclarativeContainer):
     audit_service = providers.Factory(AuditService, repo=audit_repo)
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
+
+    text_extractor = providers.Object(utf8_decode_extractor)
+    node1 = providers.Factory(FileReceptionNode, audit=audit_service, broadcaster=broadcaster)
+    node2 = providers.Factory(FormatValidationNode, audit=audit_service, broadcaster=broadcaster)
+    node3 = providers.Factory(ContentValidationNode, audit=audit_service, broadcaster=broadcaster)
+    node4 = providers.Factory(
+        DuplicateControlNode, audit=audit_service, broadcaster=broadcaster, hash_repo=hash_repo
+    )
+    coordinator = providers.Factory(
+        build_coordinator,
+        node1=node1,
+        node2=node2,
+        node3=node3,
+        node4=node4,
+        text_extractor=text_extractor,
+    )
+    pipeline_service = providers.Factory(
+        PipelineService,
+        job_repo=job_repo,
+        document_steps_repo=document_steps_repo,
+        broadcaster=broadcaster,
+        coordinator=coordinator,
+    )
 
 
 @cache

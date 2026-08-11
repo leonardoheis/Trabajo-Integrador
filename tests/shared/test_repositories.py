@@ -301,6 +301,23 @@ class TestSqlJobRepository:
         assert found is not None
         assert found.status == "done"
 
+    async def test_update_status_without_kwargs_preserves_existing_fields(
+        self, session: AsyncSession
+    ) -> None:
+        repo = SqlJobRepository(session)
+        await repo.create(_job("sql-job-004"))
+        await repo.update_status(
+            "sql-job-004", "review", rejection_reason="needs human review", failed_at_node="node3"
+        )
+        # A later status-only update (e.g. recording a human decision) must not wipe
+        # the rejection_reason/failed_at_node audit trail set above.
+        await repo.update_status("sql-job-004", "accepted")
+        found = await repo.find_by_job_id("sql-job-004")
+        assert found is not None
+        assert found.status == "accepted"
+        assert found.rejection_reason == "needs human review"
+        assert found.failed_at_node == "node3"
+
     async def test_list_all(self, session: AsyncSession) -> None:
         repo = SqlJobRepository(session)
         # session fixture already has one job (_JOB); create one more
@@ -332,6 +349,19 @@ class TestInMemoryJobRepository:
     async def test_update_status_noop_for_missing(self) -> None:
         repo = InMemoryJobRepository()
         await repo.update_status("ghost", "done")  # must not raise
+
+    async def test_update_status_without_kwargs_preserves_existing_fields(self) -> None:
+        repo = InMemoryJobRepository()
+        await repo.create(_job())
+        await repo.update_status(
+            _JOB, "review", rejection_reason="needs human review", failed_at_node="node3"
+        )
+        await repo.update_status(_JOB, "accepted")
+        found = await repo.find_by_job_id(_JOB)
+        assert found is not None
+        assert found.status == "accepted"
+        assert found.rejection_reason == "needs human review"
+        assert found.failed_at_node == "node3"
 
     async def test_list_all(self) -> None:
         repo = InMemoryJobRepository()
