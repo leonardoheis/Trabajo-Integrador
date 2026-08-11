@@ -990,11 +990,12 @@ error handlers, `routes/health/endpoints.py`, and the dependency-injector contai
 
 **Estimated scope:** S
 
-### Task 17: Pipeline endpoints + SSE stream
+### Task 17: Pipeline endpoints + SSE stream ✅ done — PR [#13](https://github.com/leonardoheis/Trabajo-Integrador/pull/13)
 
 **Description:** Implement `POST /pipeline/ingest`, `GET /pipeline/{job_id}/events`,
 `GET /pipeline/review-queue`, and `POST /pipeline/{job_id}/decision`.
-All routes are protected by `require_auth`.
+All routes are protected — implemented as one `dependencies=[Depends(get_current_user)]`
+on the router itself, since every route needs it, rather than a per-route `require_auth`.
 
 - `POST /pipeline/ingest` — accepts multipart file upload, generates `job_id`, starts
   coordinator as an `asyncio` background task, returns HTTP 202 immediately.
@@ -1006,32 +1007,41 @@ All routes are protected by `require_auth`.
   via `IHumanDecisionRepository`; updates `jobs.status` accordingly.
 
 **Acceptance criteria:**
-- [ ] `POST /pipeline/ingest` returns HTTP 202 with `job_id` within 100 ms
-- [ ] SSE stream delivers `agent_started` + `agent_passed`/`agent_failed` per agent
-- [ ] SSE stream closes cleanly on `pipeline_done`
-- [ ] Client disconnect before completion removes the queue (`try/finally` in generator)
-- [ ] Returns HTTP 404 for unknown `job_id`
-- [ ] Returns HTTP 401 without valid JWT
-- [ ] `GET /pipeline/review-queue` returns only jobs with `status = REVIEW`, each with `document_steps` inline
-- [ ] `POST /pipeline/{job_id}/decision` accepts `decision: accept | reject | escalate` + optional `notes`; persists via `IHumanDecisionRepository`; updates `jobs.status`
-- [ ] `POST /pipeline/{job_id}/decision` returns HTTP 404 for unknown job, HTTP 409 if job is not in `REVIEW` state
-- [ ] Tests assert the full SSE event sequence using `MockLlm` + small PDF fixture
-- [ ] Tests assert review queue contents and decision recording using `InMemory*` repos
+- [x] `POST /pipeline/ingest` returns HTTP 202 with `job_id`; fast by construction (one
+  `Job` insert before the response), not literally load-tested at 100 ms
+- [x] SSE stream delivers one `node_update` event per started/passed/failed transition
+  — the single-event-type `NodeEvent.to_sse()` contract from T07, not separately named
+  `agent_started`/`agent_passed`/`agent_failed` events as originally sketched
+- [x] SSE stream closes cleanly on a final `node: "pipeline", status: "done"` event
+- [x] Client disconnect before completion removes the queue (`try/finally` in generator)
+- [x] Returns HTTP 404 for unknown `job_id`
+- [x] Returns HTTP 401 without valid JWT
+- [x] `GET /pipeline/review-queue` returns only jobs with `status = "review"`, each with `document_steps` inline
+- [x] `POST /pipeline/{job_id}/decision` accepts `decision: accept | reject | escalate` + optional `notes`; persists via `IHumanDecisionRepository`; updates `jobs.status`
+- [x] `POST /pipeline/{job_id}/decision` returns HTTP 404 for unknown job, HTTP 409 if job is not in `review` state
+- [x] Tests assert the full SSE event sequence using `MockLlm` + small PDF fixture
+- [x] Tests assert review queue contents and decision recording using `InMemory*` repos
 
 **Dependencies:** Tasks 6, 7, 15, 16
 
-**Files touched:**
+**Files touched (actual):**
+- `src/classiflow/services/pipeline/service.py` (new — `PipelineService`)
+- `src/classiflow/services/pipeline/exceptions.py` (new — `JobNotFoundError`, `JobNotInReviewError`)
+- `src/classiflow/api/error_handlers/pipeline.py` (new)
 - `src/classiflow/api/routes/pipeline/endpoints.py`
-- `src/classiflow/api/routes/pipeline/schemas.py`  (add `ReviewQueueItem`, `DecisionRequest`)
-- `src/classiflow/api/dependencies.py`
-- `tests/api/routes/test_pipeline.py`
+- `src/classiflow/api/routes/pipeline/schemas.py`
+- `src/classiflow/injections/production.py` / `test.py` (node1–4 + coordinator wired in for the first time)
+- `src/classiflow/database/base.py` (`get_session()` commit/rollback fix)
+- `src/classiflow/domain/repositories/job.py` / `database/repositories/job.py` (`UnsetType`/`UNSET` sentinel fix)
+- `tests/api/routes/test_pipeline.py`, `tests/shared/test_database_base.py`
+- `playground/pipeline_end_to_end.ipynb` (new)
 
 **Estimated scope:** L
 
 ### Checkpoint H — Final
-- [ ] `uv run poe check` passes (lint + typecheck + nbtest)
-- [ ] `uv run poe test` — all tests green, coverage ≥ 80%
-- [ ] Manual smoke test:
+- [x] `uv run poe check` passes (lint + typecheck + nbtest, 136 tests)
+- [x] `uv run poe test` — all tests green, 97% coverage (verified via `uv run poe check`'s coverage step, ≥ 80% gate)
+- [ ] Manual smoke test — not yet run against a live `uvicorn` server:
   ```bash
   uv run uvicorn classiflow.api.app:create_app --factory --reload
   # 1. Obtain JWT (from /auth/callback after Google login)

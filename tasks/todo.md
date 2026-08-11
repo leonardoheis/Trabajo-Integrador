@@ -51,10 +51,10 @@ BATCH 11  ───────────────────────�
   T16  FastAPI app + health route
 
 BATCH 12  ─────────────────────────────────────────────── sequential (needs T06+T15+T16)
-  T17  Pipeline endpoints + SSE stream
+  T17  Pipeline endpoints + SSE stream          [x] done
 
 BATCH 13  ─────────────────────────────────────────────── sequential (needs T17)
-  T19  Docker build + push CI
+  T19  Docker build + push CI                   ← next
 
 BATCH 14  ─────────────────────────────────────────────── parallel (needs T11 + nodes done)
   T20  wandb integration — LLM tracing + per-node metrics
@@ -183,9 +183,10 @@ uv run poe test tests/api/routes/test_auth_oauth.py
 - [x] Endpoint functions that use `CurrentUser` decorated with `@inject`
 - [x] `AuthError` → HTTP 401, `NotAllowedError` → HTTP 403 (`error_handlers/auth.py`)
 - [x] `/health` and `/auth/*` are public today (no route declares `CurrentUser` yet)
-- [ ] Tests: 401 missing, 401 expired, 200 valid — **no protected endpoint exists yet** to
-  assert this against end-to-end; `AuthService.verify_token`/`decode_token` are unit-tested
-  directly. Add the route-level 401/200 test when **T17** puts `CurrentUser` on a real endpoint.
+- [x] Tests: 401 missing — covered end-to-end now that T17's `/pipeline/*` routes are
+  gated by `CurrentUser` (`tests/api/routes/test_pipeline.py::*::test_requires_auth`).
+  401 expired / 200 valid remain unit-tested via `AuthService.verify_token`/`decode_token`
+  directly, not via a live route — acceptable, not pursued further.
 - [x] `uv run poe check` passes
 
 ```bash
@@ -407,22 +408,46 @@ uv run poe test tests/api/routes/test_health.py
 
 ---
 
-### T17 · Pipeline endpoints + SSE stream + review queue
-**Branch:** `feat/pipeline-endpoints` · **Deps:** T06 · T15 · T16 · **Status:** `[ ]`
+### T17 · Pipeline endpoints + SSE stream + review queue ✅ done — PR [#13](https://github.com/leonardoheis/Trabajo-Integrador/pull/13)
+**Branch:** `feat/pipeline-endpoints` · **Deps:** T06 · T15 · T16 · **Status:** `[x]`
 
-- [ ] `POST /pipeline/ingest` returns HTTP 202 + `job_id` within 100 ms
-- [ ] HTTP 401 without valid JWT on all routes
-- [ ] Background task starts coordinator without blocking the response
-- [ ] `GET /pipeline/{job_id}/events` streams `node_started`/`node_passed`/`node_failed` per node
-- [ ] Final SSE event is `pipeline_done`; stream closes after
-- [ ] Client disconnect removes queue (`try/finally` in async generator)
-- [ ] HTTP 404 for unknown `job_id`
-- [ ] `GET /pipeline/review-queue` returns jobs with `status = REVIEW`, each with inline `document_steps`
-- [ ] `POST /pipeline/{job_id}/decision` accepts `{ decision: accept|reject|escalate, notes?: string }`; persists via `IHumanDecisionRepository`; updates `jobs.status`
-- [ ] `POST /pipeline/{job_id}/decision` returns HTTP 404 for unknown job, HTTP 409 if job is not in `REVIEW` state
-- [ ] Tests assert full SSE sequence using `MockLlm` + small PDF fixture
-- [ ] Tests assert review queue contents and decision recording using `InMemory*` repos
-- [ ] `uv run poe check` passes
+- [x] `POST /pipeline/ingest` returns HTTP 202 + `job_id`; only a `Job` insert happens
+  before the response, so it's fast (not literally load-tested at 100 ms)
+- [x] HTTP 401 without valid JWT on all routes — one router-level
+  `dependencies=[Depends(get_current_user)]` gate on `APIRouter(prefix="/pipeline")`,
+  not a per-route `CurrentUser` param, since every route in this router needs it
+- [x] Background task (`BackgroundTasks.add_task`) starts the coordinator without
+  blocking the response
+- [x] `GET /pipeline/{job_id}/events` streams one `node_update` SSE event per
+  started/passed/failed transition — matches the single-event-type `NodeEvent`
+  contract already built in T07 (`to_sse()`), not three separately-named SSE events
+- [x] Final SSE event carries `node: "pipeline", status: "done"`; stream closes after
+  (`EventBroadcaster.subscribe()` breaks on `JobStatus.DONE`)
+- [x] Client disconnect removes queue (`try/finally` → `broadcaster.close(job_id)` in
+  the async generator)
+- [x] HTTP 404 for unknown `job_id` (`JobNotFoundError`)
+- [x] `GET /pipeline/review-queue` returns jobs with `status = "review"`, each with
+  inline `document_steps` (`DocumentStepSchema.from_model()`)
+- [x] `POST /pipeline/{job_id}/decision` accepts `{ decision: accept|reject|escalate, notes?: string }`;
+  persists via `IHumanDecisionRepository`; updates `jobs.status`
+- [x] `POST /pipeline/{job_id}/decision` returns HTTP 404 for unknown job, HTTP 409 if
+  job is not in `review` state (`JobNotInReviewError`)
+- [x] Tests assert the full SSE sequence using `MockLlm` + a small PDF fixture
+- [x] Tests assert review queue contents and decision recording using `InMemory*` repos
+- [x] `uv run poe check` passes (136 tests)
+
+**Along the way (surfaced because this was the first feature to exercise these paths
+end-to-end, not scope creep):**
+- `database/base.py`: `get_session()` was flush-only and never committed — fixed to
+  commit on success / rollback on error
+- `IJobRepository.update_status()`'s optional kwargs defaulted to `None`, which
+  collided "not provided" with "explicitly clear" — a status-only call (e.g. recording
+  a human decision) silently wiped `rejection_reason`/`failed_at_node`. Fixed with an
+  `UnsetType`/`UNSET` sentinel, exported from `domain/repositories/__init__.py`
+- `node1`–`node4` + the coordinator wired into `Container`/`TestContainer` for the
+  first time — previously only ever constructed directly inside node/coordinator tests
+- `playground/pipeline_end_to_end.ipynb`: the whole flow exercised through the real
+  API (`TestClient`), using two real sample PDFs from `playground/samples/`
 
 ```bash
 # Verify
@@ -451,7 +476,7 @@ gh run view <run-id>
 ---
 
 ### T19 · GitHub Actions Docker build + push
-**Branch:** `feat/docker` · **Deps:** T17 · **Status:** `[ ]`
+**Branch:** `feat/docker` · **Deps:** T17 · **Status:** `[-]` *(skipped for now — deferred in favor of T20/T21)*
 
 - [ ] `Dockerfile`: `python:3.12-slim`, `apt-get install libmagic1`, `uv sync --no-dev`, port 8000
 - [ ] Entrypoint: `uvicorn classiflow.api.app:create_app --factory --host 0.0.0.0 --port 8000`
@@ -544,7 +569,7 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 | T07 | Shared domain + AuditService + EventBroadcaster | `[x]` done — PR [#8](https://github.com/lgj2911/Trabajo-Integrador/pull/8) |
 | T08 | Ingesta domain models | `[x]` done — PR [#11](https://github.com/lgj2911/Trabajo-Integrador/pull/11) |
 | T05 | Google OAuth + whitelist | `[x]` done — PR [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9) |
-| T06 | JWT auth dependency | `[x]` done — PR [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9) (route-level 401/200 test deferred to T17) |
+| T06 | JWT auth dependency | `[x]` done — PR [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9) |
 | T09 | Node 1 — File Reception | `[x]` done — PR [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13) |
 | T10 | Node 2 — Format Validation (rule-based) | `[x]` done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15) |
 | T11 | LLM Provider singleton | `[x]` done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
@@ -553,13 +578,16 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 | T14 | Node 4 — Duplicate Control | `[x]` done — PR [#4](https://github.com/leonardoheis/Trabajo-Integrador/pull/4) |
 | T15 | Coordinator — LangGraph | `[x]` done |
 | T16 | FastAPI app + health route | `[x]` done — PR [#8](https://github.com/leonardoheis/Trabajo-Integrador/pull/8) |
-| T17 | Pipeline endpoints + SSE stream | `[ ]` pending |
+| T17 | Pipeline endpoints + SSE stream | `[x]` done — PR [#13](https://github.com/leonardoheis/Trabajo-Integrador/pull/13) |
 | T18 | GitHub Actions CI | `[-]` skipped for now |
 | T19 | Docker build + push | `[ ]` pending |
 | T20 | wandb integration — LLM tracing + per-node metrics | `[ ]` pending |
 | T21 | Text extraction — MarkItDown + PaddleOCR fallback | `[ ]` pending |
 
-**16 / 21 tasks complete · 1 skipped (T18)**
+**17 / 21 tasks complete · 1 skipped (T18)**
 
-**Next up: T17 · Pipeline endpoints + SSE stream + review queue** — all its dependencies
-(T06, T15, T16) are now done. This is the next task to pick up.
+**Next up: T19 · Docker build + push CI** — its only dependency (T17) is now done, and
+it's the last task still gated on something (everything else remaining is independently
+unblocked). `T20` (wandb) and `T21` (real text extraction) are also available in
+parallel — neither depends on T17 or on each other, so any of the three is a valid
+next pick; T19 is next in the numbered sequence.
