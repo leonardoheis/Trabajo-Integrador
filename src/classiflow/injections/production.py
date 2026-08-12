@@ -10,7 +10,8 @@ from classiflow.database.repositories.human_decision import SqlHumanDecisionRepo
 from classiflow.database.repositories.job import SqlJobRepository
 from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.coordinator import build_coordinator, utf8_decode_extractor
+from classiflow.ingesta.coordinator import build_coordinator
+from classiflow.ingesta.extract import extract_document
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
@@ -34,7 +35,7 @@ class Container(containers.DeclarativeContainer):
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
 
-    text_extractor = providers.Object(utf8_decode_extractor)
+    text_extractor = providers.Object(extract_document)
     node1 = providers.Factory(FileReceptionNode, audit=audit_service, broadcaster=broadcaster)
     node2 = providers.Factory(FormatValidationNode, audit=audit_service, broadcaster=broadcaster)
     node3 = providers.Factory(ContentValidationNode, audit=audit_service, broadcaster=broadcaster)

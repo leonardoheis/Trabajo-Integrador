@@ -13,17 +13,13 @@ from classiflow.ingesta.domain.results import (
     FormatValidationResult,
 )
 from classiflow.ingesta.domain.state import JobState
+from classiflow.ingesta.extract import extract_document
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
 
-TextExtractFn = Callable[[bytes], str]
-
-
-def utf8_decode_extractor(file_bytes: bytes) -> str:
-    # ponytail: best-effort fallback; swap for MarkItDown once added as a dependency (T21)
-    return file_bytes.decode("utf-8", errors="replace")
+TextExtractFn = Callable[[bytes, str], str]
 
 
 _AnyResult = (
@@ -78,7 +74,7 @@ def build_coordinator(
     node3: ContentValidationNode,
     node4: DuplicateControlNode,
     *,
-    text_extractor: TextExtractFn = utf8_decode_extractor,
+    text_extractor: TextExtractFn = extract_document,
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
     async def _node1(state: JobState) -> dict[str, Any]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
@@ -92,7 +88,7 @@ def build_coordinator(
 
     def _extract(state: JobState) -> dict[str, Any]:
         file_bytes = state.get("file_bytes") or b""
-        return {"text": text_extractor(file_bytes)}
+        return {"text": text_extractor(file_bytes, state["filename"])}
 
     async def _node3(state: JobState) -> dict[str, Any]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])

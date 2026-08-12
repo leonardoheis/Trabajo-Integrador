@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from typing import Protocol, cast, runtime_checkable
 
@@ -41,7 +42,8 @@ class FormatValidationNode(BaseNode):
 
     async def run(self, ctx: JobContext, reception: FileReceptionResult) -> FormatValidationResult:
         start = await self._emit_started(ctx)
-        result = self.validate(ctx.filename, reception)
+        # validate() may call the SLM chain synchronously — see BaseNode's note above.
+        result = await asyncio.to_thread(self.validate, ctx.filename, reception)
         await self._emit_and_audit(
             ctx,
             start,

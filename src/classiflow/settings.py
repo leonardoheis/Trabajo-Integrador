@@ -24,6 +24,8 @@ class _Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     NODE2_MODEL_PATH: str = _DEFAULT_MODEL
     NODE3_MODEL_PATH: str = _DEFAULT_MODEL
+    OCR_LANG: str = os.getenv("OCR_LANG", "es")
+    OCR_RENDER_DPI: int = int(os.getenv("OCR_RENDER_DPI", "200"))
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -50,6 +52,14 @@ class _Settings(BaseSettings):
     @property
     def node3_model_path(self) -> str:
         return self.NODE3_MODEL_PATH
+
+    @property
+    def ocr_lang(self) -> str:
+        return self.OCR_LANG
+
+    @property
+    def ocr_render_dpi(self) -> int:
+        return self.OCR_RENDER_DPI
 
 
 Settings = _Settings()

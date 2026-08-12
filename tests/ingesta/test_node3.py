@@ -86,6 +86,7 @@ class TestContentValidationNodeValidate:
         result = node.validate("", _PDF_RECEPTION)
         assert not result.passed
         assert result.requires_ocr
+        assert result.needs_agent_review
 
     def test_empty_non_pdf_does_not_set_requires_ocr(self, node: ContentValidationNode) -> None:
         result = node.validate("", _DOCX_RECEPTION)

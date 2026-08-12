@@ -68,7 +68,7 @@ class TestCoordinatorHappyPath:
             lambda _path: MockLlm(response=_SLM_LEGITIMATE),
         )
 
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda _: _SPANISH_TEXT)
+        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: _SPANISH_TEXT)
         initial: JobState = {
             "job_id": "coord-001",
             "filename": "doc.pdf",
@@ -91,7 +91,7 @@ class TestCoordinatorHappyPath:
         )
 
         nodes = _make_nodes()
-        graph = build_coordinator(*nodes, text_extractor=lambda _: _SPANISH_TEXT)
+        graph = build_coordinator(*nodes, text_extractor=lambda *_: _SPANISH_TEXT)
 
         initial: JobState = {
             "job_id": "coord-002a",
@@ -113,7 +113,7 @@ class TestCoordinatorHappyPath:
 
 class TestCoordinatorRejectionPaths:
     async def test_empty_file_rejected_at_node1(self) -> None:
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda _: "")
+        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: "")
         initial: JobState = {
             "job_id": "coord-003",
             "filename": "empty.pdf",
@@ -126,7 +126,7 @@ class TestCoordinatorRejectionPaths:
         assert result.get("format_validation") is None
 
     async def test_missing_file_rejected_at_node1(self) -> None:
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda _: "")
+        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: "")
         initial: JobState = {
             "job_id": "coord-004",
             "filename": "none.pdf",
@@ -137,8 +137,11 @@ class TestCoordinatorRejectionPaths:
         assert result["final_status"] == "rejected"
         assert not result["reception"].passed
 
-    async def test_image_only_pdf_rejected_at_node3(self) -> None:
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda _: "")
+    async def test_image_only_pdf_routed_to_review_at_node3(self) -> None:
+        # Extraction (MarkItDown + OCR) already ran inside text_extractor before node3
+        # sees the text — an empty result here can't be told apart from an extraction
+        # infra failure, so it goes to review for a human, not an automatic reject.
+        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: "")
         initial: JobState = {
             "job_id": "coord-005",
             "filename": "scan.pdf",
@@ -146,7 +149,7 @@ class TestCoordinatorRejectionPaths:
         }
         result = await graph.ainvoke(initial)
 
-        assert result["final_status"] == "rejected"
+        assert result["final_status"] == "review"
         assert result["content_validation"].requires_ocr
 
     async def test_non_legitimate_content_goes_to_review(
@@ -156,7 +159,7 @@ class TestCoordinatorRejectionPaths:
             "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
             lambda _path: MockLlm(response=_SLM_NOT_LEGITIMATE),
         )
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda _: _SPANISH_TEXT)
+        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: _SPANISH_TEXT)
         initial: JobState = {
             "job_id": "coord-006",
             "filename": "spam.pdf",
