@@ -151,16 +151,23 @@ class ContentValidationNode(BaseNode):
             "text_excerpt": text[: self.config.excerpt_len],
             "detected_language": detected_language,
         })
-        if output.is_legitimate:
+        low_confidence = output.confidence < self.config.slm_confidence_threshold
+        if output.is_legitimate and not low_confidence:
             return ContentValidationResult(
                 passed=True,
                 char_count=char_count,
                 detected_language=detected_language,
+            )
+        reason = f"SLM: {output.reasoning}"
+        if low_confidence:
+            reason = (
+                f"{reason} (confidence {output.confidence:.2f} below "
+                f"{self.config.slm_confidence_threshold:.2f} threshold)"
             )
         return ContentValidationResult(
             passed=False,
             char_count=char_count,
             detected_language=detected_language,
             needs_agent_review=True,
-            rejection_reason=f"SLM: {output.reasoning}",
+            rejection_reason=reason,
         )

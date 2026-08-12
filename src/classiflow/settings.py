@@ -26,6 +26,9 @@ class _Settings(BaseSettings):
     NODE3_MODEL_PATH: str = _DEFAULT_MODEL
     OCR_LANG: str = os.getenv("OCR_LANG", "es")
     OCR_RENDER_DPI: int = int(os.getenv("OCR_RENDER_DPI", "200"))
+    SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.8"))
+    SLM_TOP_P: float = float(os.getenv("SLM_TOP_P", "0.95"))
+    SLM_SEED: int = int(os.getenv("SLM_SEED", "42"))
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -60,6 +63,18 @@ class _Settings(BaseSettings):
     @property
     def ocr_render_dpi(self) -> int:
         return self.OCR_RENDER_DPI
+
+    @property
+    def slm_temperature(self) -> float:
+        return self.SLM_TEMPERATURE
+
+    @property
+    def slm_top_p(self) -> float:
+        return self.SLM_TOP_P
+
+    @property
+    def slm_seed(self) -> int:
+        return self.SLM_SEED
 
 
 Settings = _Settings()

@@ -16,7 +16,7 @@ Text: {text_excerpt}
 Language: {detected_language}
 
 JSON:
-{{"is_legitimate": true or false, "confidence": 0-100, "reasoning": "one sentence"}}"""
+{{"is_legitimate": true or false, "confidence": 0.0 to 1.0, "reasoning": "one sentence"}}"""
 
 # Matches a single non-nested JSON object: the outermost { ... }
 _JSON_RE = re.compile(r"\{[^{}]+\}", re.DOTALL)

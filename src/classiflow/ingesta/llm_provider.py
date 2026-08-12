@@ -1,5 +1,7 @@
 from functools import lru_cache
 
+import llama_cpp
+import torch
 from langchain_community.llms import LlamaCpp
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseLLM
@@ -8,6 +10,16 @@ from llama_cpp import Llama
 from pydantic import Field
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
+from classiflow.settings import Settings
+
+
+def _n_gpu_layers() -> int:
+    # -1 offloads all layers to GPU. llama_supports_gpu_offload() only reflects whether
+    # this build has a GPU backend compiled in, not whether one is actually present, so
+    # it's paired with a live torch.cuda.is_available() check before trusting it.
+    if torch.cuda.is_available() and llama_cpp.llama_supports_gpu_offload():
+        return -1
+    return 0
 
 
 class MockLlm(BaseLLM):
@@ -36,7 +48,13 @@ class MockLlm(BaseLLM):
 @lru_cache(maxsize=4)
 def get_llm(model_path: str) -> Llama:
     try:
-        return Llama(model_path=model_path, n_ctx=2048, verbose=False)
+        return Llama(
+            model_path=model_path,
+            n_ctx=2048,
+            n_gpu_layers=_n_gpu_layers(),
+            seed=Settings.slm_seed,
+            verbose=False,
+        )
     except FileNotFoundError as exc:
         raise ModelNotFoundError(path=model_path) from exc
     except Exception as exc:
@@ -46,7 +64,15 @@ def get_llm(model_path: str) -> Llama:
 @lru_cache(maxsize=4)
 def get_llm_langchain(model_path: str) -> BaseLLM:
     try:
-        return LlamaCpp(model_path=model_path, n_ctx=2048, verbose=False)  # type: ignore[no-any-return]
+        return LlamaCpp(  # type: ignore[no-any-return]
+            model_path=model_path,
+            n_ctx=2048,
+            n_gpu_layers=_n_gpu_layers(),
+            temperature=Settings.slm_temperature,
+            top_p=Settings.slm_top_p,
+            seed=Settings.slm_seed,
+            verbose=False,
+        )
     except FileNotFoundError as exc:
         raise ModelNotFoundError(path=model_path) from exc
     except Exception as exc:
