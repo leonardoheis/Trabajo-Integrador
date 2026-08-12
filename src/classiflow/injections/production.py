@@ -1,5 +1,6 @@
 from functools import cache
 
+import easyocr
 from dependency_injector import containers, providers
 
 from classiflow.database.base import get_session
@@ -11,7 +12,8 @@ from classiflow.database.repositories.job import SqlJobRepository
 from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
-from classiflow.ingesta.extract import extract_document
+from classiflow.ingesta.extract import TextExtractor
+from classiflow.ingesta.extractors import MarkItDownExtractor, OCRExtractor
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
@@ -19,6 +21,7 @@ from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNod
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
+from classiflow.settings import Settings
 
 
 class Container(containers.DeclarativeContainer):
@@ -35,7 +38,16 @@ class Container(containers.DeclarativeContainer):
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
 
-    text_extractor = providers.Object(extract_document)
+    # ThreadSafeSingleton (not Singleton): construction races are real — multiple
+    # coordinator jobs' background tasks can hit OCR around the same time — and
+    # reconstruction is expensive, so the shared reader needs a lock around its
+    # first build. Replaces OCRExtractor's former hand-rolled double-checked lock.
+    ocr_reader = providers.ThreadSafeSingleton(easyocr.Reader, [Settings.ocr_lang], gpu=True)
+    markitdown_extractor = providers.Factory(MarkItDownExtractor)
+    ocr_extractor = providers.Factory(OCRExtractor, reader=ocr_reader)
+    extraction_chain = providers.List(markitdown_extractor, ocr_extractor)
+    text_extractor = providers.Factory(TextExtractor, chain=extraction_chain)
+
     node1 = providers.Factory(FileReceptionNode, audit=audit_service, broadcaster=broadcaster)
     node2 = providers.Factory(FormatValidationNode, audit=audit_service, broadcaster=broadcaster)
     node3 = providers.Factory(ContentValidationNode, audit=audit_service, broadcaster=broadcaster)

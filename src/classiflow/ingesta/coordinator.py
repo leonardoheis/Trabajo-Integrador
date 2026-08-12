@@ -13,7 +13,6 @@ from classiflow.ingesta.domain.results import (
     FormatValidationResult,
 )
 from classiflow.ingesta.domain.state import JobState
-from classiflow.ingesta.extract import extract_document
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
@@ -74,7 +73,7 @@ def build_coordinator(
     node3: ContentValidationNode,
     node4: DuplicateControlNode,
     *,
-    text_extractor: TextExtractFn = extract_document,
+    text_extractor: TextExtractFn,
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
     async def _node1(state: JobState) -> dict[str, Any]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
