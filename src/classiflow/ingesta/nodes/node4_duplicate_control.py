@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from functools import lru_cache
 from typing import Protocol
@@ -119,7 +120,9 @@ class DuplicateControlNode(BaseNode):
                 rejection_reason="Exact duplicate: SHA-256 already in store",
             )
 
-        similarity = self.embedding_store.find_similarity(text)
+        # find_similarity()/add() call SentenceTransformer.encode() synchronously —
+        # see BaseNode's note above.
+        similarity = await asyncio.to_thread(self.embedding_store.find_similarity, text)
         if similarity >= self.config.cosine_similarity_threshold:
             return DuplicateControlResult(
                 passed=False,
@@ -130,5 +133,5 @@ class DuplicateControlNode(BaseNode):
             )
 
         await self.hash_repo.save(sha256, ctx.job_id)
-        self.embedding_store.add(text)
+        await asyncio.to_thread(self.embedding_store.add, text)
         return DuplicateControlResult(passed=True, is_duplicate=False)

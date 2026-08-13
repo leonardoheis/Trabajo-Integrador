@@ -39,6 +39,12 @@ dependencies = [
     "faiss-cpu>=1.7",
     "pyyaml>=6.0",
     "llama-cpp-python>=0.2",
+    "markitdown[pdf]>=0.1",
+    "pymupdf>=1.24",
+    "easyocr>=1.7.0",
+    "torch>=2.7.1",
+    # Not used directly -- pulled in transitively by easyocr (torchvision.transforms).
+    "torchvision>=0.22.1",
 ]
 
 [dependency-groups]
@@ -153,7 +159,7 @@ warn_unused_configs = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers"]
+module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers", "markitdown", "pymupdf", "easyocr"]
 ignore_missing_imports = true
 
 #########################

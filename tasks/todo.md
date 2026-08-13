@@ -54,7 +54,7 @@ BATCH 12  ───────────────────────�
   T17  Pipeline endpoints + SSE stream          [x] done
 
 BATCH 13  ─────────────────────────────────────────────── sequential (needs T17)
-  T19  Docker build + push CI                   ← next
+  T19  Docker build + push CI                   [-] skipped for now
 
 BATCH 14  ─────────────────────────────────────────────── parallel (needs T11 + nodes done)
   T20  wandb integration — LLM tracing + per-node metrics
@@ -528,10 +528,18 @@ print(llm.callbacks)
 
 ---
 
-### T21 · Text extraction — MarkItDown + PaddleOCR fallback
-**Branch:** `feat/text-extraction` · **Deps:** T15 · **Status:** `[ ]`
+### T21 · Text extraction — MarkItDown + EasyOCR fallback
+**Branch:** `feat/text-extraction` · **Deps:** T15 · **Status:** `[~]` in progress — implemented,
+not yet committed/PR'd. Switched from PaddleOCR (originally specced below) to **EasyOCR**:
+PaddleOCR's dependency chain (`paddlex` → `modelscope` → `torch`) put `torch` and `paddle`
+native DLLs in the same process, which reproducibly crashed on Windows
+(`OSError: WinError 127` loading `torch/lib/shm.dll`) — a real, structural conflict, not a
+config issue. `bert_tunning` (sibling project) already solved this the same way for the
+same reason. Actual implementation is a small `ingesta/extractors/` package
+(`ExtractorBase` ABC, `MarkItDownExtractor`, `OCRExtractor`, own `exceptions.py`), not the
+single flat `extract.py` module sketched below — see that package for the real design.
 
-Add a real `text_extractor` to the coordinator that tries MarkItDown first and falls back to PaddleOCR for image-heavy PDFs, replacing the current UTF-8 decode stub.
+Add a real `text_extractor` to the coordinator that tries MarkItDown first and falls back to OCR for image-heavy PDFs, replacing the current UTF-8 decode stub.
 
 **Dependencies to add (`pyproject.toml`):**
 - [ ] `markitdown[pdf]>=0.1` (text extraction from PDF/DOCX/XLSX)
@@ -558,6 +566,53 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 
 ---
 
+### T22 · Bulk document ingest endpoint
+**Branch:** `feat/bulk-ingest` · **Deps:** T17 · **Status:** `[ ]`
+
+**Motivation:** today, ingesting N documents means N separate `POST /pipeline/ingest`
+calls — the client has to loop. A bulk endpoint removes that round-trip cost. But a
+*naive* version (accept a list of files, loop internally, fire N background tasks) would
+just move the client's loop onto the server without fixing anything real, because of what
+we found investigating a related question this session: this app runs one FastAPI process
+= one event loop, an LLM singleton (`get_llm_langchain`, `@lru_cache(maxsize=4)`) shared
+across all jobs, and (as of this task) node2/node3/node4's blocking SLM/embedding calls
+are offloaded via `asyncio.to_thread` to Python's *default* `ThreadPoolExecutor`, whose
+size is bounded (`min(32, os.cpu_count() + 4)`). Firing 40 coordinator runs at once
+doesn't give you 40-way parallelism — it gives you 40 things contending for a handful of
+threads and one shared model instance, with no control over the contention.
+
+**Proposed design — bounded concurrency, not a new queueing system (yet):**
+- `POST /pipeline/ingest-bulk` accepts a list of files (multipart), creates a `Job` row
+  per file immediately (fast, matches today's `POST /ingest` latency characteristics),
+  and returns `202` + the list of `job_id`s right away — same "don't block the response"
+  contract as the single-file endpoint.
+- Actual coordinator execution for all jobs (bulk *and* single-file, for consistency)
+  goes through a bounded `asyncio.Semaphore` (size configurable via `Settings`, e.g.
+  `MAX_CONCURRENT_JOBS`) so a burst of submissions queues past that limit instead of
+  firing unboundedly — the goal is *predictable* throughput under load, not maximum
+  parallelism theater.
+- Each job's SSE stream (`GET /pipeline/{job_id}/events`) works unchanged whether it was
+  submitted solo or as part of a batch — queued-but-not-started jobs just haven't emitted
+  their first `node_started` event yet.
+
+**Acceptance criteria (draft — refine when picked up):**
+- [ ] `POST /pipeline/ingest-bulk` returns `202` + `job_id` per submitted file
+- [ ] A configurable semaphore caps truly-concurrent coordinator runs; submitting more
+      than the cap queues the excess rather than starting them all at once
+- [ ] Existing `POST /pipeline/ingest` behavior/latency is unchanged
+- [ ] Test proves the concurrency cap holds (e.g. an instrumented/mock node that records
+      max simultaneous in-flight executions)
+- [ ] `uv run poe check` passes
+
+**Explicitly out of scope for this task** (call out as a separate, later decision if
+throughput ever needs to exceed a single machine/process): migrating to a real task
+queue (Celery/RQ/arq/Dramatiq) with dedicated worker processes. That's the right answer
+if this app ever needs to scale ingestion across multiple machines — it's a much bigger
+infra change (a broker like Redis/RabbitMQ, separate worker deployment), not something
+to reach for before the bounded-semaphore approach is shown to be insufficient.
+
+---
+
 ## Progress
 
 | Task | Description | Status |
@@ -580,14 +635,15 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 | T16 | FastAPI app + health route | `[x]` done — PR [#8](https://github.com/leonardoheis/Trabajo-Integrador/pull/8) |
 | T17 | Pipeline endpoints + SSE stream | `[x]` done — PR [#13](https://github.com/leonardoheis/Trabajo-Integrador/pull/13) |
 | T18 | GitHub Actions CI | `[-]` skipped for now |
-| T19 | Docker build + push | `[ ]` pending |
+| T19 | Docker build + push | `[-]` skipped for now |
 | T20 | wandb integration — LLM tracing + per-node metrics | `[ ]` pending |
-| T21 | Text extraction — MarkItDown + PaddleOCR fallback | `[ ]` pending |
+| T21 | Text extraction — MarkItDown + EasyOCR fallback | `[~]` in progress — implemented, not yet committed/PR'd |
+| T22 | Bulk document ingest endpoint | `[ ]` pending |
 
-**17 / 21 tasks complete · 1 skipped (T18)**
+**17 / 22 tasks complete · 1 in progress (T21) · 2 skipped (T18, T19)**
 
-**Next up: T19 · Docker build + push CI** — its only dependency (T17) is now done, and
-it's the last task still gated on something (everything else remaining is independently
-unblocked). `T20` (wandb) and `T21` (real text extraction) are also available in
-parallel — neither depends on T17 or on each other, so any of the three is a valid
-next pick; T19 is next in the numbered sequence.
+**Next up: finish/commit T21**, then **T20 · wandb integration**. **T22 · Bulk ingest**
+depends on T17 (done) but is deliberately queued behind T20/T21 — no urgency, and its
+design leans on the async-blocking-call fixes made alongside T21 (node2/node3/node4 now
+correctly offload SLM/embedding calls via `asyncio.to_thread`), so it's cleaner to pick
+up once T21 actually lands.

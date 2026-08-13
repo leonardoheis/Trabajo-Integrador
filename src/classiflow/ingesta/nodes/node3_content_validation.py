@@ -1,3 +1,4 @@
+import asyncio
 from functools import lru_cache
 from typing import Protocol, cast, runtime_checkable
 
@@ -75,7 +76,8 @@ class ContentValidationNode(BaseNode):
         reception: FileReceptionResult,
     ) -> ContentValidationResult:
         start = await self._emit_started(ctx)
-        result = self.validate(text, reception)
+        # validate() may call the SLM chain synchronously — see BaseNode's note above.
+        result = await asyncio.to_thread(self.validate, text, reception)
         await self._emit_and_audit(
             ctx,
             start,
@@ -96,11 +98,18 @@ class ContentValidationNode(BaseNode):
         char_count = len(text)
 
         if char_count < self.config.ocr_char_threshold and reception.detected_mime == _PDF_MIME:
+            # Text extraction (MarkItDown + OCR fallback) already ran before this node
+            # saw the text — coming up empty here means either a genuinely blank scan
+            # or an extraction-infrastructure failure (e.g. an OCR engine crash), and
+            # this node can't tell those apart. Route to review instead of auto-reject
+            # so a human decides, rather than silently discarding a possibly-valid
+            # document over a tooling failure that wasn't its fault.
             return ContentValidationResult(
                 passed=False,
                 char_count=char_count,
                 requires_ocr=True,
-                rejection_reason="Image-only PDF: routed to OCR pipeline",
+                needs_agent_review=True,
+                rejection_reason="PDF has no extractable text after OCR — needs human review",
             )
 
         if char_count < self.config.min_chars:
@@ -142,16 +151,23 @@ class ContentValidationNode(BaseNode):
             "text_excerpt": text[: self.config.excerpt_len],
             "detected_language": detected_language,
         })
-        if output.is_legitimate:
+        low_confidence = output.confidence < self.config.slm_confidence_threshold
+        if output.is_legitimate and not low_confidence:
             return ContentValidationResult(
                 passed=True,
                 char_count=char_count,
                 detected_language=detected_language,
+            )
+        reason = f"SLM: {output.reasoning}"
+        if low_confidence:
+            reason = (
+                f"{reason} (confidence {output.confidence:.2f} below "
+                f"{self.config.slm_confidence_threshold:.2f} threshold)"
             )
         return ContentValidationResult(
             passed=False,
             char_count=char_count,
             detected_language=detected_language,
             needs_agent_review=True,
-            rejection_reason=f"SLM: {output.reasoning}",
+            rejection_reason=reason,
         )

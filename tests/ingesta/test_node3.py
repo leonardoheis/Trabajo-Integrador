@@ -27,6 +27,7 @@ _UNKNOWN_TEXT = "The quick brown fox jumps over the lazy dog. Testing English co
 
 _SLM_LEGITIMATE = '{"is_legitimate": true, "confidence": 0.92, "reasoning": "official document"}'
 _SLM_NOT_LEGITIMATE = '{"is_legitimate": false, "confidence": 0.85, "reasoning": "spam content"}'
+_SLM_LEGITIMATE_LOW_CONFIDENCE = '{"is_legitimate": true, "confidence": 0.5, "reasoning": "unsure"}'
 
 _CONFIG = ContentValidationConfig(
     min_chars=20,
@@ -86,6 +87,7 @@ class TestContentValidationNodeValidate:
         result = node.validate("", _PDF_RECEPTION)
         assert not result.passed
         assert result.requires_ocr
+        assert result.needs_agent_review
 
     def test_empty_non_pdf_does_not_set_requires_ocr(self, node: ContentValidationNode) -> None:
         result = node.validate("", _DOCX_RECEPTION)
@@ -183,6 +185,25 @@ class TestContentValidationNodeRun:
         assert not result.passed
         assert result.needs_agent_review
         assert "SLM:" in result.rejection_reason
+
+    async def test_slm_low_confidence_legitimate_triggers_review(
+        self,
+        audit: AuditService,
+        broadcaster: EventBroadcaster,
+    ) -> None:
+        node = ContentValidationNode(
+            audit=audit,
+            broadcaster=broadcaster,
+            config=_CONFIG,
+            language_detector=_MockDetector("es"),
+            content_chain=build_content_chain(MockLlm(response=_SLM_LEGITIMATE_LOW_CONFIDENCE)),
+        )
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        result = await node.run(ctx, _SPANISH_TEXT, _PDF_RECEPTION)
+
+        assert not result.passed
+        assert result.needs_agent_review
+        assert "below" in result.rejection_reason
 
     async def test_emits_started_then_passed(
         self,

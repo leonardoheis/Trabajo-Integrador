@@ -18,8 +18,9 @@ from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
 
-# ponytail: fixed Spanish sample — real extraction (MarkItDown) lands in T21;
-# tests need deterministic, non-empty, allowed-language text to reach node3/node4.
+# ponytail: fixed Spanish sample instead of real extraction — tests need deterministic,
+# non-empty, allowed-language text to reach node3/node4, and shouldn't pay for real
+# MarkItDown/OCR calls (or their model downloads) on every test run.
 _TEST_TEXT = (
     "El Concejo Municipal de Rosario sanciona la siguiente ordenanza: "
     "Artículo 1º — Apruébase el presupuesto municipal para el ejercicio fiscal "
@@ -49,7 +50,7 @@ class TestContainer(containers.DeclarativeContainer):
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
 
-    text_extractor = providers.Object(lambda _b: _TEST_TEXT)
+    text_extractor = providers.Object(lambda _b, _f: _TEST_TEXT)
     node1 = providers.Factory(
         FileReceptionNode,
         audit=audit_service,
