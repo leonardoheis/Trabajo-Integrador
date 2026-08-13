@@ -31,6 +31,7 @@ class ContentValidationResult(BaseEntity):
     needs_agent_review: bool = False
     requires_ocr: bool = False
     rejection_reason: str = ""
+    confidence: float = 0.0
 
 
 class DuplicateControlResult(BaseEntity):

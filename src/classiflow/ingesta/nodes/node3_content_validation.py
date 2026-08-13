@@ -147,16 +147,30 @@ class ContentValidationNode(BaseNode):
                 "_ContentChain",
                 build_content_chain(get_llm_langchain(Settings.node3_model_path)),
             )
-        output: LegitimacyDecisionOutput = chain.invoke({
-            "text_excerpt": text[: self.config.excerpt_len],
-            "detected_language": detected_language,
-        })
+        try:
+            output: LegitimacyDecisionOutput = chain.invoke({
+                "text_excerpt": text[: self.config.excerpt_len],
+                "detected_language": detected_language,
+            })
+        except ValueError as exc:
+            # A local quantized model can produce output no amount of prompt-tuning
+            # fully rules out (missing fields, unescaped quotes breaking JSON). That's
+            # infrastructure flakiness, not evidence the document is illegitimate --
+            # route to review instead of letting it crash the whole ingest request.
+            return ContentValidationResult(
+                passed=False,
+                char_count=char_count,
+                detected_language=detected_language,
+                needs_agent_review=True,
+                rejection_reason=f"SLM response could not be parsed: {exc}",
+            )
         low_confidence = output.confidence < self.config.slm_confidence_threshold
         if output.is_legitimate and not low_confidence:
             return ContentValidationResult(
                 passed=True,
                 char_count=char_count,
                 detected_language=detected_language,
+                confidence=output.confidence,
             )
         reason = f"SLM: {output.reasoning}"
         if low_confidence:
@@ -168,6 +182,7 @@ class ContentValidationNode(BaseNode):
             passed=False,
             char_count=char_count,
             detected_language=detected_language,
+            confidence=output.confidence,
             needs_agent_review=True,
             rejection_reason=reason,
         )

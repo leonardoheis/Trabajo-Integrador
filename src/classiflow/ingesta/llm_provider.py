@@ -1,3 +1,4 @@
+import gc
 from functools import lru_cache
 
 import llama_cpp
@@ -59,6 +60,19 @@ def get_llm(model_path: str) -> Llama:
         raise ModelNotFoundError(path=model_path) from exc
     except Exception as exc:
         raise ModelLoadError(path=model_path, cause=str(exc)) from exc
+
+
+def unload_slm() -> None:
+    # Drops the lru_cache's reference to the loaded Llama/LlamaCpp instances so gc can
+    # collect them -- their __del__ frees the GGUF's CUDA context directly (ctypes-owned
+    # memory, not PyTorch's caching allocator), releasing VRAM back to the driver.
+    # ponytail: runs synchronously on the event loop (called once per finished job, not
+    # a hot path) -- move to asyncio.to_thread if it ever shows up as request latency.
+    get_llm.cache_clear()
+    get_llm_langchain.cache_clear()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 @lru_cache(maxsize=4)

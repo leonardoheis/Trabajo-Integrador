@@ -17,6 +17,7 @@ from classiflow.ingesta.domain.results import (
     FormatValidationResult,
 )
 from classiflow.ingesta.domain.state import JobState
+from classiflow.ingesta.llm_provider import unload_slm
 
 _PIPELINE_NODE = "pipeline"
 _NODE_NAMES = {
@@ -64,6 +65,7 @@ class PipelineService:
 
         failed_at_node = await self._persist_steps(job_id, final_state)
         await self._finalize_job(job_id, final_state, failed_at_node)
+        unload_slm()
 
         await self._broadcaster.emit(
             NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.DONE)
