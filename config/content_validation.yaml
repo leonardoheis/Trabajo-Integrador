@@ -13,4 +13,4 @@ allowed_languages:
   - en   # English (fallback)
 
 # SLM confidence threshold below which a human review is triggered
-slm_confidence_threshold: 0.85
+slm_confidence_threshold: 0.65

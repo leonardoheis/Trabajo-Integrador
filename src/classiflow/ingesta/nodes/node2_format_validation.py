@@ -111,9 +111,11 @@ class FormatValidationNode(BaseNode):
                 "_FormatChain",
                 build_format_chain(get_llm_langchain(Settings.node2_model_path)),
             )
+        expected_extensions = self.config.mime_to_extensions.get(reception.detected_mime, [])
         output: FormatDecisionOutput = chain.invoke({
             "filename": filename,
             "detected_mime": reception.detected_mime,
+            "expected_extensions": ", ".join(expected_extensions) or "unknown",
         })
         passed = output.decision == FormatDecision.ACCEPT
         return FormatValidationResult(

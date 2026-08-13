@@ -25,9 +25,21 @@ _SPANISH_TEXT = (
 _SHORT_TEXT = "Short text."  # 11 chars — above ocr_char_threshold (10) but below min_chars (20)
 _UNKNOWN_TEXT = "The quick brown fox jumps over the lazy dog. Testing English content here."
 
-_SLM_LEGITIMATE = '{"is_legitimate": true, "confidence": 0.92, "reasoning": "official document"}'
-_SLM_NOT_LEGITIMATE = '{"is_legitimate": false, "confidence": 0.85, "reasoning": "spam content"}'
-_SLM_LEGITIMATE_LOW_CONFIDENCE = '{"is_legitimate": true, "confidence": 0.5, "reasoning": "unsure"}'
+_LEGITIMATE_CONFIDENCE = 0.92
+_NOT_LEGITIMATE_CONFIDENCE = 0.85
+_LOW_CONFIDENCE = 0.5
+
+_SLM_LEGITIMATE = (
+    f'{{"is_legitimate": true, "confidence": {_LEGITIMATE_CONFIDENCE}, '
+    '"reasoning": "official document"}'
+)
+_SLM_NOT_LEGITIMATE = (
+    f'{{"is_legitimate": false, "confidence": {_NOT_LEGITIMATE_CONFIDENCE}, '
+    '"reasoning": "spam content"}'
+)
+_SLM_LEGITIMATE_LOW_CONFIDENCE = (
+    f'{{"is_legitimate": true, "confidence": {_LOW_CONFIDENCE}, "reasoning": "unsure"}}'
+)
 
 _CONFIG = ContentValidationConfig(
     min_chars=20,
@@ -141,6 +153,7 @@ class TestContentValidationNodeRun:
 
         assert result.passed
         assert result.detected_language == "es"
+        assert result.confidence == pytest.approx(_LEGITIMATE_CONFIDENCE)
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].event == JobStatus.PASSED.value
 
@@ -185,6 +198,7 @@ class TestContentValidationNodeRun:
         assert not result.passed
         assert result.needs_agent_review
         assert "SLM:" in result.rejection_reason
+        assert result.confidence == pytest.approx(_NOT_LEGITIMATE_CONFIDENCE)
 
     async def test_slm_low_confidence_legitimate_triggers_review(
         self,
@@ -204,6 +218,7 @@ class TestContentValidationNodeRun:
         assert not result.passed
         assert result.needs_agent_review
         assert "below" in result.rejection_reason
+        assert result.confidence == pytest.approx(_LOW_CONFIDENCE)
 
     async def test_emits_started_then_passed(
         self,
