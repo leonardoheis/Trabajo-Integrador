@@ -59,6 +59,7 @@ class Job(Base):
     failed_at_node: Mapped[str | None] = mapped_column(String(100), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     review_action_needed: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    extracted_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     steps: Mapped["list[DocumentStep]"] = relationship(
         "DocumentStep", back_populates="job", cascade="all, delete-orphan"
