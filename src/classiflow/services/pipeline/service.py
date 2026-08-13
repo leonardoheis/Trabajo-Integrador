@@ -7,8 +7,8 @@ from langgraph.graph.state import CompiledStateGraph
 
 from classiflow.database.models import DocumentStep, Job
 from classiflow.domain.job import JobStatus, NodeEvent
+from classiflow.domain.repositories import UNSET, IJobRepository, UnsetType
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
-from classiflow.domain.repositories.job import IJobRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.domain.results import (
     ContentValidationResult,
@@ -100,10 +100,16 @@ class PipelineService:
         self, job_id: str, final_state: JobState, failed_at_node: str | None
     ) -> None:
         final_status = final_state.get("final_status", "rejected")
+        # Only persist extracted text for jobs that didn't get auto-accepted -- keeps
+        # storage bounded instead of retaining every successfully processed document.
+        extracted_text: str | UnsetType | None = UNSET
+        if final_status != "accepted":
+            extracted_text = final_state.get("text") or None
         await self._job_repo.update_status(
             job_id,
             final_status,
             rejection_reason=final_state.get("rejection_reason") or None,
             failed_at_node=failed_at_node,
             review_action_needed="pending" if final_status == "review" else None,
+            extracted_text=extracted_text,
         )

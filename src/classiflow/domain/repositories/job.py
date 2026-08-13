@@ -21,7 +21,11 @@ UNSET = UnsetType()
 class IJobRepository(Protocol):
     async def create(self, job: Job) -> None: ...
     async def find_by_job_id(self, job_id: str) -> Job | None: ...
-    async def update_status(
+
+    # Each kwarg below is an independently-optional UNSET-sentinel field (see UnsetType
+    # above); collapsing them into one param object would lose the per-field opt-in
+    # this pattern exists for.
+    async def update_status(  # noqa: PLR0913
         self,
         job_id: str,
         status: str,
@@ -29,5 +33,6 @@ class IJobRepository(Protocol):
         rejection_reason: str | UnsetType | None = UNSET,
         failed_at_node: str | UnsetType | None = UNSET,
         review_action_needed: str | UnsetType | None = UNSET,
+        extracted_text: str | UnsetType | None = UNSET,
     ) -> None: ...
     async def list_all(self) -> list[Job]: ...

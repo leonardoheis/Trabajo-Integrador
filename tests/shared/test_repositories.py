@@ -307,16 +307,21 @@ class TestSqlJobRepository:
         repo = SqlJobRepository(session)
         await repo.create(_job("sql-job-004"))
         await repo.update_status(
-            "sql-job-004", "review", rejection_reason="needs human review", failed_at_node="node3"
+            "sql-job-004",
+            "review",
+            rejection_reason="needs human review",
+            failed_at_node="node3",
+            extracted_text="garbled excerpt",
         )
         # A later status-only update (e.g. recording a human decision) must not wipe
-        # the rejection_reason/failed_at_node audit trail set above.
+        # the rejection_reason/failed_at_node/extracted_text audit trail set above.
         await repo.update_status("sql-job-004", "accepted")
         found = await repo.find_by_job_id("sql-job-004")
         assert found is not None
         assert found.status == "accepted"
         assert found.rejection_reason == "needs human review"
         assert found.failed_at_node == "node3"
+        assert found.extracted_text == "garbled excerpt"
 
     async def test_list_all(self, session: AsyncSession) -> None:
         repo = SqlJobRepository(session)
@@ -354,7 +359,11 @@ class TestInMemoryJobRepository:
         repo = InMemoryJobRepository()
         await repo.create(_job())
         await repo.update_status(
-            _JOB, "review", rejection_reason="needs human review", failed_at_node="node3"
+            _JOB,
+            "review",
+            rejection_reason="needs human review",
+            failed_at_node="node3",
+            extracted_text="garbled excerpt",
         )
         await repo.update_status(_JOB, "accepted")
         found = await repo.find_by_job_id(_JOB)
@@ -362,6 +371,7 @@ class TestInMemoryJobRepository:
         assert found.status == "accepted"
         assert found.rejection_reason == "needs human review"
         assert found.failed_at_node == "node3"
+        assert found.extracted_text == "garbled excerpt"
 
     async def test_list_all(self) -> None:
         repo = InMemoryJobRepository()

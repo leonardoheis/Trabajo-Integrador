@@ -5,7 +5,14 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
 from fastapi.responses import StreamingResponse
 
-from classiflow.api.dependencies import CurrentUser, get_current_user
+from classiflow.api.dependencies import (
+    CurrentUser,
+    get_current_user,
+    get_document_steps_repo,
+    get_human_decision_repo,
+    get_job_repo,
+    get_pipeline_service,
+)
 from classiflow.api.routes.pipeline.schemas import (
     DecisionRequest,
     DocumentStepSchema,
@@ -27,11 +34,10 @@ _DECISION_TO_STATUS = {"accept": "accepted", "reject": "rejected", "escalate": "
 
 
 @router.post("/ingest", status_code=202)
-@inject
 async def ingest(
     file: UploadFile,
     background_tasks: BackgroundTasks,
-    pipeline: Annotated[PipelineService, Depends(Provide[Container.pipeline_service])],
+    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
 ) -> IngestResponse:
     filename = file.filename or "unknown"
     file_bytes = await file.read()
@@ -40,12 +46,9 @@ async def ingest(
 
 
 @router.get("/review-queue")
-@inject
 async def review_queue(
-    job_repo: Annotated[IJobRepository, Depends(Provide[Container.job_repo])],
-    document_steps_repo: Annotated[
-        IDocumentStepsRepository, Depends(Provide[Container.document_steps_repo])
-    ],
+    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
+    document_steps_repo: Annotated[IDocumentStepsRepository, Depends(get_document_steps_repo)],
 ) -> list[ReviewQueueItem]:
     jobs = [j for j in await job_repo.list_all() if j.status == "review"]
     items = []
@@ -68,7 +71,7 @@ async def review_queue(
 @inject
 async def pipeline_events(
     job_id: str,
-    job_repo: Annotated[IJobRepository, Depends(Provide[Container.job_repo])],
+    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
 ) -> StreamingResponse:
     if await job_repo.find_by_job_id(job_id) is None:
@@ -85,15 +88,12 @@ async def pipeline_events(
 
 
 @router.post("/{job_id}/decision")
-@inject
 async def submit_decision(
     job_id: str,
     body: DecisionRequest,
     current_user: CurrentUser,
-    job_repo: Annotated[IJobRepository, Depends(Provide[Container.job_repo])],
-    human_decision_repo: Annotated[
-        IHumanDecisionRepository, Depends(Provide[Container.human_decision_repo])
-    ],
+    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
+    human_decision_repo: Annotated[IHumanDecisionRepository, Depends(get_human_decision_repo)],
 ) -> None:
     job = await job_repo.find_by_job_id(job_id)
     if job is None:

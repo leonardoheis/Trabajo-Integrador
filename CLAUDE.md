@@ -141,6 +141,13 @@ Hooks enforced on every commit (see `.pre-commit-config.yaml`):
 | `mypy` | Type correctness of `src/` |
 | `nbqa-mypy` | Type correctness of notebooks |
 
+## Execution workflow
+
+**Never run notebooks or other commands in the background.** The user runs them
+themselves. When a notebook or command needs to be executed (e.g. `jupyter execute`,
+`uv run poe check`, a benchmark script), hand over the exact command and wait — do not
+invoke it yourself, foreground or background.
+
 ## LangGraph agent structure
 
 Source: https://docs.langchain.com/oss/python/langgraph/application-structure
