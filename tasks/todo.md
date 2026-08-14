@@ -24,11 +24,11 @@ BATCH 3  ───────────────────────�
   T07  Shared domain + AuditService + EventBroadcaster
 
 BATCH 4  ──────────────────────────────────────────────── parallel
-  T05  Google OAuth + whitelist          (needs T03 + T04)
+  T05  Google OAuth + whitelist          (needs T03 + T04)          [x] done
   T08  Ingesta domain models             (needs T07)
 
 BATCH 5  ──────────────────────────────────────────────── sequential (needs T04 + T05)
-  T06  JWT auth middleware
+  T06  JWT auth dependency               [x] done
 
 BATCH 6  ──────────────────────────────────────────────── sequential (needs T08)
   T09  Node 1 — File Reception
@@ -51,10 +51,10 @@ BATCH 11  ───────────────────────�
   T16  FastAPI app + health route
 
 BATCH 12  ─────────────────────────────────────────────── sequential (needs T06+T15+T16)
-  T17  Pipeline endpoints + SSE stream
+  T17  Pipeline endpoints + SSE stream          [x] done
 
 BATCH 13  ─────────────────────────────────────────────── sequential (needs T17)
-  T19  Docker build + push CI
+  T19  Docker build + push CI                   [-] skipped for now
 
 BATCH 14  ─────────────────────────────────────────────── parallel (needs T11 + nodes done)
   T20  wandb integration — LLM tracing + per-node metrics
@@ -150,33 +150,44 @@ uv run poe test tests/api/test_auth.py
 ---
 
 ### T05 · Google OAuth flow + whitelist check
-**Branch:** `feat/oauth` · **Deps:** T03 · T04 · **Status:** `[ ]`
+**Branch:** `feat/oauth` · **Deps:** T03 · T04 · **Status:** `[x]` · **PR:** [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9)
 
-- [ ] `shared/auth/oauth.py`: `get_authorization_url()` and `exchange_code(code, user_repo)`
-- [ ] `GET /auth/login` redirects to Google with `scope=email profile`
-- [ ] `GET /auth/callback?code=X` exchanges code, checks `allowed_users`, returns JWT
-- [ ] HTTP 403 if email not in whitelist or is blocked
-- [ ] Tests use `httpx.MockTransport` — no real Google call
-- [ ] `uv run poe check` passes
+- [x] `services/auth/oauth.py`: `get_authorization_url(state)` and `exchange_code(code, user_repo, http=...)`
+  (path is `services/auth/`, not `shared/auth/` — see package refactor note on T06)
+- [x] `GET /auth/login` redirects to Google with `scope=email profile`, sets signed httpOnly
+  `oauth_state` cookie for CSRF protection (added beyond original spec)
+- [x] `GET /auth/callback?code=X&state=Y` verifies CSRF state, exchanges code, checks
+  `allowed_users`, returns JWT
+- [x] HTTP 400 on missing/mismatched CSRF state, HTTP 403 if email not in whitelist or is blocked
+- [x] Tests use `httpx.MockTransport` — no real Google call
+- [x] `uv run poe check` passes
 
 ```bash
 # Verify
 uv run poe check
-uv run poe test tests/api/routes/test_auth.py
+uv run poe test tests/api/routes/test_auth_oauth.py
 ```
 
 ---
 
-### T06 · JWT auth middleware
-**Branch:** `feat/auth-middleware` · **Deps:** T04 · T05 · **Status:** `[ ]`
+### T06 · JWT auth dependency
+**Branch:** `feat/oauth` (shipped together with T05) · **Deps:** T04 · T05 · **Status:** `[x]` · **PR:** [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9)
 
-- [ ] `api/middleware/auth.py`: `require_auth` function returning `User` (registered in `Container`)
-- [ ] `CurrentUser = Annotated[User, Depends(Provide[Container.current_user])]` in `dependencies.py`
-- [ ] Endpoint functions that use `CurrentUser` decorated with `@inject`
-- [ ] HTTP 401 on missing header, invalid token, or expired token
-- [ ] `/health` and `/auth/*` explicitly public (no `CurrentUser` dependency)
-- [ ] Tests: 401 missing, 401 expired, 200 valid
-- [ ] `uv run poe check` passes
+> **Package refactor note (this PR):** `shared/` was split into top-level `domain/`,
+> `services/`, `database/`, `events/`, `injections/`. Any older task card referencing
+> `shared/...` paths now maps to one of these.
+
+- [x] `api/dependencies.py`: `get_current_user` (FastAPI dependency, not Starlette middleware)
+  returns `User` via `AuthService.verify_token`, registered through `Container`
+- [x] `CurrentUser = Annotated[User, Depends(get_current_user)]` in `dependencies.py`
+- [x] Endpoint functions that use `CurrentUser` decorated with `@inject`
+- [x] `AuthError` → HTTP 401, `NotAllowedError` → HTTP 403 (`error_handlers/auth.py`)
+- [x] `/health` and `/auth/*` are public today (no route declares `CurrentUser` yet)
+- [x] Tests: 401 missing — covered end-to-end now that T17's `/pipeline/*` routes are
+  gated by `CurrentUser` (`tests/api/routes/test_pipeline.py::*::test_requires_auth`).
+  401 expired / 200 valid remain unit-tested via `AuthService.verify_token`/`decode_token`
+  directly, not via a live route — acceptable, not pursued further.
+- [x] `uv run poe check` passes
 
 ```bash
 # Verify
@@ -397,22 +408,46 @@ uv run poe test tests/api/routes/test_health.py
 
 ---
 
-### T17 · Pipeline endpoints + SSE stream + review queue
-**Branch:** `feat/pipeline-endpoints` · **Deps:** T06 · T15 · T16 · **Status:** `[ ]`
+### T17 · Pipeline endpoints + SSE stream + review queue ✅ done — PR [#13](https://github.com/leonardoheis/Trabajo-Integrador/pull/13)
+**Branch:** `feat/pipeline-endpoints` · **Deps:** T06 · T15 · T16 · **Status:** `[x]`
 
-- [ ] `POST /pipeline/ingest` returns HTTP 202 + `job_id` within 100 ms
-- [ ] HTTP 401 without valid JWT on all routes
-- [ ] Background task starts coordinator without blocking the response
-- [ ] `GET /pipeline/{job_id}/events` streams `node_started`/`node_passed`/`node_failed` per node
-- [ ] Final SSE event is `pipeline_done`; stream closes after
-- [ ] Client disconnect removes queue (`try/finally` in async generator)
-- [ ] HTTP 404 for unknown `job_id`
-- [ ] `GET /pipeline/review-queue` returns jobs with `status = REVIEW`, each with inline `document_steps`
-- [ ] `POST /pipeline/{job_id}/decision` accepts `{ decision: accept|reject|escalate, notes?: string }`; persists via `IHumanDecisionRepository`; updates `jobs.status`
-- [ ] `POST /pipeline/{job_id}/decision` returns HTTP 404 for unknown job, HTTP 409 if job is not in `REVIEW` state
-- [ ] Tests assert full SSE sequence using `MockLlm` + small PDF fixture
-- [ ] Tests assert review queue contents and decision recording using `InMemory*` repos
-- [ ] `uv run poe check` passes
+- [x] `POST /pipeline/ingest` returns HTTP 202 + `job_id`; only a `Job` insert happens
+  before the response, so it's fast (not literally load-tested at 100 ms)
+- [x] HTTP 401 without valid JWT on all routes — one router-level
+  `dependencies=[Depends(get_current_user)]` gate on `APIRouter(prefix="/pipeline")`,
+  not a per-route `CurrentUser` param, since every route in this router needs it
+- [x] Background task (`BackgroundTasks.add_task`) starts the coordinator without
+  blocking the response
+- [x] `GET /pipeline/{job_id}/events` streams one `node_update` SSE event per
+  started/passed/failed transition — matches the single-event-type `NodeEvent`
+  contract already built in T07 (`to_sse()`), not three separately-named SSE events
+- [x] Final SSE event carries `node: "pipeline", status: "done"`; stream closes after
+  (`EventBroadcaster.subscribe()` breaks on `JobStatus.DONE`)
+- [x] Client disconnect removes queue (`try/finally` → `broadcaster.close(job_id)` in
+  the async generator)
+- [x] HTTP 404 for unknown `job_id` (`JobNotFoundError`)
+- [x] `GET /pipeline/review-queue` returns jobs with `status = "review"`, each with
+  inline `document_steps` (`DocumentStepSchema.from_model()`)
+- [x] `POST /pipeline/{job_id}/decision` accepts `{ decision: accept|reject|escalate, notes?: string }`;
+  persists via `IHumanDecisionRepository`; updates `jobs.status`
+- [x] `POST /pipeline/{job_id}/decision` returns HTTP 404 for unknown job, HTTP 409 if
+  job is not in `review` state (`JobNotInReviewError`)
+- [x] Tests assert the full SSE sequence using `MockLlm` + a small PDF fixture
+- [x] Tests assert review queue contents and decision recording using `InMemory*` repos
+- [x] `uv run poe check` passes (136 tests)
+
+**Along the way (surfaced because this was the first feature to exercise these paths
+end-to-end, not scope creep):**
+- `database/base.py`: `get_session()` was flush-only and never committed — fixed to
+  commit on success / rollback on error
+- `IJobRepository.update_status()`'s optional kwargs defaulted to `None`, which
+  collided "not provided" with "explicitly clear" — a status-only call (e.g. recording
+  a human decision) silently wiped `rejection_reason`/`failed_at_node`. Fixed with an
+  `UnsetType`/`UNSET` sentinel, exported from `domain/repositories/__init__.py`
+- `node1`–`node4` + the coordinator wired into `Container`/`TestContainer` for the
+  first time — previously only ever constructed directly inside node/coordinator tests
+- `playground/pipeline_end_to_end.ipynb`: the whole flow exercised through the real
+  API (`TestClient`), using two real sample PDFs from `playground/samples/`
 
 ```bash
 # Verify
@@ -441,7 +476,7 @@ gh run view <run-id>
 ---
 
 ### T19 · GitHub Actions Docker build + push
-**Branch:** `feat/docker` · **Deps:** T17 · **Status:** `[ ]`
+**Branch:** `feat/docker` · **Deps:** T17 · **Status:** `[-]` *(skipped for now — deferred in favor of T20/T21)*
 
 - [ ] `Dockerfile`: `python:3.12-slim`, `apt-get install libmagic1`, `uv sync --no-dev`, port 8000
 - [ ] Entrypoint: `uvicorn classiflow.api.app:create_app --factory --host 0.0.0.0 --port 8000`
@@ -493,10 +528,18 @@ print(llm.callbacks)
 
 ---
 
-### T21 · Text extraction — MarkItDown + PaddleOCR fallback
-**Branch:** `feat/text-extraction` · **Deps:** T15 · **Status:** `[ ]`
+### T21 · Text extraction — MarkItDown + EasyOCR fallback
+**Branch:** `feat/text-extraction` · **Deps:** T15 · **Status:** `[~]` in progress — implemented,
+not yet committed/PR'd. Switched from PaddleOCR (originally specced below) to **EasyOCR**:
+PaddleOCR's dependency chain (`paddlex` → `modelscope` → `torch`) put `torch` and `paddle`
+native DLLs in the same process, which reproducibly crashed on Windows
+(`OSError: WinError 127` loading `torch/lib/shm.dll`) — a real, structural conflict, not a
+config issue. `bert_tunning` (sibling project) already solved this the same way for the
+same reason. Actual implementation is a small `ingesta/extractors/` package
+(`ExtractorBase` ABC, `MarkItDownExtractor`, `OCRExtractor`, own `exceptions.py`), not the
+single flat `extract.py` module sketched below — see that package for the real design.
 
-Add a real `text_extractor` to the coordinator that tries MarkItDown first and falls back to PaddleOCR for image-heavy PDFs, replacing the current UTF-8 decode stub.
+Add a real `text_extractor` to the coordinator that tries MarkItDown first and falls back to OCR for image-heavy PDFs, replacing the current UTF-8 decode stub.
 
 **Dependencies to add (`pyproject.toml`):**
 - [ ] `markitdown[pdf]>=0.1` (text extraction from PDF/DOCX/XLSX)
@@ -523,6 +566,53 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 
 ---
 
+### T22 · Bulk document ingest endpoint
+**Branch:** `feat/bulk-ingest` · **Deps:** T17 · **Status:** `[ ]`
+
+**Motivation:** today, ingesting N documents means N separate `POST /pipeline/ingest`
+calls — the client has to loop. A bulk endpoint removes that round-trip cost. But a
+*naive* version (accept a list of files, loop internally, fire N background tasks) would
+just move the client's loop onto the server without fixing anything real, because of what
+we found investigating a related question this session: this app runs one FastAPI process
+= one event loop, an LLM singleton (`get_llm_langchain`, `@lru_cache(maxsize=4)`) shared
+across all jobs, and (as of this task) node2/node3/node4's blocking SLM/embedding calls
+are offloaded via `asyncio.to_thread` to Python's *default* `ThreadPoolExecutor`, whose
+size is bounded (`min(32, os.cpu_count() + 4)`). Firing 40 coordinator runs at once
+doesn't give you 40-way parallelism — it gives you 40 things contending for a handful of
+threads and one shared model instance, with no control over the contention.
+
+**Proposed design — bounded concurrency, not a new queueing system (yet):**
+- `POST /pipeline/ingest-bulk` accepts a list of files (multipart), creates a `Job` row
+  per file immediately (fast, matches today's `POST /ingest` latency characteristics),
+  and returns `202` + the list of `job_id`s right away — same "don't block the response"
+  contract as the single-file endpoint.
+- Actual coordinator execution for all jobs (bulk *and* single-file, for consistency)
+  goes through a bounded `asyncio.Semaphore` (size configurable via `Settings`, e.g.
+  `MAX_CONCURRENT_JOBS`) so a burst of submissions queues past that limit instead of
+  firing unboundedly — the goal is *predictable* throughput under load, not maximum
+  parallelism theater.
+- Each job's SSE stream (`GET /pipeline/{job_id}/events`) works unchanged whether it was
+  submitted solo or as part of a batch — queued-but-not-started jobs just haven't emitted
+  their first `node_started` event yet.
+
+**Acceptance criteria (draft — refine when picked up):**
+- [ ] `POST /pipeline/ingest-bulk` returns `202` + `job_id` per submitted file
+- [ ] A configurable semaphore caps truly-concurrent coordinator runs; submitting more
+      than the cap queues the excess rather than starting them all at once
+- [ ] Existing `POST /pipeline/ingest` behavior/latency is unchanged
+- [ ] Test proves the concurrency cap holds (e.g. an instrumented/mock node that records
+      max simultaneous in-flight executions)
+- [ ] `uv run poe check` passes
+
+**Explicitly out of scope for this task** (call out as a separate, later decision if
+throughput ever needs to exceed a single machine/process): migrating to a real task
+queue (Celery/RQ/arq/Dramatiq) with dedicated worker processes. That's the right answer
+if this app ever needs to scale ingestion across multiple machines — it's a much bigger
+infra change (a broker like Redis/RabbitMQ, separate worker deployment), not something
+to reach for before the bounded-semaphore approach is shown to be insufficient.
+
+---
+
 ## Progress
 
 | Task | Description | Status |
@@ -533,8 +623,8 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 | T04 | JWT utilities | `[x]` done — PR [#7](https://github.com/lgj2911/Trabajo-Integrador/pull/7) |
 | T07 | Shared domain + AuditService + EventBroadcaster | `[x]` done — PR [#8](https://github.com/lgj2911/Trabajo-Integrador/pull/8) |
 | T08 | Ingesta domain models | `[x]` done — PR [#11](https://github.com/lgj2911/Trabajo-Integrador/pull/11) |
-| T05 | Google OAuth + whitelist | `[ ]` pending |
-| T06 | JWT auth middleware | `[ ]` pending |
+| T05 | Google OAuth + whitelist | `[x]` done — PR [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9) |
+| T06 | JWT auth dependency | `[x]` done — PR [#9](https://github.com/leonardoheis/Trabajo-Integrador/pull/9) |
 | T09 | Node 1 — File Reception | `[x]` done — PR [#13](https://github.com/lgj2911/Trabajo-Integrador/pull/13) |
 | T10 | Node 2 — Format Validation (rule-based) | `[x]` done — PR [#15](https://github.com/lgj2911/Trabajo-Integrador/pull/15) |
 | T11 | LLM Provider singleton | `[x]` done — PR [#17](https://github.com/lgj2911/Trabajo-Integrador/pull/17) [#18](https://github.com/lgj2911/Trabajo-Integrador/pull/18) |
@@ -543,10 +633,17 @@ Add a real `text_extractor` to the coordinator that tries MarkItDown first and f
 | T14 | Node 4 — Duplicate Control | `[x]` done — PR [#4](https://github.com/leonardoheis/Trabajo-Integrador/pull/4) |
 | T15 | Coordinator — LangGraph | `[x]` done |
 | T16 | FastAPI app + health route | `[x]` done — PR [#8](https://github.com/leonardoheis/Trabajo-Integrador/pull/8) |
-| T17 | Pipeline endpoints + SSE stream | `[ ]` pending |
+| T17 | Pipeline endpoints + SSE stream | `[x]` done — PR [#13](https://github.com/leonardoheis/Trabajo-Integrador/pull/13) |
 | T18 | GitHub Actions CI | `[-]` skipped for now |
-| T19 | Docker build + push | `[ ]` pending |
+| T19 | Docker build + push | `[-]` skipped for now |
 | T20 | wandb integration — LLM tracing + per-node metrics | `[ ]` pending |
-| T21 | Text extraction — MarkItDown + PaddleOCR fallback | `[ ]` pending |
+| T21 | Text extraction — MarkItDown + EasyOCR fallback | `[~]` in progress — implemented, not yet committed/PR'd |
+| T22 | Bulk document ingest endpoint | `[ ]` pending |
 
-**14 / 21 tasks complete · 1 skipped (T18)**
+**17 / 22 tasks complete · 1 in progress (T21) · 2 skipped (T18, T19)**
+
+**Next up: finish/commit T21**, then **T20 · wandb integration**. **T22 · Bulk ingest**
+depends on T17 (done) but is deliberately queued behind T20/T21 — no urgency, and its
+design leans on the async-blocking-call fixes made alongside T21 (node2/node3/node4 now
+correctly offload SLM/embedding calls via `asyncio.to_thread`), so it's cleaner to pick
+up once T21 actually lands.

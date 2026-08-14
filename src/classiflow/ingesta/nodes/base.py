@@ -9,6 +9,13 @@ from classiflow.services.audit.service import AuditService
 
 
 class BaseNode:
+    # Subclasses: if run() does a blocking, CPU-bound call (SLM invocation, embedding
+    # computation, OCR, ...), wrap it in `await asyncio.to_thread(...)`. run() is a
+    # coroutine that the coordinator awaits directly on the event loop — unlike a plain
+    # sync node function, which LangGraph itself auto-dispatches to a thread — so a bare
+    # blocking call here freezes every other concurrent request (other jobs, health
+    # checks, open SSE streams) for its duration. See node2/node3's SLM calls and
+    # node4's embedding calls for the pattern.
     def __init__(self, audit: AuditService, broadcaster: EventBroadcaster) -> None:
         self.audit = audit
         self.broadcaster = broadcaster

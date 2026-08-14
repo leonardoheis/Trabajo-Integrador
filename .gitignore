@@ -192,6 +192,9 @@ desktop.ini
 !models/
 !models/**
 
+# ---- Un-ignore the main dev database (other *.db files stay ignored) ----
+!data/classiflow.db
+
 # ---- Samples (local test files) ----
 samples/
 

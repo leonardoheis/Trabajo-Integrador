@@ -18,7 +18,8 @@ from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNod
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
 
-TextExtractFn = Callable[[bytes], str]
+TextExtractFn = Callable[[bytes, str], str]
+
 
 _AnyResult = (
     FileReceptionResult | FormatValidationResult | ContentValidationResult | DuplicateControlResult
@@ -72,8 +73,7 @@ def build_coordinator(
     node3: ContentValidationNode,
     node4: DuplicateControlNode,
     *,
-    # ponytail: best-effort fallback; swap for MarkItDown once added as a dependency
-    text_extractor: TextExtractFn = lambda b: b.decode("utf-8", errors="replace"),
+    text_extractor: TextExtractFn,
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
     async def _node1(state: JobState) -> dict[str, Any]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
@@ -87,7 +87,7 @@ def build_coordinator(
 
     def _extract(state: JobState) -> dict[str, Any]:
         file_bytes = state.get("file_bytes") or b""
-        return {"text": text_extractor(file_bytes)}
+        return {"text": text_extractor(file_bytes, state["filename"])}
 
     async def _node3(state: JobState) -> dict[str, Any]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])

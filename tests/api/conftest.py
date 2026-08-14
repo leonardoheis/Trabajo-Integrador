@@ -2,16 +2,74 @@ import pytest
 from fastapi.testclient import TestClient
 
 from classiflow.api.app import create_app
+from classiflow.api.dependencies import (
+    get_document_steps_repo,
+    get_human_decision_repo,
+    get_job_repo,
+    get_pipeline_service,
+)
+from classiflow.database.models import AllowedUser
+from classiflow.domain.repositories import (
+    IDocumentStepsRepository,
+    IHumanDecisionRepository,
+    IJobRepository,
+)
+from classiflow.injections.production import Container
 from classiflow.injections.test import TestContainer
 from classiflow.services.auth import encode_token
+from classiflow.services.pipeline.service import PipelineService
 
 _TEST_EMAIL = "test@classiflow.dev"
 
 
 @pytest.fixture(scope="module")
 def client() -> TestClient:
-    TestContainer().wire(packages=["classiflow"])
-    return TestClient(create_app())
+    # `Provide[Container.x]` markers throughout the app reference the *production*
+    # Container class by identity, so wiring a same-named but unrelated TestContainer
+    # instance can't satisfy them (dependency_injector's wiring maps providers by name
+    # within one declarative class, not across two independent classes). Overriding a
+    # Container() instance with a fresh TestContainer() instance keeps the exact provider
+    # objects the markers point at, while swapping in the in-memory implementations.
+    test_container = TestContainer()
+    container = Container()
+    container.override(test_container)
+    container.wire(packages=["classiflow"])
+
+    # `auth_headers` issues a JWT for this email — whitelist it so CurrentUser-protected
+    # routes accept it, matching a real logged-in (allowed) user.
+    allowed = AllowedUser(email=_TEST_EMAIL, is_active=True, is_blocked=False)
+    test_container.user_repo().seed(allowed)
+
+    # job_repo/document_steps_repo/human_decision_repo/pipeline_service are built from
+    # a native FastAPI Depends(get_session) in production (see api/dependencies.py),
+    # not from the dependency_injector Container -- container.override() above can't
+    # reach them, so they're swapped via FastAPI's own override mechanism instead,
+    # pointing straight at TestContainer's already-in-memory providers. Plain functions
+    # rather than the provider objects themselves: FastAPI's dependency_overrides
+    # introspects the override callable's signature (inspect.signature()) to resolve
+    # its own sub-dependencies, and dependency_injector's Factory/Singleton provider
+    # instances are Cython-compiled callables that aren't introspectable that way --
+    # passing one directly raises "ValueError: callable <dependency_injector.providers.
+    # Factory...> is not supported by signature".
+    def _job_repo_override() -> IJobRepository:
+        return test_container.job_repo()
+
+    def _document_steps_repo_override() -> IDocumentStepsRepository:
+        return test_container.document_steps_repo()
+
+    def _human_decision_repo_override() -> IHumanDecisionRepository:
+        return test_container.human_decision_repo()
+
+    def _pipeline_service_override() -> PipelineService:
+        return test_container.pipeline_service()
+
+    app = create_app()
+    app.dependency_overrides[get_job_repo] = _job_repo_override
+    app.dependency_overrides[get_document_steps_repo] = _document_steps_repo_override
+    app.dependency_overrides[get_human_decision_repo] = _human_decision_repo_override
+    app.dependency_overrides[get_pipeline_service] = _pipeline_service_override
+
+    return TestClient(app)
 
 
 @pytest.fixture

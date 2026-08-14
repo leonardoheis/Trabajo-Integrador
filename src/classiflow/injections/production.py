@@ -1,32 +1,41 @@
 from functools import cache
 
+import easyocr
 from dependency_injector import containers, providers
 
 from classiflow.database.base import get_session
-from classiflow.database.repositories.audit import SqlAuditRepository
-from classiflow.database.repositories.document_steps import SqlDocumentStepsRepository
-from classiflow.database.repositories.hash import SqlHashRepository
-from classiflow.database.repositories.human_decision import SqlHumanDecisionRepository
-from classiflow.database.repositories.job import SqlJobRepository
 from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.services.audit.service import AuditService
+from classiflow.ingesta.extract import TextExtractor
+from classiflow.ingesta.extractors import MarkItDownExtractor, OCRExtractor
 from classiflow.services.auth.service import AuthService
+from classiflow.settings import Settings
 
 
 class Container(containers.DeclarativeContainer):
+    # Session-scoped repos/services (job_repo, document_steps_repo, human_decision_repo,
+    # hash_repo, audit_repo, pipeline_service, coordinator, node1-4) are NOT declared
+    # here -- this Resource is never torn down (no Closing[]/shutdown_resources() call
+    # anywhere), so anything built from it shares one uncommitted, never-refreshed
+    # session for the process's whole lifetime. Those pieces are built per-request from
+    # a native FastAPI Depends(get_session) instead -- see api/dependencies.py's
+    # get_job_repo/get_document_steps_repo/get_human_decision_repo/get_pipeline_service.
+    # user_repo/auth_service stay here since they're read-only (no data-loss bug).
     db_session = providers.Resource(get_session)
 
-    hash_repo = providers.Factory(SqlHashRepository, session=db_session)
-    audit_repo = providers.Factory(SqlAuditRepository, session=db_session)
     user_repo = providers.Factory(SqlUserRepository, session=db_session)
-    document_steps_repo = providers.Factory(SqlDocumentStepsRepository, session=db_session)
-    human_decision_repo = providers.Factory(SqlHumanDecisionRepository, session=db_session)
-    job_repo = providers.Factory(SqlJobRepository, session=db_session)
-
-    audit_service = providers.Factory(AuditService, repo=audit_repo)
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
+
+    # ThreadSafeSingleton (not Singleton): construction races are real — multiple
+    # coordinator jobs' background tasks can hit OCR around the same time — and
+    # reconstruction is expensive, so the shared reader needs a lock around its
+    # first build. Replaces OCRExtractor's former hand-rolled double-checked lock.
+    ocr_reader = providers.ThreadSafeSingleton(easyocr.Reader, [Settings.ocr_lang], gpu=True)
+    markitdown_extractor = providers.Factory(MarkItDownExtractor)
+    ocr_extractor = providers.Factory(OCRExtractor, reader=ocr_reader)
+    extraction_chain = providers.List(markitdown_extractor, ocr_extractor)
+    text_extractor = providers.Factory(TextExtractor, chain=extraction_chain)
 
 
 @cache
