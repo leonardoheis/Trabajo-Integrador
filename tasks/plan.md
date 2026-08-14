@@ -15,15 +15,17 @@ Sources
           │
           ▼
 ┌─────────────────────────────────────────────────────┐
-│  Stage 1: Ingesta          ◄── THIS PLAN            │
+│  Stage 1: Ingesta          ◄── THIS PLAN — DONE      │
 │  File reception · Format validation ·               │
-│  Content validation · Duplicate control             │
+│  Content validation · Duplicate control ·           │
+│  Text extraction (MarkItDown → EasyOCR, inline)     │
 └─────────────────────────────────────────────────────┘
           │ accepted files only
           ▼
 ┌─────────────────────────────────────────────────────┐
-│  Stage 2: Text Extraction  [future]                 │
-│  Text · Page images · Document structure            │
+│  Stage 2: Extraction Hardening  [next]              │
+│  Bounded concurrency · SSE observability ·          │
+│  extractor_used tracking — NOT re-extraction         │
 └─────────────────────────────────────────────────────┘
           │
           ▼
@@ -58,7 +60,9 @@ Web Interface: upload · agent visualization · classification · chat  [future]
 
 The Ingesta stage is the **first and only processing gate** before content enters the system.
 Its job is to determine whether a file is **safe, valid, and new** — it never reads document
-content deeply. Accepted files are handed off to Stage 2.
+content deeply. Text extraction (MarkItDown → EasyOCR fallback) also runs inline within this
+stage, ahead of node3; accepted files are handed off to Stage 2 (extraction hardening) already
+carrying their extracted text.
 
 The stage is a sequential 4-agent chain coordinated by a LangGraph state machine, triggered
 exclusively by the API. There is no filesystem watcher in scope.
@@ -142,11 +146,12 @@ Client                       API (FastAPI)                Background Task
   allow model swaps without touching agent logic.
 - **LangGraph as Coordinator** — typed state graph with conditional edges.
 - **Image-only PDFs → `requires_ocr` routing** — Agent 3 detects PDFs that yield zero
-  extracted text (scanned documents). Instead of failing, it tags the job
-  `status=REQUIRES_OCR` and routes it out of Stage 1. Text extraction for these documents
-  is handled in Stage 2 via MarkItDown (primary) → EasyOCR fallback (when extracted text
-  < 50 chars). This keeps Stage 1 fast and Stage 2 responsible for content extraction —
-  MarkItDown does not belong inside ingesta agents.
+  extracted text (scanned documents). Text extraction (MarkItDown primary → EasyOCR
+  fallback when extracted text < 50 chars) runs inline in Stage 1's coordinator, ahead
+  of node3 — not deferred to a later stage. If a PDF still has no usable text after
+  both extractors ran, node3 tags the job `requires_ocr=True` and routes it to human
+  review instead of auto-rejecting: this node can't tell a genuinely blank scan apart
+  from an OCR-infrastructure failure that wasn't the document's fault.
 
 ### Cross-Platform & Deployment
 - **Target OS: Linux** (Ubuntu/Debian). Docker image uses `python:3.12-slim` (Linux).
@@ -851,9 +856,10 @@ Also detect image-only PDFs (zero extracted text) and route them out of Stage 1.
 **Model:** Phi-4-mini (GGUF) via `get_llm_langchain()` singleton — same instance as Agent 2.
 
 **Image-only PDF handling:**
-If text extraction yields fewer than a minimum threshold of characters AND the file is a PDF,
-Agent 3 sets `status=REQUIRES_OCR` instead of `passed=False`. This routes the job to the
-Stage 2 OCR path (MarkItDown → EasyOCR fallback) rather than rejecting a valid scanned document.
+If text extraction (already run inline, MarkItDown → EasyOCR fallback, ahead of this node)
+still yields fewer than a minimum threshold of characters AND the file is a PDF, Agent 3 sets
+`requires_ocr=True` and routes to human review instead of `passed=False` — both extractors
+already ran, so this signals "needs a human to check" rather than "needs OCR" as such.
 
 **Acceptance criteria:**
 - [x] Returns `passed=False` for text shorter than `MIN_CHARS` (non-PDF files)
@@ -1129,8 +1135,8 @@ and pushes it to a container registry only on push to `main`.
 |---|---|---|
 | `llama-cpp-python` not installable in CI without GPU | High | `MockLlm` for all tests; real model only in manual integration runs |
 | Phi-4-mini GGUF not available / slow on CPU | Medium | Quantize to Q4_K_M (~2.5 GB); test with `MockLlm`; production requires ≥ 8 GB RAM |
-| Scanned PDFs (image-only) rejected by Agent 3 | High | Detect zero-text PDFs, emit `requires_ocr=True`, route to Stage 2 OCR — do not reject |
-| EasyOCR fallback adds a heavy dependency (~1 GB models) | Low | Stage 2 only; not required for Stage 1 tests; lazy-loaded on first scanned PDF |
+| Scanned PDFs (image-only) rejected by Agent 3 | High | Detect zero-text PDFs, emit `requires_ocr=True`, route to human review — do not reject |
+| EasyOCR fallback adds a heavy dependency (~1 GB models) | Low | Lazy-loaded on first scanned PDF; not required for most Stage 1 tests (mocked) |
 | `python-magic` requires system `libmagic1` | Medium | Install in Dockerfile via `apt-get`; document for local Linux dev; Windows devs install `python-magic-bin` manually |
 | `faiss-cpu` slow on first import | Low | Lazy import inside Agent 4; only loaded when `run()` is called |
 | mypy strict + LangChain generics | Medium | `type: ignore[misc]` only for LangChain internals; document each suppression |

@@ -48,11 +48,13 @@ Sources (inputs)
                 upload · agent visualization · classification · chat
 ```
 
-## Stage 1 — Ingesta Pipeline
+## Stage 1 — Ingesta Pipeline (done — merged to `main` via [PR #17](https://github.com/leonardoheis/Trabajo-Integrador/pull/17))
 
 Stage 1 is the first and only processing gate before a document enters the system.
 It determines whether a file is **safe, valid, and new** — it never classifies content.
-Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
+Text extraction (MarkItDown → EasyOCR fallback) runs inline within this stage, ahead of
+node3. Accepted files are handed off to Stage 2 (extraction hardening — bounded
+concurrency + observability, not re-extraction) already carrying their extracted text.
 
 ### How a file moves through the nodes
 
@@ -87,10 +89,9 @@ Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
 │       ├─ chars ≥ min_chars (50) ─────────────────────────────► ✓ │
 │       └─ chars < min_chars ──────────────────────────────────► OCR │
 │                                                                  │
-│   OCR path  (Stage 2 — not built yet)                            │
-│       Attempt 2 — EasyOCR  (fast, CPU, clean scans)              │
-│           ├─ chars ≥ min_usable (20) ──────────────────────────► ✓ │
-│           └─ chars < min_usable ───────────────────────────────► REJECTED (unreadable) │
+│   Attempt 2 — EasyOCR  (fast, CPU, clean scans)                  │
+│       ├─ chars ≥ min_usable (20) ──────────────────────────────► ✓ │
+│       └─ chars < min_usable ─────────────► requires_ocr=True, human review │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
        │  text: str
@@ -114,7 +115,7 @@ Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
 └──────┬──────┘
        │ is_duplicate=False
        ▼
-    ACCEPTED → Stage 2 (text extraction · enrichment · classification)
+    ACCEPTED → Stage 2 (extraction hardening) → Stage 3 (enrichment) → Stage 4 (classification)
 ```
 
 ### Text extraction retry circuit
@@ -122,19 +123,20 @@ Accepted files are handed off to Stage 2 (text extraction + enrichment, future).
 | Attempt | Tool | Trigger | Notes |
 |---------|------|---------|-------|
 | 1 | **MarkItDown** | always | Handles tables, columns, bad encodings, complex layouts. No model needed. |
-| 2 | **EasyOCR** | `len(text) < 50` | Pixel-level OCR, CPU-only, good for clean scans. Fails job if `len(text) < 20`. |
+| 2 | **EasyOCR** | `len(text) < 50` | Pixel-level OCR, CPU-only, good for clean scans. Routes to review if `len(text) < 20` after this. |
 
-MarkItDown runs inside the Stage 1 Coordinator (no model needed, fast).
-EasyOCR runs in Stage 2 (heavier, separate process — not built yet).
+Both extractors run inline inside the Stage 1 Coordinator's `_extract` step, ahead of
+node3 — extraction is fully done by the time a job reaches content validation. Stage 2
+adds bounded concurrency and SSE/DB observability around this existing step; it does
+not re-extract anything.
 
 ### Routing outcomes
 
 | Outcome | Meaning | Next step |
 |---------|---------|-----------|
-| `ACCEPTED` | All 4 nodes passed | Stage 2 pipeline |
+| `ACCEPTED` | All 4 nodes passed | Stage 2 (extraction hardening) |
 | `REJECTED` | Hard failure at any node | Audit log, no retry |
-| `REVIEW QUEUE` | Ambiguous result | Human reviewer decides |
-| `REQUIRES_OCR` | Insufficient text from MarkItDown | Stage 2 EasyOCR path |
+| `REVIEW QUEUE` | Ambiguous result, or no usable text even after OCR | Human reviewer decides |
 
 ## Repository Structure
 
@@ -204,7 +206,7 @@ EasyOCR runs in Stage 2 (heavier, separate process — not built yet).
 
 ## Build Status
 
-12 / 20 tasks complete · 1 skipped (T18 CI — deferred)
+**Stage 1 closed** — merged to `main` via [PR #17](https://github.com/leonardoheis/Trabajo-Integrador/pull/17). 18 / 19 Stage-1 tasks complete · 1 pending (T22, not blocking).
 
 | Task | Description | Status |
 |------|-------------|--------|
@@ -212,6 +214,8 @@ EasyOCR runs in Stage 2 (heavier, separate process — not built yet).
 | T02 | Database models + Alembic migration | ✅ done |
 | T03 | Repository implementations | ✅ done |
 | T04 | JWT utilities | ✅ done |
+| T05 | Google OAuth + whitelist | ✅ done |
+| T06 | JWT auth dependency | ✅ done |
 | T07 | Shared domain + AuditService + EventBroadcaster | ✅ done |
 | T08 | Ingesta domain models | ✅ done |
 | T09 | Node 1 — File Reception | ✅ done |
@@ -220,16 +224,17 @@ EasyOCR runs in Stage 2 (heavier, separate process — not built yet).
 | T12 | Node 2 — SLM escalation path | ✅ done |
 | T13 | Node 3 — Content Validation | ✅ done |
 | T14 | Node 4 — Duplicate Control | ✅ done |
-| T05 | Google OAuth + whitelist | 🔲 pending |
-| T06 | JWT auth middleware | 🔲 pending |
-| T15 | Coordinator — LangGraph | 🔲 pending |
-| T16 | FastAPI app + health route | 🔲 pending |
-| T17 | Pipeline endpoints + SSE stream | 🔲 pending |
-| T19 | Docker build + push | 🔲 pending |
-| T18 | GitHub Actions CI | ⏭ skipped |
-| T20 | wandb integration — LLM tracing + per-node metrics | 🔲 pending |
+| T15 | Coordinator — LangGraph | ✅ done |
+| T16 | FastAPI app + health route | ✅ done |
+| T17 | Pipeline endpoints + SSE stream | ✅ done |
+| T21 | Text extraction — MarkItDown + EasyOCR fallback | ✅ done |
+| T22 | Bulk document ingest endpoint | 🔲 pending |
 
-Full task details and dependency graph: [tasks/todo.md](tasks/todo.md)
+GitHub Actions CI, Docker build+push, and wandb tracing (formerly T18-T20) don't gate
+pipeline functionality — moved to Stage 4, see [`tasks/todo_stage4.md`](tasks/todo_stage4.md).
+
+Full task details and dependency graph: [tasks/todo.md](tasks/todo.md) ·
+[Stage 2 plan](tasks/plan_stage2.md) · [Stage 2 tasks](tasks/todo_stage2.md)
 
 ## Key Technical Decisions
 

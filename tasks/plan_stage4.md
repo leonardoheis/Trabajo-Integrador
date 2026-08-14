@@ -109,6 +109,27 @@ foreign_municipality_enabled: true
 | `classifier_disagreement` | bool | |
 | `created_at` | datetime | |
 
+## Operational Tasks (moved from Stage 1)
+
+Three ops/infra tasks originally scoped under Stage 1 — deferred there since they don't
+gate any pipeline functionality, and moved here rather than left in limbo now that
+Stage 1 is closed (merged to `main` via PR #17):
+
+### 8. GitHub Actions CI pipeline
+
+`.github/workflows/ci.yml` — lint/typecheck/test/coverage-gate on every push and PR.
+
+### 9. GitHub Actions Docker build + push
+
+`Dockerfile` + `.github/workflows/docker.yml` — containerize the FastAPI app.
+
+### 10. wandb integration — LLM tracing + per-node metrics
+
+LangChain callback (`WandbCallbackHandler`) for node2/node3 SLM calls, plus per-node
+`wandb.log()` for duration/pass-fail/confidence across all four nodes.
+
+Full task detail for all three: see `todo_stage4.md` S4-T10 through S4-T12.
+
 ## Tasks
 
 See `todo_stage4.md` for the full task list and parallel execution map.

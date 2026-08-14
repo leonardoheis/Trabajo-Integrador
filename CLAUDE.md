@@ -272,7 +272,11 @@ Before opening a PR, Claude must:
 
 Saying "execute task X" or "implement and make a PR" is **not** authorization — the user must explicitly approve after reviewing the summary.
 
-**Base branch:** All task PRs target `feat/ingesta-pipeline` (the sprint integration branch), never `main`.
+**Base branch:** Each stage gets its own sprint integration branch; task PRs target that
+branch, never `main` directly. The integration branch itself gets PR'd into `main` once
+its stage is closed out (e.g. `feat/ingesta-pipeline` → `main`, Stage 1, PR #17).
+Current: **`feat/extraction-hardening`** (Stage 2 — Extraction Hardening).
+`feat/ingesta-pipeline` is closed; don't target it for new work.
 
 ## Downloader link resolution strategies
 

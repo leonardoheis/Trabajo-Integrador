@@ -15,7 +15,6 @@ BATCH 0  ───────────────────────�
 BATCH 1  ──────────────────────────────────────────────── parallel (all need T01)
   T02  Database models + Alembic
   T04  JWT utilities                     [-] skipped for now
-  T18  GitHub Actions CI                 [-] skipped for now
 
 BATCH 2  ──────────────────────────────────────────────── sequential (needs T02)
   T03  Repository implementations
@@ -52,13 +51,11 @@ BATCH 11  ───────────────────────�
 
 BATCH 12  ─────────────────────────────────────────────── sequential (needs T06+T15+T16)
   T17  Pipeline endpoints + SSE stream          [x] done
-
-BATCH 13  ─────────────────────────────────────────────── sequential (needs T17)
-  T19  Docker build + push CI                   [-] skipped for now
-
-BATCH 14  ─────────────────────────────────────────────── parallel (needs T11 + nodes done)
-  T20  wandb integration — LLM tracing + per-node metrics
 ```
+
+T18 (CI), T19 (Docker), T20 (wandb) — moved to Stage 4 (`todo_stage4.md` S4-T10 through
+S4-T12) since none of them gate pipeline functionality and Stage 1 is now closed
+(merged to `main` via PR #17).
 
 ---
 
@@ -458,73 +455,12 @@ uv run uvicorn classiflow.api.app:create_app --factory --reload
 
 ---
 
-### T18 · GitHub Actions CI pipeline
-**Branch:** `feat/ci` · **Deps:** T01 · **Status:** `[-]` *(skipped for now)*
+### T18, T19, T20 — moved to Stage 4
 
-- [ ] `.github/workflows/ci.yml` triggers on every push and PR
-- [ ] Jobs: `lint` (ruff), `typecheck` (mypy), `test` (pytest + coverage), `coverage-gate` (≥ 80%)
-- [ ] `lint` and `typecheck` run in parallel
-- [ ] `test` uploads coverage artifact
-- [ ] All jobs green on first push
-
-```bash
-# Verify
-gh run list --limit 5
-gh run view <run-id>
-```
-
----
-
-### T19 · GitHub Actions Docker build + push
-**Branch:** `feat/docker` · **Deps:** T17 · **Status:** `[-]` *(skipped for now — deferred in favor of T20/T21)*
-
-- [ ] `Dockerfile`: `python:3.12-slim`, `apt-get install libmagic1`, `uv sync --no-dev`, port 8000
-- [ ] Entrypoint: `uvicorn classiflow.api.app:create_app --factory --host 0.0.0.0 --port 8000`
-- [ ] `python-magic` detects MIME correctly inside the container
-- [ ] Container accepts `DATABASE_URL`, `JWT_SECRET_KEY`, `GOOGLE_CLIENT_ID/SECRET` as env vars
-- [ ] `.github/workflows/docker.yml`: build + push on `main`, build only on PRs
-- [ ] `INSTALL.md` documents `libmagic1` for Linux and the Windows dev workaround
-
-```bash
-# Verify
-docker build -t classiflow .
-docker run --env-file .env -p 8000:8000 classiflow
-curl http://localhost:8000/health
-```
-
----
-
-### T20 · wandb integration — LLM tracing + per-node metrics
-**Branch:** `feat/wandb` · **Deps:** T11 · T09–T14 · **Status:** `[ ]`
-
-**Strategy A — LangChain callback (zero node changes):**
-- [ ] `wandb>=0.17` added to `pyproject.toml`; `uv sync --dev` succeeds
-- [ ] `ingesta/llm_provider.py`: `get_llm_langchain()` accepts optional `callbacks` list; production default is `[WandbCallbackHandler(project="classiflow")]` when `WANDB_API_KEY` is set
-- [ ] `settings.py` has `WANDB_API_KEY: str = ""` and `WANDB_PROJECT: str = "classiflow"`
-- [ ] Every LLM call (nodes 2 & 3) logs: prompt text, raw output, latency, token count
-- [ ] `WANDB_API_KEY` unset → callbacks list is empty, no wandb import side-effects
-
-**Strategy B — per-node `wandb.log()` (richer metrics):**
-- [ ] Each node's `run()` calls `wandb.log({"node": self.name, "duration_ms": duration_ms, "passed": result.passed})` after audit
-- [ ] Node 3 logs additionally: `confidence`, `detected_language`
-- [ ] Node 4 logs additionally: `is_duplicate`, `duplicate_type`, `similarity_score`
-- [ ] Guarded by `if settings.WANDB_API_KEY` — no wandb traffic in tests
-
-**Tests:**
-- [ ] Strategy A: test that `WandbCallbackHandler` is in the callbacks list when `WANDB_API_KEY` is set
-- [ ] Strategy B: test that `wandb.log` is called with expected keys (mock `wandb.log`)
-- [ ] All existing tests unchanged (wandb disabled when `WANDB_API_KEY` is empty)
-- [ ] `uv run poe check` passes
-
-```bash
-# Verify
-WANDB_API_KEY=your_key uv run python -c "
-from classiflow.ingesta.llm_provider import get_llm_langchain
-from classiflow.settings import Settings
-llm = get_llm_langchain(Settings.node3_model_path)
-print(llm.callbacks)
-"
-```
+GitHub Actions CI, GitHub Actions Docker build+push, and wandb LLM tracing/per-node
+metrics don't gate any pipeline functionality, so they've moved to
+[`todo_stage4.md`](todo_stage4.md) (S4-T10, S4-T11, S4-T12) rather than sit pending
+against a now-closed stage. Full task detail lives there.
 
 ---
 
@@ -634,16 +570,13 @@ to reach for before the bounded-semaphore approach is shown to be insufficient.
 | T15 | Coordinator — LangGraph | `[x]` done |
 | T16 | FastAPI app + health route | `[x]` done — PR [#8](https://github.com/leonardoheis/Trabajo-Integrador/pull/8) |
 | T17 | Pipeline endpoints + SSE stream | `[x]` done — PR [#13](https://github.com/leonardoheis/Trabajo-Integrador/pull/13) |
-| T18 | GitHub Actions CI | `[-]` skipped for now |
-| T19 | Docker build + push | `[-]` skipped for now |
-| T20 | wandb integration — LLM tracing + per-node metrics | `[ ]` pending |
-| T21 | Text extraction — MarkItDown + EasyOCR fallback | `[~]` in progress — implemented, not yet committed/PR'd |
+| T21 | Text extraction — MarkItDown + EasyOCR fallback | `[x]` done — merged to `main` via PR [#17](https://github.com/leonardoheis/Trabajo-Integrador/pull/17) |
 | T22 | Bulk document ingest endpoint | `[ ]` pending |
 
-**17 / 22 tasks complete · 1 in progress (T21) · 2 skipped (T18, T19)**
+T18 (CI), T19 (Docker), T20 (wandb) moved to Stage 4 — see `todo_stage4.md`.
 
-**Next up: finish/commit T21**, then **T20 · wandb integration**. **T22 · Bulk ingest**
-depends on T17 (done) but is deliberately queued behind T20/T21 — no urgency, and its
-design leans on the async-blocking-call fixes made alongside T21 (node2/node3/node4 now
-correctly offload SLM/embedding calls via `asyncio.to_thread`), so it's cleaner to pick
-up once T21 actually lands.
+**18 / 19 Stage-1 tasks complete · 1 pending (T22)**
+
+**Stage 1 is closed** — merged to `main` via PR [#17](https://github.com/leonardoheis/Trabajo-Integrador/pull/17).
+T22 (bulk ingest) is the only item left against this stage; it's not blocking Stage 2
+(Extraction Hardening, see `todo_stage2.md`), which can proceed independently.
