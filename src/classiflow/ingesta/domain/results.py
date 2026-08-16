@@ -40,3 +40,18 @@ class DuplicateControlResult(BaseEntity):
     duplicate_type: str = ""
     similarity_score: float = 0.0
     rejection_reason: str = ""
+
+
+class KnowledgeIndexingResult(BaseEntity):
+    # `passed` stays True even when indexing fails: the document already cleared every
+    # validation gate, so a knowledge-base problem must not retroactively reject it.
+    # `indexed` is the field that says whether it is searchable.
+    passed: bool
+    indexed: bool = False
+    chunk_count: int = 0
+    doc_type: str = ""
+    number: str = ""
+    year: str = ""
+    subject: str = ""
+    download_url: str = ""
+    rejection_reason: str = ""

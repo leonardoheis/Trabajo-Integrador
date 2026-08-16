@@ -1,8 +1,11 @@
+from collections.abc import AsyncIterator
+
 import numpy as np
 import numpy.typing as npt
 from dependency_injector import containers, providers
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.database.repositories.document import InMemoryDocumentRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.database.repositories.human_decision import InMemoryHumanDecisionRepository
@@ -14,6 +17,12 @@ from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
+from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
+from classiflow.knowledge.chunker import ChunkerService
+from classiflow.knowledge.domain.document import DocumentMetadata
+from classiflow.knowledge.indexer import IndexerService
+from classiflow.knowledge.infrastructure.chroma_store import InMemoryVectorStore
+from classiflow.knowledge.rag import RagService
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
@@ -34,6 +43,43 @@ def _test_mime_detector(file_bytes: bytes) -> str:
 
 def _test_embed(_text: str) -> npt.NDArray[np.float32]:
     return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+
+
+class _StubEmbedder:
+    """Deterministic 3-d embedding: no model download, no inference in tests."""
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_query(text) for text in texts]
+
+    def embed_query(self, text: str) -> list[float]:  # noqa: PLR6301
+        lowered = text.lower()
+        return [
+            1.0 if "ordenanza" in lowered else 0.0,
+            1.0 if "presupuesto" in lowered else 0.0,
+            float(len(lowered) % 3) / 3.0,
+        ]
+
+
+class _StubChatLlm:
+    """Echoes a fixed Spanish answer, mirroring MockLlm's role for the SLM nodes."""
+
+    def __init__(self, response: str = "Según los pasajes provistos, no hay datos.") -> None:
+        self._response = response
+
+    async def astream(self, _system: str, _user: str) -> AsyncIterator[str]:
+        yield self._response
+
+
+class _StubMetadataRepository:
+    def resolve(self, filename: str) -> DocumentMetadata:  # noqa: PLR6301
+        return DocumentMetadata(
+            filename=filename,
+            doc_type="Ordenanza",
+            number="10902",
+            year="2026",
+            subject="Presupuesto municipal",
+            download_url="https://www.rosario.gob.ar/normativa/ver/test",
+        )
 
 
 class TestContainer(containers.DeclarativeContainer):
@@ -66,12 +112,39 @@ class TestContainer(containers.DeclarativeContainer):
         hash_repo=hash_repo,
         embedding_store=providers.Factory(EmbeddingStore, dim=4, embed_fn=_test_embed),
     )
+    document_repo = providers.Singleton(InMemoryDocumentRepository)
+    vector_store = providers.Singleton(InMemoryVectorStore)
+    embedder = providers.Singleton(_StubEmbedder)
+    chat_llm = providers.Singleton(_StubChatLlm)
+    chunker = providers.Factory(ChunkerService)
+    document_metadata_repo = providers.Singleton(_StubMetadataRepository)
+    indexer = providers.Factory(
+        IndexerService,
+        chunker=chunker,
+        embedder=embedder,
+        vector_store=vector_store,
+        metadata_repo=document_metadata_repo,
+    )
+    rag_service = providers.Factory(
+        RagService,
+        embedder=embedder,
+        vector_store=vector_store,
+        chat_llm=chat_llm,
+    )
+    node5 = providers.Factory(
+        KnowledgeIndexingNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        indexer=indexer,
+        document_repo=document_repo,
+    )
     coordinator = providers.Factory(
         build_coordinator,
         node1=node1,
         node2=node2,
         node3=node3,
         node4=node4,
+        node5=node5,
         text_extractor=text_extractor,
     )
     pipeline_service = providers.Factory(

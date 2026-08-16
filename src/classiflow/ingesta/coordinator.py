@@ -17,6 +17,7 @@ from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
+from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
 
 TextExtractFn = Callable[[bytes, str], str]
 
@@ -64,14 +65,17 @@ def _route_node3(state: JobState) -> str:
 
 def _route_node4(state: JobState) -> str:
     dc = state.get("duplicate_control")
-    return "accept" if dc and dc.passed else "reject"
+    return "node5" if dc and dc.passed else "reject"
 
 
-def build_coordinator(
+# One parameter per graph node plus the extractor; collapsing them into a params
+# object would only hide the wiring.
+def build_coordinator(  # noqa: PLR0913
     node1: FileReceptionNode,
     node2: FormatValidationNode,
     node3: ContentValidationNode,
     node4: DuplicateControlNode,
+    node5: KnowledgeIndexingNode,
     *,
     text_extractor: TextExtractFn,
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
@@ -99,6 +103,11 @@ def build_coordinator(
         result = await node4.run(ctx, state["reception"].sha256, state.get("text", ""))
         return {"duplicate_control": result}
 
+    async def _node5(state: JobState) -> dict[str, Any]:
+        ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
+        result = await node5.run(ctx, state["reception"].sha256, state.get("text", ""))
+        return {"knowledge_indexing": result}
+
     def _accept(_state: JobState) -> dict[str, Any]:
         return {"final_status": "accepted"}
 
@@ -114,6 +123,7 @@ def build_coordinator(
     graph.add_node("extract", _extract)
     graph.add_node("node3", _node3)
     graph.add_node("node4", _node4)
+    graph.add_node("node5", _node5)
     graph.add_node("accept", _accept)  # type: ignore[arg-type]
     graph.add_node("reject", _reject)
     graph.add_node("review", _review)
@@ -131,7 +141,10 @@ def build_coordinator(
         _route_node3,
         {"node4": "node4", "reject": "reject", "review": "review"},
     )
-    graph.add_conditional_edges("node4", _route_node4, {"accept": "accept", "reject": "reject"})
+    # Indexing runs only on the accept path, and only after node 4 has committed the
+    # document's hash -- a rejected or duplicated document must never reach the KB.
+    graph.add_conditional_edges("node4", _route_node4, {"node5": "node5", "reject": "reject"})
+    graph.add_edge("node5", "accept")
     graph.add_edge("accept", END)
     graph.add_edge("reject", END)
     graph.add_edge("review", END)

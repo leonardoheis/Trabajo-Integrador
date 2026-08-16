@@ -9,7 +9,9 @@ _DEFAULT_MODEL = str(
 )
 
 
-class _Settings(BaseSettings):
+# One read-only accessor per setting is this module's established pattern; the
+# count grows with configuration, not with behaviour.
+class _Settings(BaseSettings):  # noqa: PLR0904
     API_PORT: int = 8000
     HOST: str = "0.0.0.0"  # nosec
 
@@ -29,6 +31,27 @@ class _Settings(BaseSettings):
     SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.8"))
     SLM_TOP_P: float = float(os.getenv("SLM_TOP_P", "0.95"))
     SLM_SEED: int = int(os.getenv("SLM_SEED", "42"))
+
+    # Knowledge base / chat (stage 5)
+    CHROMA_PATH: str = os.getenv("CHROMA_PATH", str(_PROJECT_ROOT / "data" / "chroma"))
+    CHROMA_COLLECTION: str = os.getenv("CHROMA_COLLECTION", "classiflow_docs")
+    # Multilingual on purpose: the corpus is Spanish. Node 4's duplicate control keeps
+    # all-MiniLM-L6-v2 -- swapping it there would invalidate the cosine threshold
+    # calibrated in config/duplicate_control.yaml.
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
+    CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1000"))
+    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
+    RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
+    SCRAPPER_DIR: str = os.getenv("SCRAPPER_DIR", str(_PROJECT_ROOT / "scrapper"))
+
+    CHAT_LLM_PROVIDER: str = os.getenv("CHAT_LLM_PROVIDER", "llama")
+    CHAT_MAX_TOKENS: int = int(os.getenv("CHAT_MAX_TOKENS", "2048"))
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-opus-5")
+    CHAT_MODEL_PATH: str = _DEFAULT_MODEL
+    # Retrieval passages plus the question do not fit in the 2048 the validation nodes
+    # use, so the chat model gets its own context size.
+    CHAT_MODEL_N_CTX: int = int(os.getenv("CHAT_MODEL_N_CTX", "8192"))
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -75,6 +98,58 @@ class _Settings(BaseSettings):
     @property
     def slm_seed(self) -> int:
         return self.SLM_SEED
+
+    @property
+    def chroma_path(self) -> str:
+        return self.CHROMA_PATH
+
+    @property
+    def chroma_collection(self) -> str:
+        return self.CHROMA_COLLECTION
+
+    @property
+    def embedding_model(self) -> str:
+        return self.EMBEDDING_MODEL
+
+    @property
+    def chunk_size(self) -> int:
+        return self.CHUNK_SIZE
+
+    @property
+    def chunk_overlap(self) -> int:
+        return self.CHUNK_OVERLAP
+
+    @property
+    def retrieval_top_k(self) -> int:
+        return self.RETRIEVAL_TOP_K
+
+    @property
+    def scrapper_dir(self) -> str:
+        return self.SCRAPPER_DIR
+
+    @property
+    def chat_llm_provider(self) -> str:
+        return self.CHAT_LLM_PROVIDER
+
+    @property
+    def chat_max_tokens(self) -> int:
+        return self.CHAT_MAX_TOKENS
+
+    @property
+    def anthropic_api_key(self) -> str:
+        return self.ANTHROPIC_API_KEY
+
+    @property
+    def anthropic_model(self) -> str:
+        return self.ANTHROPIC_MODEL
+
+    @property
+    def chat_model_path(self) -> str:
+        return self.CHAT_MODEL_PATH
+
+    @property
+    def chat_model_n_ctx(self) -> int:
+        return self.CHAT_MODEL_N_CTX
 
 
 Settings = _Settings()

@@ -15,6 +15,7 @@ from classiflow.ingesta.domain.results import (
     DuplicateControlResult,
     FileReceptionResult,
     FormatValidationResult,
+    KnowledgeIndexingResult,
 )
 from classiflow.ingesta.domain.state import JobState
 from classiflow.ingesta.llm_provider import unload_slm
@@ -25,9 +26,14 @@ _NODE_NAMES = {
     "format_validation": "node2_format_validation",
     "content_validation": "node3_content_validation",
     "duplicate_control": "node4_duplicate_control",
+    "knowledge_indexing": "node5_knowledge_indexing",
 }
 _StepResult = (
-    FileReceptionResult | FormatValidationResult | ContentValidationResult | DuplicateControlResult
+    FileReceptionResult
+    | FormatValidationResult
+    | ContentValidationResult
+    | DuplicateControlResult
+    | KnowledgeIndexingResult
 )
 
 

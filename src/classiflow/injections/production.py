@@ -8,6 +8,13 @@ from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.extract import TextExtractor
 from classiflow.ingesta.extractors import MarkItDownExtractor, OCRExtractor
+from classiflow.knowledge.chunker import ChunkerService
+from classiflow.knowledge.infrastructure.chroma_store import ChromaVectorStore
+from classiflow.knowledge.infrastructure.claude_chat_llm import ClaudeChatLlm
+from classiflow.knowledge.infrastructure.csv_metadata import CsvDocumentMetadataRepository
+from classiflow.knowledge.infrastructure.embedder import SentenceTransformerEmbedder
+from classiflow.knowledge.infrastructure.llama_chat_llm import LlamaCppChatLlm
+from classiflow.knowledge.rag import RagService
 from classiflow.services.auth.service import AuthService
 from classiflow.settings import Settings
 
@@ -36,6 +43,31 @@ class Container(containers.DeclarativeContainer):
     ocr_extractor = providers.Factory(OCRExtractor, reader=ocr_reader)
     extraction_chain = providers.List(markitdown_extractor, ocr_extractor)
     text_extractor = providers.Factory(TextExtractor, chain=extraction_chain)
+
+    # Knowledge base (stage 5). All Singletons: the embedder holds a loaded
+    # SentenceTransformer, the Chroma client owns an on-disk handle, and the CSV
+    # repository caches parsed rows -- rebuilding any of them per request would be
+    # wasteful. ThreadSafeSingleton for the embedder specifically, since concurrent
+    # pipeline jobs can race on its first construction (same reasoning as ocr_reader).
+    embedder = providers.ThreadSafeSingleton(SentenceTransformerEmbedder)
+    vector_store = providers.Singleton(ChromaVectorStore)
+    document_metadata_repo = providers.Singleton(CsvDocumentMetadataRepository)
+    chunker = providers.Factory(ChunkerService)
+
+    claude_chat_llm = providers.Singleton(ClaudeChatLlm)
+    llama_chat_llm = providers.Singleton(LlamaCppChatLlm)
+    chat_llm = providers.Selector(
+        providers.Callable(lambda: Settings.chat_llm_provider),
+        claude=claude_chat_llm,
+        llama=llama_chat_llm,
+    )
+
+    rag_service = providers.Factory(
+        RagService,
+        embedder=embedder,
+        vector_store=vector_store,
+        chat_llm=chat_llm,
+    )
 
 
 @cache

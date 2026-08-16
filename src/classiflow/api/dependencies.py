@@ -8,10 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.database.base import get_session
 from classiflow.database.repositories.audit import SqlAuditRepository
+from classiflow.database.repositories.document import SqlDocumentRepository
 from classiflow.database.repositories.document_steps import SqlDocumentStepsRepository
 from classiflow.database.repositories.hash import IHashRepository, SqlHashRepository
 from classiflow.database.repositories.human_decision import SqlHumanDecisionRepository
 from classiflow.database.repositories.job import SqlJobRepository
+from classiflow.domain.repositories.document import IDocumentRepository
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
 from classiflow.domain.repositories.human_decision import IHumanDecisionRepository
 from classiflow.domain.repositories.job import IJobRepository
@@ -22,7 +24,15 @@ from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
+from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
 from classiflow.injections.production import Container
+from classiflow.knowledge.chunker import ChunkerService
+from classiflow.knowledge.indexer import IndexerService
+from classiflow.knowledge.rag import RagService
+from classiflow.knowledge.repositories.chat_llm import IChatLlm
+from classiflow.knowledge.repositories.document_metadata import IDocumentMetadataRepository
+from classiflow.knowledge.repositories.embedder import IEmbedder
+from classiflow.knowledge.repositories.vector_store import IVectorStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
@@ -62,14 +72,48 @@ def get_hash_repo(session: DbSession) -> IHashRepository:
     return SqlHashRepository(session)
 
 
+def get_document_repo(session: DbSession) -> IDocumentRepository:
+    return SqlDocumentRepository(session)
+
+
 def get_audit_service(session: DbSession) -> AuditService:
     return AuditService(SqlAuditRepository(session))
 
 
 @inject
-def get_coordinator(
+def get_indexer(
+    chunker: Annotated[ChunkerService, Depends(Provide[Container.chunker])],
+    embedder: Annotated[IEmbedder, Depends(Provide[Container.embedder])],
+    vector_store: Annotated[IVectorStore, Depends(Provide[Container.vector_store])],
+    metadata_repo: Annotated[
+        IDocumentMetadataRepository, Depends(Provide[Container.document_metadata_repo])
+    ],
+) -> IndexerService:
+    return IndexerService(
+        chunker=chunker,
+        embedder=embedder,
+        vector_store=vector_store,
+        metadata_repo=metadata_repo,
+    )
+
+
+@inject
+def get_rag_service(
+    embedder: Annotated[IEmbedder, Depends(Provide[Container.embedder])],
+    vector_store: Annotated[IVectorStore, Depends(Provide[Container.vector_store])],
+    chat_llm: Annotated[IChatLlm, Depends(Provide[Container.chat_llm])],
+) -> RagService:
+    return RagService(embedder=embedder, vector_store=vector_store, chat_llm=chat_llm)
+
+
+# Each kwarg is an independently-injected collaborator; bundling them into a params
+# object would only obscure the wiring.
+@inject
+def get_coordinator(  # noqa: PLR0913, PLR0917
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     hash_repo: Annotated[IHashRepository, Depends(get_hash_repo)],
+    document_repo: Annotated[IDocumentRepository, Depends(get_document_repo)],
+    indexer: Annotated[IndexerService, Depends(get_indexer)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
     text_extractor: Annotated[TextExtractFn, Depends(Provide[Container.text_extractor])],
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
@@ -77,7 +121,13 @@ def get_coordinator(
     node2 = FormatValidationNode(audit=audit_service, broadcaster=broadcaster)
     node3 = ContentValidationNode(audit=audit_service, broadcaster=broadcaster)
     node4 = DuplicateControlNode(audit=audit_service, broadcaster=broadcaster, hash_repo=hash_repo)
-    return build_coordinator(node1, node2, node3, node4, text_extractor=text_extractor)
+    node5 = KnowledgeIndexingNode(
+        audit=audit_service,
+        broadcaster=broadcaster,
+        indexer=indexer,
+        document_repo=document_repo,
+    )
+    return build_coordinator(node1, node2, node3, node4, node5, text_extractor=text_extractor)
 
 
 @inject

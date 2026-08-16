@@ -6,6 +6,7 @@ import numpy.typing as npt
 import pytest
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.database.repositories.document import InMemoryDocumentRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
@@ -14,6 +15,11 @@ from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
+from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
+from classiflow.knowledge.chunker import ChunkerService
+from classiflow.knowledge.domain.document import DocumentMetadata
+from classiflow.knowledge.indexer import IndexerService
+from classiflow.knowledge.infrastructure.chroma_store import InMemoryVectorStore
 from classiflow.services.audit.service import AuditService
 
 if TYPE_CHECKING:
@@ -38,8 +44,25 @@ def _stub_embed(_text: str) -> npt.NDArray[np.float32]:
     return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
 
+class _StubKnowledgeEmbedder:
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0] for _ in texts]
+
+    def embed_query(self, _text: str) -> list[float]:
+        return [1.0, 0.0]
+
+
+class _StubKnowledgeMetadata:
+    def resolve(self, filename: str) -> DocumentMetadata:
+        return DocumentMetadata(filename=filename)
+
+
 def _make_nodes() -> tuple[
-    FileReceptionNode, FormatValidationNode, ContentValidationNode, DuplicateControlNode
+    FileReceptionNode,
+    FormatValidationNode,
+    ContentValidationNode,
+    DuplicateControlNode,
+    KnowledgeIndexingNode,
 ]:
     audit = AuditService(InMemoryAuditRepository())
     broadcaster = EventBroadcaster()
@@ -58,7 +81,18 @@ def _make_nodes() -> tuple[
         broadcaster=broadcaster,
         embedding_store=EmbeddingStore(dim=_DIM, embed_fn=_stub_embed),
     )
-    return n1, n2, n3, n4
+    n5 = KnowledgeIndexingNode(
+        audit=audit,
+        broadcaster=broadcaster,
+        indexer=IndexerService(
+            chunker=ChunkerService(),
+            embedder=_StubKnowledgeEmbedder(),
+            vector_store=InMemoryVectorStore(),
+            metadata_repo=_StubKnowledgeMetadata(),
+        ),
+        document_repo=InMemoryDocumentRepository(),
+    )
+    return n1, n2, n3, n4, n5
 
 
 class TestCoordinatorHappyPath:

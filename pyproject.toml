@@ -45,6 +45,9 @@ dependencies = [
     "torch>=2.7.1",
     # Not used directly -- pulled in transitively by easyocr (torchvision.transforms).
     "torchvision>=0.22.1",
+    # Knowledge base / chat (stage 5)
+    "chromadb>=0.5",
+    "anthropic>=0.40",
 ]
 
 [dependency-groups]
@@ -159,7 +162,7 @@ warn_unused_configs = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers", "markitdown", "pymupdf", "easyocr"]
+module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers", "markitdown", "pymupdf", "easyocr", "chromadb", "chromadb.*"]
 ignore_missing_imports = true
 
 #########################

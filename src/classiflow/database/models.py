@@ -88,6 +88,33 @@ class DocumentStep(Base):
     job: Mapped[Job] = relationship("Job", back_populates="steps")
 
 
+class Document(Base):
+    """Catalogue of documents indexed into the knowledge base.
+
+    Also the source of truth for rebuilding the Chroma collection: everything needed
+    to re-index (job, hash, chunk count and the municipal metadata) lives here.
+    """
+
+    __tablename__ = "documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    doc_type: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    year: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    subject: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sanction_date: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    publication_date: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bulletin_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    download_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    indexed_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
 class HumanDecision(Base):
     __tablename__ = "human_decisions"
 

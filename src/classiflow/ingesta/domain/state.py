@@ -5,6 +5,7 @@ from .results import (
     DuplicateControlResult,
     FileReceptionResult,
     FormatValidationResult,
+    KnowledgeIndexingResult,
 )
 
 
@@ -20,5 +21,6 @@ class JobState(_JobStateRequired, total=False):
     format_validation: FormatValidationResult
     content_validation: ContentValidationResult
     duplicate_control: DuplicateControlResult
+    knowledge_indexing: KnowledgeIndexingResult
     final_status: str
     rejection_reason: str
