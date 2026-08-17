@@ -66,11 +66,6 @@ Sources (inputs)
 /
 ├── .claude/                        Claude Code project settings
 ├── documents/                      Reference documents and architecture diagrams
-├── notebooks/                      Jupyter notebooks
-│   └── colab_downloader.ipynb      Bulk download via Google Colab
-├── scrapper/                       Ingestion scripts and CSV metadata
-│   ├── downloader.py               Async bulk downloader — Phase 1 ingestion
-│   └── *.csv                       One CSV per document category (10 types)
 ├── src/
 │   └── classiflow/                 Main Python package
 ├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
@@ -86,19 +81,6 @@ uv sync --dev          # install all deps (runtime + dev group) into .venv
 
 The `.venv/` directory is gitignored. Always use `uv sync` — do not use `pip install`.
 
-## Running the downloader (ingestion Phase 1)
-
-```bash
-uv run python scrapper/downloader.py --output ./downloads --concurrency 5 --delay 0.5
-```
-
-Arguments:
-- `--output` — destination folder (default: `./downloads`)
-- `--concurrency` — parallel downloads, keep ≤ 5 to avoid rate-limiting (default: 5)
-- `--delay` — seconds between requests (default: 0.5)
-
-A `checkpoint.json` file tracks progress; re-running skips already-downloaded files.
-
 ## Code revision
 
 **Run after every modification:**
@@ -112,8 +94,7 @@ This is the single verification gate. It runs in order:
 | Step | Command | What it checks |
 |------|---------|---------------|
 | `lint` | `ruff check . && ruff format --check .` | Style and lint rules |
-| `typecheck` | `mypy src && nbqa mypy notebooks` | Type correctness |
-| `nbtest` | `pytest --nbmake notebooks` | Notebooks execute without error |
+| `typecheck` | `mypy src` | Type correctness |
 
 Individual tools (when you need to run one step in isolation):
 
@@ -138,7 +119,6 @@ Hooks enforced on every commit (see `.pre-commit-config.yaml`):
 | `ruff-format` | Code formatted per ruff config |
 | `ruff-check` | Lint rules (exits non-zero if fixes were applied) |
 | `mypy` | Type correctness of `src/` |
-| `nbqa-mypy` | Type correctness of notebooks |
 
 ## Execution workflow
 
@@ -198,8 +178,7 @@ Apply this structure to every new LangGraph agent added to the project.
 
 ## Conventions
 
-- **Python**: standard library + aiohttp / aiofiles / tqdm / beautifulsoup4 / weasyprint.
-- Package source lives in `src/classiflow/`. Scripts live in `scrapper/`.
+- Package source lives in `src/classiflow/`.
 - All comments, docstrings, and commit messages are in English.
 - Line length: 100. Quote style: double. (Configured in `[tool.ruff]`.)
 - Type annotations required on all functions in `src/` (mypy strict).
@@ -278,16 +257,6 @@ Current: **`feat/extraction-hardening`** (Stage 2 — Extraction Hardening). All
 tasks (S2-T01–T07) are implemented and committed; the branch itself is not yet merged
 to `main` — that merge needs explicit user authorization like any other PR.
 `feat/ingesta-pipeline` is closed; don't target it for new work.
-
-## Downloader link resolution strategies
-
-| Type | How it works |
-|------|-------------|
-| `direct_pdf` | URL already points to the PDF |
-| `normativa` | Extracts `idNormativa` and builds a direct download URL |
-| `boletin_html` | Scrapes bulletin index page to find internal PDF IDs |
-| `html_to_pdf` | Downloads a Plone HTML page and converts it via weasyprint |
-| `scrape_page` | Generic scraping for compendium pages |
 
 ## Downloaded documents (Phase 1 output)
 

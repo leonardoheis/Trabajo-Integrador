@@ -34,12 +34,6 @@ repos:
         entry: uv run mypy src
         pass_filenames: false
         files: ^src/
-      - id: nbqa-mypy
-        name: nbqa-mypy
-        language: system
-        entry: uv run nbqa mypy notebooks
-        pass_filenames: false
-        files: ^notebooks/
 
   - repo: https://gitlab.com/vojko.pribudic.foss/pre-commit-update
     rev: v0.9.0
@@ -52,4 +46,4 @@ repos:
     hooks:
       - id: codespell
         stages: [pre-commit]
-        exclude: ^(scrapper/|src/classiflow/playground/|documents/|\.claude/)
+        exclude: ^(src/classiflow/playground/|documents/|\.claude/)

@@ -83,7 +83,9 @@ concurrency + observability, not re-extraction) already carrying their extracted
        │
        ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│   TEXT EXTRACTION   (Coordinator step — not a named node)        │
+│   EXTRACTION   (ExtractionStep node — Stage 2, bounded by a      │
+│                 Container-injected asyncio.Semaphore, SSE +      │
+│                 DocumentStep observability like node1-4)         │
 │                                                                  │
 │   Attempt 1 — MarkItDown  (tables, columns, bad encodings)       │
 │       ├─ chars ≥ min_chars (50) ─────────────────────────────► ✓ │
@@ -144,62 +146,45 @@ not re-extract anything.
 /
 ├── .claude/                        Claude Code project settings
 ├── documents/                      Reference documents and architecture diagrams
-├── notebooks/                      Jupyter notebooks
-│   └── colab_downloader.ipynb      Bulk download via Google Colab
-├── scrapper/                       Phase 1 — ingestion scripts and CSV metadata
-│   ├── downloader.py               Async bulk downloader
-│   └── *.csv                       One CSV per document category (10 types)
+├── docs/superpowers/specs/         Architecture design specs (superpowers:brainstorming)
+├── config/                         YAML config, one file per ingesta stage
+│   ├── allowed_formats.yaml · content_validation.yaml
+│   └── duplicate_control.yaml · extraction.yaml
+├── models/                         SLM + embedding model weights (gitignored — see "Models" below)
 ├── src/
 │   └── classiflow/                 Main Python package
-│       ├── settings.py             pydantic-settings config (DATABASE_URL, JWT_*, etc.)
-│       ├── shared/
-│       │   ├── auth/
-│       │   │   └── jwt.py          encode_token() / decode_token() / AuthError (PyJWT)
-│       │   ├── audit/
-│       │   │   └── service.py      AuditService — wraps IAuditRepository + loguru
-│       │   ├── domain/
-│       │   │   ├── job.py          NodeEvent, JobStatus
-│       │   │   └── user.py         User, AuthToken
-│       │   ├── events/
-│       │   │   └── broadcaster.py  EventBroadcaster — asyncio.Queue per job_id
-│       │   └── database/
-│       │       ├── base.py         Async engine + session factory
-│       │       ├── models.py       ORM models (6 tables)
-│       │       └── repositories/   Protocol interfaces + SQL and InMemory impls
-│       ├── ingesta/
-│       │   ├── config.py               AllowedFormatsConfig — loads allowed_formats.yaml
-│       │   ├── config_content.py       ContentValidationConfig — loads content_validation.yaml
-│       │   ├── config_duplicate.py     DuplicateControlConfig — loads duplicate_control.yaml
-│       │   ├── mime.py                 MimeDetector callable — filetype-based MIME detection
-│       │   ├── llm_provider.py         get_llm() / get_llm_langchain() singletons + MockLlm
-│       │   ├── exceptions.py           LlmProviderError · ModelNotFoundError · ModelLoadError
-│       │   ├── nodes/
-│       │   │   ├── base.py                       BaseNode abstract class
-│       │   │   ├── node1_file_reception.py        Size · SHA-256 · MIME detection
-│       │   │   ├── node2_format_validation.py     Rule-based ACCEPT/REJECT/MANUAL_REVIEW + SLM
-│       │   │   ├── node3_content_validation.py    Length · language · SLM legitimacy check
-│       │   │   └── node4_duplicate_control.py     SHA-256 exact match + FAISS cosine similarity
-│       │   └── domain/
-│       │       ├── results.py      FileReceptionResult, FormatValidationResult, etc.
-│       │       └── state.py        JobState TypedDict (LangGraph coordinator state)
-│       ├── playground/
-│       │   └── stage1/
-│       │       ├── node1_file_reception.ipynb     End-to-end demo — Node 1
-│       │       ├── node2_format_validation.ipynb  End-to-end demo — Node 2
-│       │       ├── node3_content_validation.ipynb End-to-end demo — Node 3
-│       │       ├── node4_duplicate_control.ipynb  End-to-end demo — Node 4
-│       │       └── coordinator.ipynb              Full 4-node pipeline via LangGraph
-│       └── api/                    FastAPI application (in progress)
-│           └── error_handlers/
-│               ├── types.py        ExceptionHandler type + EXCEPTION_HANDLERS registry
-│               └── llm.py          LlmErrorBody (Pydantic) + handlers for LLM errors
-├── alembic/                        Database migrations
-│   └── versions/
-│       ├── 0001_initial_schema.py  Initial schema — all 6 tables
-│       └── 0002_rename_agent_to_node.py  Rename agent columns to node
-├── tasks/
-│   ├── plan.md                     Full implementation plan
-│   └── todo.md                     Task tracker
+│       ├── settings.py             pydantic-settings config (DATABASE_URL, JWT_*, model paths, etc.)
+│       ├── domain/                 job.py (NodeEvent, JobStatus) · user.py (User, AuthToken) ·
+│       │                           base.py (BaseEntity) · repositories/ (Protocol interfaces)
+│       ├── database/                base.py (async engine/session) · models.py (ORM, 6 tables) ·
+│       │                           repositories/ (Sql*/InMemory* implementations)
+│       ├── events/
+│       │   └── broadcaster.py      EventBroadcaster — asyncio.Queue per job_id, SSE source
+│       ├── services/
+│       │   ├── auth/               jwt.py · oauth.py · service.py (Google OAuth + whitelist)
+│       │   ├── audit/               service.py (AuditService) + repository.py
+│       │   └── pipeline/            service.py (PipelineService — orchestrates the coordinator)
+│       ├── ingesta/                 Stage 1+2 — ingestion, validation, extraction
+│       │   ├── coordinator.py       build_coordinator() — LangGraph state machine
+│       │   ├── extract.py           TextExtractor — MarkItDown → EasyOCR fallback chain
+│       │   ├── config*.py           AllowedFormatsConfig · ContentValidationConfig ·
+│       │   │                       DuplicateControlConfig · ExtractionConfig (+ config_loader.py)
+│       │   ├── llm_provider.py      get_llm_langchain() (@lru_cache) + MockLlm
+│       │   ├── exceptions.py       LlmProviderError · ModelNotFoundError · ModelLoadError
+│       │   ├── extractors/          MarkItDownExtractor · OCRExtractor · exceptions
+│       │   ├── nodes/               base.py (BaseNode) · node1-4 · extraction_step.py
+│       │   ├── domain/              context.py (JobContext) · results.py · state.py (JobState, NodeUpdate)
+│       │   └── prompts/            format_validation.py · content_validation.py — SLM chain builders
+│       ├── api/                    FastAPI application
+│       │   ├── app.py · runner.py · dependencies.py (DI-wired Depends() aliases)
+│       │   ├── routes/             auth/ · health/ · pipeline/ (ingest, SSE events, review queue)
+│       │   └── error_handlers/     typed exception → JSONResponse handlers
+│       ├── injections/             production.py (Container) · test.py (TestContainer)
+│       └── playground/             stage1/ (7 demo notebooks) · stage2/ (concurrency demo) ·
+│                                   samples/ (sample PDFs the notebooks depend on)
+├── alembic/versions/                0001 initial schema · 0002 rename agent→node ·
+│                                   0003 add Job.extracted_text
+├── tasks/                          plan_stageN.md + todo_stageN.md per stage (1–5)
 ├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
 └── uv.lock                         Locked dependency graph
 ```
@@ -241,8 +226,8 @@ Full task details and dependency graph: [tasks/todo.md](tasks/todo.md) ·
 fixed several hidden-dependency singletons (`get_language_detector`,
 `get_sentence_model`/`embedding_store`, node2/node3 SLM chains) by wiring them through the
 DI `Container`, matching the existing `broadcaster`/`text_extractor` pattern. All 7 tasks
-committed to `feat/extraction-hardening`; the branch itself hasn't been merged to `main`
-yet.
+committed to `feat/extraction-hardening`; open for merge to `main` via
+[PR #20](https://github.com/leonardoheis/Trabajo-Integrador/pull/20).
 
 | Task | Description | Status |
 |------|-------------|--------|
@@ -319,26 +304,10 @@ Both paths are configurable via `Settings` (`NODE2_MODEL_PATH`/`NODE3_MODEL_PATH
 one path by default; `EMBEDDING_MODEL_PATH`) if you want to point at a different
 location or a different quantization of the SLM.
 
-## Running the Downloader (Phase 1)
-
-```bash
-uv run python scrapper/downloader.py --output ./downloads --concurrency 5 --delay 0.5
-```
-
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--output` | `./downloads` | Destination folder for PDFs |
-| `--concurrency` | `5` | Parallel downloads — keep ≤ 5 to avoid rate-limiting |
-| `--delay` | `0.5` | Seconds between requests |
-
-A `checkpoint.json` file tracks progress; re-running skips already-downloaded files.
-
-Alternatively, open `notebooks/colab_downloader.ipynb` in Google Colab to run the downloader using cloud resources without any local setup.
-
 ## Development
 
 ```bash
-uv run poe check   # lint + type check + notebook tests + coverage (run after every change)
+uv run poe check   # lint + type check + coverage (run after every change)
 uv run poe fmt     # auto-format
 uv run poe test    # unit tests only
 ```

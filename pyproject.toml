@@ -4,13 +4,6 @@ version = "0.1.0"
 description = "classiflow allows to classify documents using agent-based approaches."
 requires-python = ">=3.10"
 dependencies = [
-    # Existing scraper deps
-    "aiohttp>=3.9",
-    "aiofiles>=23.0",
-    "tqdm>=4.66",
-    "beautifulsoup4>=4.12",
-    "lxml>=5.0",
-    "weasyprint>=61.0",
     # API
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -52,8 +45,6 @@ dev = [
     "ruff",
     "pytest",
     "pytest-cov",
-    "nbmake",
-    "nbqa",
     "mypy",
     "pre-commit",
     "httpx>=0.28.1",
@@ -129,7 +120,6 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.ruff.lint.per-file-ignores]
-"notebooks/*.ipynb" = ["F401"]
 "src/classiflow/playground/*.ipynb" = ["T201", "F401"]  # playground: print() is intentional output
 "src/classiflow/playground/**/*.ipynb" = ["T201", "F401"]
 "tests/**/*.py" = ["PLR6301"]  # pytest class methods don't need to use self
@@ -167,7 +157,7 @@ ignore_missing_imports = true
 #########################
 
 [tool.codespell]
-skip = "scrapper,src/classiflow/playground"
+skip = "src/classiflow/playground"
 
 #########################
 # Bandit
@@ -357,17 +347,13 @@ testpaths = ["tests"]
 pythonpath = ["."]
 anyio_mode = "auto"
 
-[tool.coverage.run]
-omit = ["notebooks/conftest.py", "scrapper/*"]
-
 [tool.poe.tasks]
 lint = { shell = "ruff check . && ruff format --check ." }
 fmt = "ruff format ."
-typecheck = { shell = "mypy src && nbqa mypy notebooks" }
-nbtest = { cmd = "pytest --nbmake notebooks --ignore=notebooks/colab_downloader.ipynb", env = { USE_MOCK_LLM = "true" } }
+typecheck = "mypy src"
 test = "pytest tests"
 coverage = { shell = "pytest tests -v --override-ini=addopts= --log-level=CRITICAL --cov=. --cov-branch --cov-report=xml --cov-report=html --cov-report=term-missing:skip-covered --junitxml=tests/reports/pytest-report.xml" }
-check = ["lint", "typecheck", "nbtest", "coverage", "precommit-reloaded"]
+check = ["lint", "typecheck", "coverage", "precommit-reloaded"]
 serve = "uvicorn classiflow.api.app:app --reload --port 8000"
 precommit = "uv run pre-commit run --all-files --verbose"
 precommit-reloaded = "uv run --all-groups pre-commit run --all-files"
