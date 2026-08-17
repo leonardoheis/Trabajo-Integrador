@@ -3,6 +3,7 @@ from typing import TypedDict
 from .results import (
     ContentValidationResult,
     DuplicateControlResult,
+    ExtractionResult,
     FileReceptionResult,
     FormatValidationResult,
 )
@@ -18,6 +19,7 @@ class JobState(_JobStateRequired, total=False):
     text: str
     reception: FileReceptionResult
     format_validation: FormatValidationResult
+    extraction: ExtractionResult
     content_validation: ContentValidationResult
     duplicate_control: DuplicateControlResult
     final_status: str

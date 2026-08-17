@@ -9,6 +9,18 @@ class FormatDecision(str, Enum):
     MANUAL_REVIEW = "manual_review"
 
 
+class ExtractionResult(BaseEntity):
+    # passed/rejection_reason default to the "always succeeds" values -- extraction
+    # never rejects a document (that judgment stays in node3's validate()), these
+    # fields exist only so ExtractionStep fits the same _StepResult shape node1-4 use
+    # for PipelineService._persist_steps.
+    passed: bool = True
+    text: str = ""
+    extractor_used: str = ""
+    char_count: int = 0
+    rejection_reason: str = ""
+
+
 class FileReceptionResult(BaseEntity):
     passed: bool
     sha256: str = ""

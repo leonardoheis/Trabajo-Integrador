@@ -13,6 +13,7 @@ from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.domain.results import (
     ContentValidationResult,
     DuplicateControlResult,
+    ExtractionResult,
     FileReceptionResult,
     FormatValidationResult,
 )
@@ -23,11 +24,16 @@ _PIPELINE_NODE = "pipeline"
 _NODE_NAMES = {
     "reception": "node1_file_reception",
     "format_validation": "node2_format_validation",
+    "extraction": "extraction",
     "content_validation": "node3_content_validation",
     "duplicate_control": "node4_duplicate_control",
 }
 _StepResult = (
-    FileReceptionResult | FormatValidationResult | ContentValidationResult | DuplicateControlResult
+    FileReceptionResult
+    | FormatValidationResult
+    | ExtractionResult
+    | ContentValidationResult
+    | DuplicateControlResult
 )
 
 

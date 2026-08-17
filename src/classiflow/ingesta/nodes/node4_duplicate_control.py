@@ -16,6 +16,7 @@ from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import DuplicateControlResult
 from classiflow.ingesta.nodes.base import BaseNode
 from classiflow.services.audit.service import AuditService
+from classiflow.settings import Settings
 
 _EMBED_DIM = 384
 _MODEL_NAME = "all-MiniLM-L6-v2"
@@ -36,7 +37,9 @@ class _VectorIndex(Protocol):
 
 @lru_cache(maxsize=1)
 def _get_sentence_model() -> SentenceTransformer:
-    return SentenceTransformer(_MODEL_NAME)  # type: ignore[no-any-return]
+    return SentenceTransformer(  # type: ignore[no-any-return]
+        _MODEL_NAME, cache_folder=Settings.embedding_model_path
+    )
 
 
 def _default_embed(text: str) -> npt.NDArray[np.float32]:

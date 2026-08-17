@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from typing import Any
 
 from langgraph.graph import END, StateGraph
@@ -13,13 +12,11 @@ from classiflow.ingesta.domain.results import (
     FormatValidationResult,
 )
 from classiflow.ingesta.domain.state import JobState
+from classiflow.ingesta.nodes.extraction_step import ExtractionStep
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
-
-TextExtractFn = Callable[[bytes, str], str]
-
 
 _AnyResult = (
     FileReceptionResult | FormatValidationResult | ContentValidationResult | DuplicateControlResult
@@ -73,7 +70,7 @@ def build_coordinator(
     node3: ContentValidationNode,
     node4: DuplicateControlNode,
     *,
-    text_extractor: TextExtractFn,
+    extraction_step: ExtractionStep,
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
     async def _node1(state: JobState) -> dict[str, Any]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
@@ -85,9 +82,11 @@ def build_coordinator(
         result = await node2.run(ctx, state["reception"])
         return {"format_validation": result}
 
-    def _extract(state: JobState) -> dict[str, Any]:
+    async def _extract(state: JobState) -> dict[str, Any]:
+        ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
         file_bytes = state.get("file_bytes") or b""
-        return {"text": text_extractor(file_bytes, state["filename"])}
+        result = await extraction_step.run(ctx, file_bytes, state["filename"])
+        return {"text": result.text, "extraction": result}
 
     async def _node3(state: JobState) -> dict[str, Any]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])

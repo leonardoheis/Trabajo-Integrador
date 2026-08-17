@@ -1,15 +1,20 @@
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
 import pytest
+from langgraph.graph.state import CompiledStateGraph
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
+from classiflow.ingesta.domain.results import ExtractionResult
+from classiflow.ingesta.extract import TextExtractFn
 from classiflow.ingesta.llm_provider import MockLlm
+from classiflow.ingesta.nodes.extraction_step import ExtractionStep
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
@@ -31,6 +36,11 @@ _SPANISH_TEXT = (
 _SLM_LEGITIMATE = '{"is_legitimate": true, "confidence": 0.92, "reasoning": "official doc"}'
 _SLM_NOT_LEGITIMATE = '{"is_legitimate": false, "confidence": 0.88, "reasoning": "spam"}'
 
+_SPANISH_EXTRACTION = ExtractionResult(
+    text=_SPANISH_TEXT, extractor_used="test", char_count=len(_SPANISH_TEXT)
+)
+_EMPTY_EXTRACTION = ExtractionResult(text="", extractor_used="", char_count=0)
+
 _DIM = 4
 
 
@@ -38,9 +48,16 @@ def _stub_embed(_text: str) -> npt.NDArray[np.float32]:
     return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
 
-def _make_nodes() -> tuple[
-    FileReceptionNode, FormatValidationNode, ContentValidationNode, DuplicateControlNode
-]:
+_CoordinatorNodes = tuple[
+    FileReceptionNode,
+    FormatValidationNode,
+    ExtractionStep,
+    ContentValidationNode,
+    DuplicateControlNode,
+]
+
+
+def _make_nodes(text_extractor: TextExtractFn) -> _CoordinatorNodes:
     audit = AuditService(InMemoryAuditRepository())
     broadcaster = EventBroadcaster()
     n1 = FileReceptionNode(
@@ -49,6 +66,12 @@ def _make_nodes() -> tuple[
         mime_detector=lambda _b: "application/pdf",
     )
     n2 = FormatValidationNode(audit=audit, broadcaster=broadcaster)
+    extraction_step = ExtractionStep(
+        audit=audit,
+        broadcaster=broadcaster,
+        text_extractor=text_extractor,
+        semaphore=asyncio.Semaphore(10),
+    )
     n3 = ContentValidationNode(
         audit=audit, broadcaster=broadcaster, language_detector=_MockDetector("es")
     )
@@ -58,7 +81,12 @@ def _make_nodes() -> tuple[
         broadcaster=broadcaster,
         embedding_store=EmbeddingStore(dim=_DIM, embed_fn=_stub_embed),
     )
-    return n1, n2, n3, n4
+    return n1, n2, extraction_step, n3, n4
+
+
+def _build_graph(text_extractor: TextExtractFn) -> CompiledStateGraph:
+    n1, n2, extraction_step, n3, n4 = _make_nodes(text_extractor)
+    return build_coordinator(n1, n2, n3, n4, extraction_step=extraction_step)
 
 
 class TestCoordinatorHappyPath:
@@ -68,7 +96,7 @@ class TestCoordinatorHappyPath:
             lambda _path: MockLlm(response=_SLM_LEGITIMATE),
         )
 
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: _SPANISH_TEXT)
+        graph = _build_graph(lambda *_: _SPANISH_EXTRACTION)
         initial: JobState = {
             "job_id": "coord-001",
             "filename": "doc.pdf",
@@ -90,8 +118,7 @@ class TestCoordinatorHappyPath:
             lambda _path: MockLlm(response=_SLM_LEGITIMATE),
         )
 
-        nodes = _make_nodes()
-        graph = build_coordinator(*nodes, text_extractor=lambda *_: _SPANISH_TEXT)
+        graph = _build_graph(lambda *_: _SPANISH_EXTRACTION)
 
         initial: JobState = {
             "job_id": "coord-002a",
@@ -113,7 +140,7 @@ class TestCoordinatorHappyPath:
 
 class TestCoordinatorRejectionPaths:
     async def test_empty_file_rejected_at_node1(self) -> None:
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: "")
+        graph = _build_graph(lambda *_: _EMPTY_EXTRACTION)
         initial: JobState = {
             "job_id": "coord-003",
             "filename": "empty.pdf",
@@ -126,7 +153,7 @@ class TestCoordinatorRejectionPaths:
         assert result.get("format_validation") is None
 
     async def test_missing_file_rejected_at_node1(self) -> None:
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: "")
+        graph = _build_graph(lambda *_: _EMPTY_EXTRACTION)
         initial: JobState = {
             "job_id": "coord-004",
             "filename": "none.pdf",
@@ -141,7 +168,7 @@ class TestCoordinatorRejectionPaths:
         # Extraction (MarkItDown + OCR) already ran inside text_extractor before node3
         # sees the text — an empty result here can't be told apart from an extraction
         # infra failure, so it goes to review for a human, not an automatic reject.
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: "")
+        graph = _build_graph(lambda *_: _EMPTY_EXTRACTION)
         initial: JobState = {
             "job_id": "coord-005",
             "filename": "scan.pdf",
@@ -159,7 +186,7 @@ class TestCoordinatorRejectionPaths:
             "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
             lambda _path: MockLlm(response=_SLM_NOT_LEGITIMATE),
         )
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: _SPANISH_TEXT)
+        graph = _build_graph(lambda *_: _SPANISH_EXTRACTION)
         initial: JobState = {
             "job_id": "coord-006",
             "filename": "spam.pdf",

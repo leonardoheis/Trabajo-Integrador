@@ -273,6 +273,32 @@ uv sync --dev
 
 Always use `uv sync` — do not use `pip install`.
 
+## Models
+
+The pipeline uses two models, neither of which is committed to git (see `.gitignore` —
+everything under `models/` is ignored except a `.gitkeep` placeholder). A fresh clone
+needs to fetch both before `node2`/`node3`/`node4` will work.
+
+| Model | Purpose | Source | Target path |
+|---|---|---|---|
+| Phi-4-mini-instruct (Q4_K_M GGUF) | SLM used by node2 (format gray-zone) and node3 (content legitimacy) | [unsloth/Phi-4-mini-instruct-GGUF](https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF) | `models/Phi-4-mini-instruct-Q4_K_M.gguf` |
+| all-MiniLM-L6-v2 | Embedding model used by node4 for semantic duplicate detection | [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | `models/embeddings/` (auto-downloaded on first use) |
+
+**SLM — manual download required:**
+
+```bash
+uv run huggingface-cli download unsloth/Phi-4-mini-instruct-GGUF \
+    Phi-4-mini-instruct-Q4_K_M.gguf --local-dir models
+```
+
+**Embedding model — no action needed.** `node4_duplicate_control.py`'s
+`SentenceTransformer("all-MiniLM-L6-v2", cache_folder=Settings.embedding_model_path)`
+downloads it automatically into `models/embeddings/` the first time node4 runs.
+
+Both paths are configurable via `Settings` (`NODE2_MODEL_PATH`/`NODE3_MODEL_PATH` share
+one path by default; `EMBEDDING_MODEL_PATH`) if you want to point at a different
+location or a different quantization of the SLM.
+
 ## Running the Downloader (Phase 1)
 
 ```bash

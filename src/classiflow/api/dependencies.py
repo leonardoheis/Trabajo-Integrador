@@ -1,3 +1,4 @@
+import asyncio
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
@@ -17,7 +18,9 @@ from classiflow.domain.repositories.human_decision import IHumanDecisionReposito
 from classiflow.domain.repositories.job import IJobRepository
 from classiflow.domain.user import User
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.coordinator import TextExtractFn, build_coordinator
+from classiflow.ingesta.coordinator import build_coordinator
+from classiflow.ingesta.extract import TextExtractFn
+from classiflow.ingesta.nodes.extraction_step import ExtractionStep
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
@@ -72,12 +75,21 @@ def get_coordinator(
     hash_repo: Annotated[IHashRepository, Depends(get_hash_repo)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
     text_extractor: Annotated[TextExtractFn, Depends(Provide[Container.text_extractor])],
+    extraction_semaphore: Annotated[
+        asyncio.Semaphore, Depends(Provide[Container.extraction_semaphore])
+    ],
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
     node1 = FileReceptionNode(audit=audit_service, broadcaster=broadcaster)
     node2 = FormatValidationNode(audit=audit_service, broadcaster=broadcaster)
     node3 = ContentValidationNode(audit=audit_service, broadcaster=broadcaster)
     node4 = DuplicateControlNode(audit=audit_service, broadcaster=broadcaster, hash_repo=hash_repo)
-    return build_coordinator(node1, node2, node3, node4, text_extractor=text_extractor)
+    extraction_step = ExtractionStep(
+        audit=audit_service,
+        broadcaster=broadcaster,
+        text_extractor=text_extractor,
+        semaphore=extraction_semaphore,
+    )
+    return build_coordinator(node1, node2, node3, node4, extraction_step=extraction_step)
 
 
 @inject
