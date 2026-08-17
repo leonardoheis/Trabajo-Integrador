@@ -1,0 +1,13 @@
+# Text extraction thresholds and concurrency.
+# ingesta/extract.py's TextExtractor (MarkItDown -> EasyOCR fallback chain) uses this config.
+
+# MarkItDown yielding fewer characters than this triggers the OCR fallback attempt.
+min_text_for_ocr: 50
+
+# Text shorter than this after all extractors have run is treated as unusable
+# (empty result) rather than a partial success.
+min_usable_text: 20
+
+# How many extractions (MarkItDown/OCR calls) may run concurrently across the app.
+# ponytail: move to a config page when UI admin exists.
+max_concurrent_extractions: 2

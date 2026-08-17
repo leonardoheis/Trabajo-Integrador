@@ -5,22 +5,22 @@ from typing import Protocol, cast, runtime_checkable
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config import AllowedFormatsConfig, get_allowed_formats
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import (
+from classiflow.ingesta.domain import (
     FileReceptionResult,
     FormatDecision,
     FormatValidationResult,
+    JobContext,
 )
 from classiflow.ingesta.llm_provider import get_llm_langchain
 from classiflow.ingesta.nodes.base import BaseNode
-from classiflow.ingesta.prompts.format_validation import FormatDecisionOutput, build_format_chain
+from classiflow.ingesta.prompts import FormatChainInput, FormatDecisionOutput, build_format_chain
 from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
 
 
 @runtime_checkable
 class _FormatChain(Protocol):
-    def invoke(self, inp: dict[str, str], **kwargs: object) -> FormatDecisionOutput: ...
+    def invoke(self, inp: FormatChainInput, **kwargs: object) -> FormatDecisionOutput: ...
 
 
 class FormatValidationNode(BaseNode):
@@ -62,7 +62,7 @@ class FormatValidationNode(BaseNode):
     def validate(self, filename: str, reception: FileReceptionResult) -> FormatValidationResult:
         decision = self.rule_based_check(filename, reception.detected_mime)
 
-        if decision is None:
+        if decision == FormatDecision.SLM_ESCALATE:
             return self._slm_check(filename, reception)
 
         if decision == FormatDecision.ACCEPT:
@@ -83,7 +83,7 @@ class FormatValidationNode(BaseNode):
             ),
         )
 
-    def rule_based_check(self, filename: str, detected_mime: str) -> FormatDecision | None:
+    def rule_based_check(self, filename: str, detected_mime: str) -> FormatDecision:
         extension = Path(filename).suffix.lower()
 
         if (
@@ -99,7 +99,7 @@ class FormatValidationNode(BaseNode):
 
         expected_extensions = self.config.mime_to_extensions.get(detected_mime, [])
         if expected_extensions and extension not in expected_extensions:
-            return None  # gray zone: MIME/extension mismatch → SLM escalation
+            return FormatDecision.SLM_ESCALATE  # gray zone: MIME/extension mismatch
 
         return FormatDecision.ACCEPT
 
@@ -112,11 +112,13 @@ class FormatValidationNode(BaseNode):
                 build_format_chain(get_llm_langchain(Settings.node2_model_path)),
             )
         expected_extensions = self.config.mime_to_extensions.get(reception.detected_mime, [])
-        output: FormatDecisionOutput = chain.invoke({
-            "filename": filename,
-            "detected_mime": reception.detected_mime,
-            "expected_extensions": ", ".join(expected_extensions) or "unknown",
-        })
+        output: FormatDecisionOutput = chain.invoke(
+            FormatChainInput(
+                filename=filename,
+                detected_mime=reception.detected_mime,
+                expected_extensions=", ".join(expected_extensions) or "unknown",
+            )
+        )
         passed = output.decision == FormatDecision.ACCEPT
         return FormatValidationResult(
             passed=passed,

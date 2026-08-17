@@ -69,7 +69,7 @@ class TestEventsEndpoint:
 
         response = client.get(f"/pipeline/{job_id}/events", headers=auth_headers)
         assert response.status_code == HTTPStatus.OK
-        min_blocks = 5  # 4 node events (started+passed pairs) + final pipeline_done
+        min_blocks = 5  # 5 node events (started+passed pairs) + final pipeline_done
         blocks = [b for b in response.text.split("event: node_update") if b.strip()]
         assert len(blocks) >= min_blocks
         assert '"status":"done"' in blocks[-1]
@@ -96,6 +96,7 @@ class TestReviewQueueEndpoint:
         assert node_names == [
             "node1_file_reception",
             "node2_format_validation",
+            "extraction",
             "node3_content_validation",
         ]
 

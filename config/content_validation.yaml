@@ -1,7 +1,6 @@
 # Content validation thresholds and rules
 # Agent 3 (Content Validation) uses this config.
 min_chars: 30
-max_chars: 500000
 
 # PDFs with fewer extracted characters than this are treated as image-only and routed to OCR
 ocr_char_threshold: 50

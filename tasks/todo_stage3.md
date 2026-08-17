@@ -1,6 +1,7 @@
 # Classiflow — Stage 3 Task List
 
-> Prerequisite: Stage 2 complete (ExtractionRecord exists in DB).
+> Prerequisite: Stage 2 complete (the `"extraction"` `DocumentStep` carries `text`,
+> `extractor_used`, `char_count` in its `detail` for every job — see `plan_stage2.md` S2-T04).
 > Full details in [plan_stage3.md](plan_stage3.md).
 > Status: `[ ]` pending · `[~]` in progress · `[x]` done · `[-]` skipped · `[!]` blocked
 

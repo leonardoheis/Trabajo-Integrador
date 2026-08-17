@@ -75,8 +75,7 @@ Sources (inputs)
 │   └── classiflow/                 Main Python package
 ├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
 ├── uv.lock                         Locked dependency graph
-├── .pre-commit-config.yaml         Pre-commit hooks (ruff, mypy, gitleaks, uv-lock)
-└── DEPLOY.md                       Deployment options and scale estimates
+└── .pre-commit-config.yaml         Pre-commit hooks (ruff, mypy, gitleaks, uv-lock)
 ```
 
 ## Environment setup
@@ -275,7 +274,9 @@ Saying "execute task X" or "implement and make a PR" is **not** authorization �
 **Base branch:** Each stage gets its own sprint integration branch; task PRs target that
 branch, never `main` directly. The integration branch itself gets PR'd into `main` once
 its stage is closed out (e.g. `feat/ingesta-pipeline` → `main`, Stage 1, PR #17).
-Current: **`feat/extraction-hardening`** (Stage 2 — Extraction Hardening).
+Current: **`feat/extraction-hardening`** (Stage 2 — Extraction Hardening). All Stage 2
+tasks (S2-T01–T07) are implemented and committed; the branch itself is not yet merged
+to `main` — that merge needs explicit user authorization like any other PR.
 `feat/ingesta-pipeline` is closed; don't target it for new work.
 
 ## Downloader link resolution strategies

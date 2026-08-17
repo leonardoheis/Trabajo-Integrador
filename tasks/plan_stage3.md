@@ -2,8 +2,15 @@
 
 ## Responsibility
 
-Takes an `ExtractionRecord` (Stage 2 output) and produces an `EnrichedRecord` ready for
-classification. Three sequential steps: **clean → extract entities → enrich metadata**.
+Takes the extracted text from the `"extraction"` `DocumentStep` (Stage 2 output — see
+`plan_stage2.md` S2-T04) and produces an `EnrichedRecord` ready for classification.
+Three sequential steps: **clean → extract entities → enrich metadata**.
+
+Note: an earlier draft of this stage had Stage 2 write a dedicated `ExtractionRecord`
+table and referenced it here as this stage's input. Stage 2 was redefined to reuse the
+existing `DocumentStep` table instead (see `plan_stage2.md`'s Architecture Decisions) —
+`ExtractionRecord` was never built. Read `extracted text` below as "the `text` field in
+the `"extraction"` step's `DocumentStep.detail` for this job," not a separate table.
 
 ## Steps
 
@@ -39,15 +46,14 @@ Attach context from outside the document body:
 | `filename` | original filename |
 | `language` | from Stage 1 Node 3 (already detected, not re-detected) |
 | `sha256` | from Stage 1 Node 4 (already computed) |
-| `stage2_extractor_used` | from ExtractionRecord |
+| `stage2_extractor_used` | from the `"extraction"` `DocumentStep.detail` |
 
 ## DB Model — EnrichedRecord
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | UUID | PK |
-| `file_id` | UUID | FK → ingested file |
-| `extraction_id` | UUID | FK → ExtractionRecord |
+| `job_id` | str | FK → `Job` (same key `DocumentStep` already uses) |
 | `cleaned_text` | str | |
 | `entities` | JSON | EntityExtraction fields above |
 | `metadata` | JSON | enrichment fields above |

@@ -297,16 +297,6 @@ disable = [
     "missing-class-docstring",
     "missing-function-docstring",
     "missing-module-docstring",
-    "subprocess-run-check",
-    "redefined-outer-name",                   # Incompatible with PyTest fixtures
-    "consider-using-assignment-expr",         # Too new syntax
-    "unused-import",                          # Check and fix by Ruff
-    "unused-variable",                        # Too many false positives
-    "invalid-name",                           # Too many false positives
-    "not-an-iterable",                        # Too many false positives
-    "assignment-from-no-return",              # Too many false positives
-    "magic-value-comparison",
-    "consider-using-namedtuple-or-dataclass",
 ]
 
 enable = [
@@ -317,6 +307,16 @@ enable = [
     "use-symbolic-message-instead",
     "deprecated-pragma",
     "file-ignored",
+    "subprocess-run-check",
+    "redefined-outer-name",
+    "consider-using-assignment-expr",         # Too new syntax
+    "unused-import",                          # Check and fix by Ruff
+    "unused-variable",                        # Too many false positives
+    "invalid-name",                           # Too many false positives
+    "not-an-iterable",                        # Too many false positives
+    "assignment-from-no-return",              # Too many false positives
+    "magic-value-comparison",
+    "consider-using-namedtuple-or-dataclass",
 ]
 
 #########################
@@ -367,7 +367,8 @@ typecheck = { shell = "mypy src && nbqa mypy notebooks" }
 nbtest = { cmd = "pytest --nbmake notebooks --ignore=notebooks/colab_downloader.ipynb", env = { USE_MOCK_LLM = "true" } }
 test = "pytest tests"
 coverage = { shell = "pytest tests -v --override-ini=addopts= --log-level=CRITICAL --cov=. --cov-branch --cov-report=xml --cov-report=html --cov-report=term-missing:skip-covered --junitxml=tests/reports/pytest-report.xml" }
-check = ["lint", "typecheck", "nbtest", "coverage"]
+check = ["lint", "typecheck", "nbtest", "coverage", "precommit-reloaded"]
 serve = "uvicorn classiflow.api.app:app --reload --port 8000"
 precommit = "uv run pre-commit run --all-files --verbose"
+precommit-reloaded = "uv run --all-groups pre-commit run --all-files"
 precommit-update = "uv run pre-commit run --hook-stage manual pre-commit-update"

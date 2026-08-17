@@ -1,9 +1,12 @@
-from typing import Annotated
+import asyncio
+from typing import TYPE_CHECKING, Annotated, cast
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from langchain_core.runnables import Runnable
 from langgraph.graph.state import CompiledStateGraph
+from lingua import LanguageDetector
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.database.base import get_session
@@ -17,15 +20,30 @@ from classiflow.domain.repositories.human_decision import IHumanDecisionReposito
 from classiflow.domain.repositories.job import IJobRepository
 from classiflow.domain.user import User
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.coordinator import TextExtractFn, build_coordinator
-from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
-from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
-from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
-from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
+from classiflow.ingesta.coordinator import build_coordinator
+from classiflow.ingesta.extract import TextExtractFn
+from classiflow.ingesta.nodes import (
+    ContentValidationNode,
+    DuplicateControlNode,
+    ExtractionStep,
+    FileReceptionNode,
+    FormatValidationNode,
+)
+from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
+from classiflow.ingesta.prompts import (
+    ContentChainInput,
+    FormatChainInput,
+    FormatDecisionOutput,
+    LegitimacyDecisionOutput,
+)
 from classiflow.injections.production import Container
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
+
+if TYPE_CHECKING:
+    from classiflow.ingesta.nodes.node2_format_validation import _FormatChain
+    from classiflow.ingesta.nodes.node3_content_validation import _ContentChain
 
 _bearer = HTTPBearer()
 
@@ -66,18 +84,88 @@ def get_audit_service(session: DbSession) -> AuditService:
     return AuditService(SqlAuditRepository(session))
 
 
-@inject
-def get_coordinator(
+def get_node1(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+) -> FileReceptionNode:
+    return FileReceptionNode(audit=audit_service, broadcaster=broadcaster)
+
+
+@inject
+def get_node2(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+    format_chain: Annotated[
+        Runnable[FormatChainInput, FormatDecisionOutput],
+        Depends(Provide[Container.node2_format_chain]),
+    ],
+) -> FormatValidationNode:
+    return FormatValidationNode(
+        audit=audit_service,
+        broadcaster=broadcaster,
+        format_chain=cast("_FormatChain", format_chain),
+    )
+
+
+@inject
+def get_node3(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+    language_detector: Annotated[LanguageDetector, Depends(Provide[Container.language_detector])],
+    content_chain: Annotated[
+        Runnable[ContentChainInput, LegitimacyDecisionOutput],
+        Depends(Provide[Container.node3_content_chain]),
+    ],
+) -> ContentValidationNode:
+    return ContentValidationNode(
+        audit=audit_service,
+        broadcaster=broadcaster,
+        language_detector=language_detector,
+        content_chain=cast("_ContentChain", content_chain),
+    )
+
+
+@inject
+def get_node4(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
     hash_repo: Annotated[IHashRepository, Depends(get_hash_repo)],
+    embedding_store: Annotated[EmbeddingStore, Depends(Provide[Container.embedding_store])],
+) -> DuplicateControlNode:
+    return DuplicateControlNode(
+        audit=audit_service,
+        broadcaster=broadcaster,
+        hash_repo=hash_repo,
+        embedding_store=embedding_store,
+    )
+
+
+@inject
+def get_extraction_step(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
     text_extractor: Annotated[TextExtractFn, Depends(Provide[Container.text_extractor])],
+    extraction_semaphore: Annotated[
+        asyncio.Semaphore, Depends(Provide[Container.extraction_semaphore])
+    ],
+) -> ExtractionStep:
+    return ExtractionStep(
+        audit=audit_service,
+        broadcaster=broadcaster,
+        text_extractor=text_extractor,
+        semaphore=extraction_semaphore,
+    )
+
+
+@inject
+def get_coordinator(
+    node1: Annotated[FileReceptionNode, Depends(get_node1)],
+    node2: Annotated[FormatValidationNode, Depends(get_node2)],
+    node3: Annotated[ContentValidationNode, Depends(get_node3)],
+    node4: Annotated[DuplicateControlNode, Depends(get_node4)],
+    extraction_step: Annotated[ExtractionStep, Depends(get_extraction_step)],
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
-    node1 = FileReceptionNode(audit=audit_service, broadcaster=broadcaster)
-    node2 = FormatValidationNode(audit=audit_service, broadcaster=broadcaster)
-    node3 = ContentValidationNode(audit=audit_service, broadcaster=broadcaster)
-    node4 = DuplicateControlNode(audit=audit_service, broadcaster=broadcaster, hash_repo=hash_repo)
-    return build_coordinator(node1, node2, node3, node4, text_extractor=text_extractor)
+    return build_coordinator(node1, node2, node3, node4, extraction_step=extraction_step)
 
 
 @inject

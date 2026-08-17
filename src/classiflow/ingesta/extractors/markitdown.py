@@ -9,6 +9,11 @@ from classiflow.ingesta.extractors.exceptions import MarkItDownError
 
 
 class MarkItDownExtractor(ExtractorBase):
+    @property
+    @override
+    def name(self) -> str:
+        return "markitdown"
+
     @override
     def extract(self, file_bytes: bytes, filename: str) -> str:
         with tempfile.NamedTemporaryFile(

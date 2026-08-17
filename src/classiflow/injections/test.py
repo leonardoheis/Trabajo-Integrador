@@ -1,3 +1,5 @@
+import asyncio
+
 import numpy as np
 import numpy.typing as npt
 from dependency_injector import containers, providers
@@ -10,10 +12,15 @@ from classiflow.database.repositories.job import InMemoryJobRepository
 from classiflow.database.repositories.user import InMemoryUserRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
-from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
-from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
-from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
-from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
+from classiflow.ingesta.domain import ExtractionResult
+from classiflow.ingesta.nodes import (
+    ContentValidationNode,
+    DuplicateControlNode,
+    ExtractionStep,
+    FileReceptionNode,
+    FormatValidationNode,
+)
+from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
@@ -50,7 +57,20 @@ class TestContainer(containers.DeclarativeContainer):
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
 
-    text_extractor = providers.Object(lambda _b, _f: _TEST_TEXT)
+    text_extractor = providers.Object(
+        lambda _b, _f: ExtractionResult(
+            text=_TEST_TEXT, extractor_used="test", char_count=len(_TEST_TEXT)
+        )
+    )
+    # Generous cap -- shouldn't gate tests, just needs to satisfy the now-required param.
+    extraction_semaphore = providers.Singleton(asyncio.Semaphore, 100)
+    extraction_step = providers.Factory(
+        ExtractionStep,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        text_extractor=text_extractor,
+        semaphore=extraction_semaphore,
+    )
     node1 = providers.Factory(
         FileReceptionNode,
         audit=audit_service,
@@ -72,7 +92,7 @@ class TestContainer(containers.DeclarativeContainer):
         node2=node2,
         node3=node3,
         node4=node4,
-        text_extractor=text_extractor,
+        extraction_step=extraction_step,
     )
     pipeline_service = providers.Factory(
         PipelineService,

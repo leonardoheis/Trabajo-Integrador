@@ -21,6 +21,11 @@ class OCRExtractor(ExtractorBase):
     def __init__(self, reader: _OcrReader) -> None:
         self._reader = reader
 
+    @property
+    @override
+    def name(self) -> str:
+        return "ocr"
+
     @override
     def extract(self, file_bytes: bytes, filename: str) -> str:
         try:

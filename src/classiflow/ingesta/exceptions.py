@@ -1,19 +1,26 @@
+from dataclasses import dataclass
+
+
 class LlmProviderError(Exception): ...
 
 
+@dataclass
 class ModelNotFoundError(LlmProviderError):
-    def __init__(self, path: str) -> None:
-        self.path = path
+    path: str
+
+    def __post_init__(self) -> None:
         super().__init__(str(self))
 
     def __str__(self) -> str:
         return f"Model file not found: {self.path}"
 
 
+@dataclass
 class ModelLoadError(LlmProviderError):
-    def __init__(self, path: str, cause: str) -> None:
-        self.path = path
-        self.cause = cause
+    path: str
+    cause: str
+
+    def __post_init__(self) -> None:
         super().__init__(str(self))
 
     def __str__(self) -> str:

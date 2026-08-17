@@ -10,24 +10,30 @@ from classiflow.domain.job import JobStatus, NodeEvent
 from classiflow.domain.repositories import UNSET, IJobRepository, UnsetType
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.domain.results import (
+from classiflow.ingesta.domain import (
     ContentValidationResult,
     DuplicateControlResult,
+    ExtractionResult,
     FileReceptionResult,
     FormatValidationResult,
+    JobState,
 )
-from classiflow.ingesta.domain.state import JobState
 from classiflow.ingesta.llm_provider import unload_slm
 
 _PIPELINE_NODE = "pipeline"
 _NODE_NAMES = {
     "reception": "node1_file_reception",
     "format_validation": "node2_format_validation",
+    "extraction": "extraction",
     "content_validation": "node3_content_validation",
     "duplicate_control": "node4_duplicate_control",
 }
 _StepResult = (
-    FileReceptionResult | FormatValidationResult | ContentValidationResult | DuplicateControlResult
+    FileReceptionResult
+    | FormatValidationResult
+    | ExtractionResult
+    | ContentValidationResult
+    | DuplicateControlResult
 )
 
 

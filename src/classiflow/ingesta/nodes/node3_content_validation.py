@@ -7,11 +7,11 @@ from lingua import LanguageDetector, LanguageDetectorBuilder
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_content import ContentValidationConfig, get_content_validation_config
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import ContentValidationResult, FileReceptionResult
+from classiflow.ingesta.domain import ContentValidationResult, FileReceptionResult, JobContext
 from classiflow.ingesta.llm_provider import get_llm_langchain
 from classiflow.ingesta.nodes.base import BaseNode
-from classiflow.ingesta.prompts.content_validation import (
+from classiflow.ingesta.prompts import (
+    ContentChainInput,
     LegitimacyDecisionOutput,
     build_content_chain,
 )
@@ -38,11 +38,19 @@ class _LanguageDetector(Protocol):
 
 @runtime_checkable
 class _ContentChain(Protocol):
-    def invoke(self, inp: dict[str, str], **kwargs: object) -> LegitimacyDecisionOutput: ...
+    def invoke(self, inp: ContentChainInput, **kwargs: object) -> LegitimacyDecisionOutput: ...
 
 
 @lru_cache(maxsize=1)
-def _get_detector() -> LanguageDetector:
+def get_language_detector() -> LanguageDetector:
+    # Kept cached even though Container.language_detector (injections/production.py)
+    # already gives production a single shared instance via constructor injection --
+    # this function is also the fallback ContentValidationNode.__init__ reaches for
+    # when no language_detector is passed, which still happens for
+    # TestContainer.node3 (a Factory -- fresh ContentValidationNode, and thus this
+    # fallback, on every resolution). Without the cache, every such test would rebuild
+    # Lingua's full multi-language n-gram model from scratch. Same reasoning as
+    # get_llm_langchain's cache, which unload_slm() also depends on staying in place.
     return LanguageDetectorBuilder.from_all_languages().build()
 
 
@@ -65,7 +73,7 @@ class ContentValidationNode(BaseNode):
             config if config is not None else get_content_validation_config()
         )
         self.language_detector: _LanguageDetector = (
-            language_detector if language_detector is not None else _get_detector()
+            language_detector if language_detector is not None else get_language_detector()
         )
         self.content_chain: _ContentChain | None = content_chain
 
@@ -148,10 +156,12 @@ class ContentValidationNode(BaseNode):
                 build_content_chain(get_llm_langchain(Settings.node3_model_path)),
             )
         try:
-            output: LegitimacyDecisionOutput = chain.invoke({
-                "text_excerpt": text[: self.config.excerpt_len],
-                "detected_language": detected_language,
-            })
+            output: LegitimacyDecisionOutput = chain.invoke(
+                ContentChainInput(
+                    text_excerpt=text[: self.config.excerpt_len],
+                    detected_language=detected_language,
+                )
+            )
         except ValueError as exc:
             # A local quantized model can produce output no amount of prompt-tuning
             # fully rules out (missing fields, unescaped quotes breaking JSON). That's
