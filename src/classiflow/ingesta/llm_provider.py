@@ -7,7 +7,6 @@ from langchain_community.llms import LlamaCpp
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseLLM
 from langchain_core.outputs import Generation, LLMResult
-from llama_cpp import Llama
 from pydantic import Field
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
@@ -46,29 +45,12 @@ class MockLlm(BaseLLM):
         return "mock"
 
 
-@lru_cache(maxsize=4)
-def get_llm(model_path: str) -> Llama:
-    try:
-        return Llama(
-            model_path=model_path,
-            n_ctx=2048,
-            n_gpu_layers=_n_gpu_layers(),
-            seed=Settings.slm_seed,
-            verbose=False,
-        )
-    except FileNotFoundError as exc:
-        raise ModelNotFoundError(path=model_path) from exc
-    except Exception as exc:
-        raise ModelLoadError(path=model_path, cause=str(exc)) from exc
-
-
 def unload_slm() -> None:
-    # Drops the lru_cache's reference to the loaded Llama/LlamaCpp instances so gc can
-    # collect them -- their __del__ frees the GGUF's CUDA context directly (ctypes-owned
+    # Drops the lru_cache's reference to the loaded LlamaCpp instance so gc can
+    # collect it -- its __del__ frees the GGUF's CUDA context directly (ctypes-owned
     # memory, not PyTorch's caching allocator), releasing VRAM back to the driver.
     # ponytail: runs synchronously on the event loop (called once per finished job, not
     # a hot path) -- move to asyncio.to_thread if it ever shows up as request latency.
-    get_llm.cache_clear()
     get_llm_langchain.cache_clear()
     gc.collect()
     if torch.cuda.is_available():

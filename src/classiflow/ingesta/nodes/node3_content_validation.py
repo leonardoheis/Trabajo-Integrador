@@ -42,7 +42,15 @@ class _ContentChain(Protocol):
 
 
 @lru_cache(maxsize=1)
-def _get_detector() -> LanguageDetector:
+def get_language_detector() -> LanguageDetector:
+    # Kept cached even though Container.language_detector (injections/production.py)
+    # already gives production a single shared instance via constructor injection --
+    # this function is also the fallback ContentValidationNode.__init__ reaches for
+    # when no language_detector is passed, which still happens for
+    # TestContainer.node3 (a Factory -- fresh ContentValidationNode, and thus this
+    # fallback, on every resolution). Without the cache, every such test would rebuild
+    # Lingua's full multi-language n-gram model from scratch. Same reasoning as
+    # get_llm_langchain's cache, which unload_slm() also depends on staying in place.
     return LanguageDetectorBuilder.from_all_languages().build()
 
 
@@ -65,7 +73,7 @@ class ContentValidationNode(BaseNode):
             config if config is not None else get_content_validation_config()
         )
         self.language_detector: _LanguageDetector = (
-            language_detector if language_detector is not None else _get_detector()
+            language_detector if language_detector is not None else get_language_detector()
         )
         self.content_chain: _ContentChain | None = content_chain
 
