@@ -198,6 +198,12 @@ desktop.ini
 # ---- Samples (local test files) ----
 samples/
 
+# ---- Playground scratch output ----
+# Settings.CHROMA_PATH defaults to a relative "./data/chroma", so a notebook kernel
+# launched from its own directory writes the vector store here instead of the repo
+# root. The root-level "data/**" rule is anchored and does not cover it.
+src/classiflow/playground/stage1/data/
+
 # ---- Claude Code / tooling (local only) ----
 .claude/worktrees/
 .codegraph/
