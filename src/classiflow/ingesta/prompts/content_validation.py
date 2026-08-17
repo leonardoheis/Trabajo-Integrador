@@ -4,9 +4,15 @@ import re
 
 from langchain_core.language_models import BaseLLM
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import Runnable, RunnableLambda
-from pydantic import BaseModel
+
+from classiflow.domain.base import BaseEntity
+
+
+class ContentChainInput(BaseEntity):
+    text_excerpt: str
+    detected_language: str
+
 
 _TEMPLATE = """\
 Task: decide if this excerpt is real text from an official municipal act \
@@ -42,7 +48,7 @@ _CONFIDENCE_RE = re.compile(r'"confidence"\s*:\s*([0-9]*\.?[0-9]+)')
 _REASONING_RE = re.compile(r'"reasoning"\s*:\s*"(.*)"\s*,\s*"confidence"', re.DOTALL)
 
 
-class LegitimacyDecisionOutput(BaseModel):
+class LegitimacyDecisionOutput(BaseEntity):
     # Defaults make a malformed/partial SLM response (a real occurrence with a small
     # quantized local model -- e.g. it omits "confidence") fail safe into the low-
     # confidence/not-legitimate review path in node3, instead of crashing the node.
@@ -68,9 +74,12 @@ def _extract(text: str) -> LegitimacyDecisionOutput:
     )
 
 
-def build_content_chain(llm: BaseLLM) -> Runnable[dict[str, str], LegitimacyDecisionOutput]:
-    prompt = PromptTemplate(
-        template=_TEMPLATE,
-        input_variables=["text_excerpt", "detected_language"],
+def _format_prompt(chain_input: ContentChainInput) -> str:
+    return _TEMPLATE.format(
+        text_excerpt=chain_input.text_excerpt,
+        detected_language=chain_input.detected_language,
     )
-    return prompt | llm | StrOutputParser() | RunnableLambda(_extract)
+
+
+def build_content_chain(llm: BaseLLM) -> Runnable[ContentChainInput, LegitimacyDecisionOutput]:
+    return RunnableLambda(_format_prompt) | llm | StrOutputParser() | RunnableLambda(_extract)

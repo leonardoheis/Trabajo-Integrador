@@ -10,7 +10,11 @@ from classiflow.ingesta.config_content import ContentValidationConfig, get_conte
 from classiflow.ingesta.domain import ContentValidationResult, FileReceptionResult, JobContext
 from classiflow.ingesta.llm_provider import get_llm_langchain
 from classiflow.ingesta.nodes.base import BaseNode
-from classiflow.ingesta.prompts import LegitimacyDecisionOutput, build_content_chain
+from classiflow.ingesta.prompts import (
+    ContentChainInput,
+    LegitimacyDecisionOutput,
+    build_content_chain,
+)
 from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
 
@@ -34,7 +38,7 @@ class _LanguageDetector(Protocol):
 
 @runtime_checkable
 class _ContentChain(Protocol):
-    def invoke(self, inp: dict[str, str], **kwargs: object) -> LegitimacyDecisionOutput: ...
+    def invoke(self, inp: ContentChainInput, **kwargs: object) -> LegitimacyDecisionOutput: ...
 
 
 @lru_cache(maxsize=1)
@@ -152,10 +156,12 @@ class ContentValidationNode(BaseNode):
                 build_content_chain(get_llm_langchain(Settings.node3_model_path)),
             )
         try:
-            output: LegitimacyDecisionOutput = chain.invoke({
-                "text_excerpt": text[: self.config.excerpt_len],
-                "detected_language": detected_language,
-            })
+            output: LegitimacyDecisionOutput = chain.invoke(
+                ContentChainInput(
+                    text_excerpt=text[: self.config.excerpt_len],
+                    detected_language=detected_language,
+                )
+            )
         except ValueError as exc:
             # A local quantized model can produce output no amount of prompt-tuning
             # fully rules out (missing fields, unescaped quotes breaking JSON). That's

@@ -1,5 +1,11 @@
 # Implementation Plan: Classiflow — Stage 2: Extraction Hardening
 
+**Status: implemented.** All 7 tasks (S2-T01–T07) below are done and committed to
+`feat/extraction-hardening` (plus follow-up hidden-dependency DI fixes and typing
+cleanup merged via PR [#18](https://github.com/leonardoheis/Trabajo-Integrador/pull/18)
+and [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19) — see "Additional
+work beyond this plan" at the end). The branch itself is not yet merged to `main`.
+
 ## Project Context
 
 Stage 1 (`feat/ingesta-pipeline` → `main`, PR [#17](https://github.com/leonardoheis/Trabajo-Integrador/pull/17)) shipped the full 4-node ingestion pipeline **and** text
@@ -114,12 +120,12 @@ hardcoded module constants into `config/extraction.yaml` + a Pydantic model, mat
 it's what Phase 3's semaphore reads.
 
 **Acceptance criteria:**
-- [ ] `config/extraction.yaml`: `min_text_for_ocr: 50`, `min_usable_text: 20`,
+- [x] `config/extraction.yaml`: `min_text_for_ocr: 50`, `min_usable_text: 20`,
       `max_concurrent_extractions: 2`
-- [ ] `ingesta/config_extraction.py`: `ExtractionConfig(BaseModel)` +
+- [x] `ingesta/config_extraction.py`: `ExtractionConfig(BaseModel)` +
       `get_extraction_config()` with `@lru_cache`, same shape as `get_content_validation_config()`
-- [ ] `extract.py`'s module constants removed, replaced with config reads
-- [ ] `uv run poe check` passes
+- [x] `extract.py`'s module constants removed, replaced with config reads
+- [x] `uv run poe check` passes
 
 **Dependencies:** None
 
@@ -141,13 +147,13 @@ uv run poe test tests/ingesta/test_extract.py
 bare `str` to `ExtractionResult`.
 
 **Acceptance criteria:**
-- [ ] `ExtractionResult(BaseEntity)` added to `domain/results.py`
-- [ ] `TextExtractor.__call__` returns `ExtractionResult` instead of `str`
-- [ ] `extractor_used` set to `"markitdown"` or `"ocr"` depending on which extractor
+- [x] `ExtractionResult(BaseEntity)` added to `domain/results.py`
+- [x] `TextExtractor.__call__` returns `ExtractionResult` instead of `str`
+- [x] `extractor_used` set to `"markitdown"` or `"ocr"` depending on which extractor
       actually produced usable text
-- [ ] Existing callers of `TextExtractor`/`TextExtractFn` updated for the new return
+- [x] Existing callers of `TextExtractor`/`TextExtractFn` updated for the new return
       type (`coordinator.py`'s `_extract`, any direct test usage)
-- [ ] `uv run poe check` passes
+- [x] `uv run poe check` passes
 
 **Dependencies:** None (parallel with S2-T01)
 
@@ -171,14 +177,17 @@ relying on LangGraph's sync-function auto-dispatch. A module-level
 concurrent `/pipeline/ingest` requests can't run unbounded OCR simultaneously.
 
 **Acceptance criteria:**
-- [ ] `_extract` is `async def`; blocking extraction work runs via `asyncio.to_thread`
-- [ ] Semaphore sized from `ExtractionConfig.max_concurrent_extractions`, acquired
-      around the extraction call (`async with semaphore:`)
-- [ ] A burst of concurrent `/pipeline/ingest` calls never has more than
+- [x] `_extract` is `async def`; blocking extraction work runs via `asyncio.to_thread`
+- [x] Semaphore sized from `ExtractionConfig.max_concurrent_extractions`, acquired
+      around the extraction call (`async with semaphore:`) — **Container-injected**
+      (`Container.extraction_semaphore`), not a module-level singleton; a code-smell
+      review caught the original module-level-getter design as a Hidden Dependency
+      before it was committed
+- [x] A burst of concurrent `/pipeline/ingest` calls never has more than
       `max_concurrent_extractions` extractions actually running at once — the rest
       wait, they don't fail or get dropped
-- [ ] Existing single-request latency/behavior unchanged
-- [ ] `uv run poe check` passes
+- [x] Existing single-request latency/behavior unchanged
+- [x] `uv run poe check` passes
 
 **Dependencies:** S2-T01 (needs `ExtractionConfig`)
 
@@ -213,14 +222,14 @@ only the rejected/review ones. Storing it in the `"extraction"` `DocumentStep.de
 second copy of the "only store for non-accepted" logic `Job.extracted_text` already has.
 
 **Acceptance criteria:**
-- [ ] `ExtractionStep(BaseNode)` in `nodes/extraction_step.py`, `name = "extraction"`
-- [ ] SSE stream shows `extraction: started` then `extraction: passed` between
+- [x] `ExtractionStep(BaseNode)` in `nodes/extraction_step.py`, `name = "extraction"`
+- [x] SSE stream shows `extraction: started` then `extraction: passed` between
       `node2_format_validation` and `node3_content_validation` events
-- [ ] `DocumentStep` row written for the `"extraction"` step, `detail` containing
+- [x] `DocumentStep` row written for the `"extraction"` step, `detail` containing
       `text` + `extractor_used` + `char_count` — for every job, regardless of the
       pipeline's eventual accept/reject/review outcome
-- [ ] `api/dependencies.py::get_coordinator` builds `ExtractionStep` alongside node1-4
-- [ ] `uv run poe check` passes
+- [x] `api/dependencies.py::get_coordinator` builds `ExtractionStep` alongside node1-4
+- [x] `uv run poe check` passes
 
 **Dependencies:** S2-T02 (needs `ExtractionResult`)
 
@@ -243,11 +252,11 @@ test), the SSE stream carries `extraction` events in the right order, and
 `DocumentStep.detail` contains `extractor_used` for a real run.
 
 **Acceptance criteria:**
-- [ ] Test proves the concurrency cap holds under simulated concurrent
+- [x] Test proves the concurrency cap holds under simulated concurrent
       `/pipeline/ingest` calls
-- [ ] Test asserts `extraction` events appear in the SSE stream between node2 and node3
-- [ ] Test asserts `extractor_used` is queryable from `DocumentStep` after a run
-- [ ] `uv run poe check` passes
+- [x] Test asserts `extraction` events appear in the SSE stream between node2 and node3
+- [x] Test asserts `extractor_used` is queryable from `DocumentStep` after a run
+- [x] `uv run poe check` passes
 
 **Dependencies:** S2-T03 · S2-T04
 
@@ -274,23 +283,22 @@ repo root, ignore it properly, and document exactly how to repopulate it from a 
 clone.
 
 **Acceptance criteria:**
-- [ ] `src/classiflow/ingesta/models/` moved to `models/` at the repo root
-- [ ] `settings.py`'s `_DEFAULT_MODEL` updated to
+- [x] `src/classiflow/ingesta/models/` moved to `models/` at the repo root
+- [x] `settings.py`'s `_DEFAULT_MODEL` updated to
       `_PROJECT_ROOT / "models" / "Phi-4-mini-instruct-Q4_K_M.gguf"`
-- [ ] `node4_duplicate_control.py`'s `_get_sentence_model()` passes `cache_folder=`
+- [x] `node4_duplicate_control.py`'s `_get_sentence_model()` passes `cache_folder=`
       pointing into `models/` via a new `Settings.EMBEDDING_MODEL_PATH`-style setting
-- [ ] `.gitignore`: `!models/`/`!models/**` exception removed; replaced with
+- [x] `.gitignore`: `!models/`/`!models/**` exception removed; replaced with
       `models/**` + `!models/**/.gitkeep`, matching the existing `data/**` pattern —
       covers the embedding model's config/tokenizer files, which no current
       extension-based rule catches
-- [ ] `README.md` gains a "Models" section: name, purpose, Hugging Face source, and
+- [x] `README.md` gains a "Models" section: name, purpose, Hugging Face source, and
       download command/target path for each of the two models
-- [ ] The exact HF repo `Phi-4-mini-instruct-Q4_K_M.gguf` was sourced from is confirmed
-      (by content hash — several community GGUF conversions share this filename)
-      before it goes in the README, not assumed
-- [ ] Fresh clone + `uv sync --dev` + following the new README instructions reaches a
+- [x] The exact HF repo `Phi-4-mini-instruct-Q4_K_M.gguf` was sourced from is confirmed —
+      [unsloth/Phi-4-mini-instruct-GGUF](https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF)
+- [x] Fresh clone + `uv sync --dev` + following the new README instructions reaches a
       working `uv run poe check`
-- [ ] `uv run poe check` passes
+- [x] `uv run poe check` passes
 
 **Dependencies:** None (touches `settings.py`/`.gitignore`/`README.md`, not the
 extraction pipeline itself — safe to do in parallel with S2-T01..T05)
@@ -314,11 +322,11 @@ PDFs this session's notebooks (`pipeline_end_to_end.ipynb`, `text_extraction.ipy
 of them today.
 
 **Acceptance criteria:**
-- [ ] `.gitignore`'s `samples/` rule removed or narrowed to exactly this directory
-- [ ] Sample PDFs in `src/classiflow/playground/samples/` committed
-- [ ] Total added size checked before committing (municipal PDFs, expected a few
+- [x] `.gitignore`'s `samples/` rule removed or narrowed to exactly this directory
+- [x] Sample PDFs in `src/classiflow/playground/samples/` committed
+- [x] Total added size checked before committing (municipal PDFs, expected a few
       hundred KB to ~1MB each)
-- [ ] `uv run poe check` passes
+- [x] `uv run poe check` passes
 
 **Dependencies:** None
 
@@ -344,3 +352,47 @@ du -sh src/classiflow/playground/samples/
 ## Tasks
 
 See `todo_stage2.md` for the full task list and parallel execution map.
+
+## Additional work beyond this plan
+
+A `/code-smells` review of the S2-T03 semaphore surfaced a broader Hidden Dependency
+pattern already present elsewhere in `ingesta/` (module-level `@lru_cache` singleton
+getters instead of Container-managed dependencies). Fixed together, beyond this plan's
+original scope, and merged via two follow-up PRs into `feat/extraction-hardening`:
+
+- **PR [#18](https://github.com/leonardoheis/Trabajo-Integrador/pull/18)** —
+  `get_language_detector` (node3), `get_sentence_model`/`embedding_store` (node4), and
+  the node2/node3 SLM chains wired through the DI `Container`, matching the existing
+  `broadcaster`/`text_extractor` pattern. Also fixed a real bug found in the process:
+  `embedding_store` was previously rebuilt empty on every request (a `Factory`, not a
+  `Singleton`), so semantic near-duplicate detection was silently a no-op in
+  production — only exact SHA-256 dedup ever worked.
+- **PR [#19](https://github.com/leonardoheis/Trabajo-Integrador/pull/19)** — replaced
+  `coordinator.py`'s `dict[str, Any]` node-closure returns with a typed `NodeUpdate`
+  pydantic model.
+
+Further cleanup after both PRs merged (still on `feat/extraction-hardening`, uncommitted
+as of this plan update — see git status before assuming these are on `main`):
+
+- Completed the `nodes`/`domain`/`prompts` package `__init__.py` re-exports (they
+  existed but were stale/unused — every consumer imported from the submodule directly)
+  and migrated every consumer to the package-level import.
+- Deleted dead config fields (`DuplicateControlConfig.on_duplicate`,
+  `ContentValidationConfig.max_chars` — declared, loaded from YAML, never read) and the
+  unused, `Any`-typed `NodeEvent.detail` field.
+- Added a shared `config_loader.py` to de-duplicate the four near-identical
+  `@lru_cache` + YAML-loading config modules.
+- `ingesta/exceptions.py`'s `ModelNotFoundError`/`ModelLoadError` converted to this
+  project's `@dataclass` exception convention (was hand-rolled `__init__`).
+- `FormatChainInput`/`ContentChainInput`/`FormatDecisionOutput`/`LegitimacyDecisionOutput`
+  (the two SLM prompt chains' input/output types) converted from `dict[str, str]` to
+  `BaseEntity` models — removed a `PromptTemplate` dependency entirely in the process,
+  which also eliminated two `cast()`s that existed only to bridge LangChain's own
+  `dict[str, Any]`-typed internals.
+- `DEPLOY.md` deleted (superseded — its scale-estimate table merged into `README.md`'s
+  "Document Categories" table).
+- `playground/stage1/pipeline_benchmark.ipynb` fixed (its `ExtractionStep(...)` call was
+  missing the now-required `semaphore=` argument — broken since S2-T03 landed, unnoticed
+  because `poe check`'s `nbtest` step doesn't cover `playground/`). New
+  `playground/stage2/extraction_concurrency.ipynb` added, demonstrating the S2-T03
+  concurrency cap and S2-T04 observability interactively.

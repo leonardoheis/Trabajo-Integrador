@@ -30,7 +30,12 @@ from classiflow.ingesta.nodes import (
     FormatValidationNode,
 )
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
-from classiflow.ingesta.prompts import FormatDecisionOutput, LegitimacyDecisionOutput
+from classiflow.ingesta.prompts import (
+    ContentChainInput,
+    FormatChainInput,
+    FormatDecisionOutput,
+    LegitimacyDecisionOutput,
+)
 from classiflow.injections.production import Container
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
@@ -91,7 +96,7 @@ def get_node2(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
     format_chain: Annotated[
-        Runnable[dict[str, str], FormatDecisionOutput],
+        Runnable[FormatChainInput, FormatDecisionOutput],
         Depends(Provide[Container.node2_format_chain]),
     ],
 ) -> FormatValidationNode:
@@ -108,7 +113,7 @@ def get_node3(
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
     language_detector: Annotated[LanguageDetector, Depends(Provide[Container.language_detector])],
     content_chain: Annotated[
-        Runnable[dict[str, str], LegitimacyDecisionOutput],
+        Runnable[ContentChainInput, LegitimacyDecisionOutput],
         Depends(Provide[Container.node3_content_chain]),
     ],
 ) -> ContentValidationNode:

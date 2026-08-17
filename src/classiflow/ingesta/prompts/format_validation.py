@@ -1,10 +1,16 @@
 from langchain_core.language_models import BaseLLM
 from langchain_core.output_parsers import PydanticOutputParser
-from langchain_core.prompts import PromptTemplate
-from langchain_core.runnables import Runnable
-from pydantic import BaseModel
+from langchain_core.runnables import Runnable, RunnableLambda
 
+from classiflow.domain.base import BaseEntity
 from classiflow.ingesta.domain import FormatDecision
+
+
+class FormatChainInput(BaseEntity):
+    filename: str
+    detected_mime: str
+    expected_extensions: str
+
 
 _TEMPLATE = """\
 This file's MIME type is already on the accepted list, but its extension \
@@ -35,19 +41,24 @@ ingestion into the system.
 Respond with valid JSON only."""
 
 
-class FormatDecisionOutput(BaseModel):
+class FormatDecisionOutput(BaseEntity):
     decision: FormatDecision
     confidence: float | None = None
     reasoning: str = ""
 
 
-def build_format_chain(llm: BaseLLM) -> Runnable[dict[str, str], FormatDecisionOutput]:
+def build_format_chain(llm: BaseLLM) -> Runnable[FormatChainInput, FormatDecisionOutput]:
     parser: PydanticOutputParser[FormatDecisionOutput] = PydanticOutputParser(
         pydantic_object=FormatDecisionOutput
     )
-    prompt = PromptTemplate(
-        template=_TEMPLATE,
-        input_variables=["filename", "detected_mime", "expected_extensions"],
-        partial_variables={"format_instructions": parser.get_format_instructions()},
-    )
-    return prompt | llm | parser
+    format_instructions = parser.get_format_instructions()
+
+    def _format_prompt(chain_input: FormatChainInput) -> str:
+        return _TEMPLATE.format(
+            filename=chain_input.filename,
+            detected_mime=chain_input.detected_mime,
+            expected_extensions=chain_input.expected_extensions,
+            format_instructions=format_instructions,
+        )
+
+    return RunnableLambda(_format_prompt) | llm | parser

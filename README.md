@@ -236,6 +236,24 @@ pipeline functionality — moved to Stage 4, see [`tasks/todo_stage4.md`](tasks/
 Full task details and dependency graph: [tasks/todo.md](tasks/todo.md) ·
 [Stage 2 plan](tasks/plan_stage2.md) · [Stage 2 tasks](tasks/todo_stage2.md)
 
+**Stage 2 implemented** — bounded concurrency and full SSE/DB observability around Stage
+1's existing text-extraction step (MarkItDown → EasyOCR fallback); no re-extraction. Also
+fixed several hidden-dependency singletons (`get_language_detector`,
+`get_sentence_model`/`embedding_store`, node2/node3 SLM chains) by wiring them through the
+DI `Container`, matching the existing `broadcaster`/`text_extractor` pattern. All 7 tasks
+committed to `feat/extraction-hardening`; the branch itself hasn't been merged to `main`
+yet.
+
+| Task | Description | Status |
+|------|-------------|--------|
+| S2-T01 | `ExtractionConfig` | ✅ done |
+| S2-T02 | `ExtractionResult` domain entity | ✅ done |
+| S2-T03 | Bounded concurrency (`asyncio.Semaphore`, Container-injected) | ✅ done |
+| S2-T04 | `ExtractionStep` + `DocumentStep` observability | ✅ done |
+| S2-T05 | Integration test — concurrency + observability | ✅ done |
+| S2-T06 | Relocate models to project root + document download sources | ✅ done |
+| S2-T07 | Track `playground/samples/` in git | ✅ done |
+
 ## Key Technical Decisions
 
 - **SQLAlchemy 2.0 async** (`Mapped[]` annotations, `async_sessionmaker`, `aiosqlite` for local dev)
@@ -250,20 +268,22 @@ Full task details and dependency graph: [tasks/todo.md](tasks/todo.md) ·
 
 The dataset covers 10 categories of municipal documents from Rosario's open-data portal:
 
-| Category | Description |
-|----------|-------------|
-| `boletines` | Municipal bulletins |
-| `compendios_de_boletines` | Bulletin compendiums |
-| `convenios` | Agreements |
-| `declaraciones_concejo_municipal` | Municipal council declarations |
-| `decreto_ordenanzas` | Decree-ordinances |
-| `decretos` | Decrees |
-| `decretos_concejo_municipal` | Municipal council decrees |
-| `ordenanzas` | Ordinances |
-| `resoluciones` | Resolutions |
-| `resoluciones_concejo_municipal` | Municipal council resolutions |
+| Category | Description | Documents |
+|----------|-------------|-----------|
+| `boletines` | Municipal bulletins | 2,035 |
+| `compendios_de_boletines` | Bulletin compendiums | 27 |
+| `convenios` | Agreements | 8 |
+| `declaraciones_concejo_municipal` | Municipal council declarations | 37 |
+| `decreto_ordenanzas` | Decree-ordinances | 344 |
+| `decretos` | Decrees | 5,483 |
+| `decretos_concejo_municipal` | Municipal council decrees | 6,738 |
+| `ordenanzas` | Ordinances | 5,306 |
+| `resoluciones` | Resolutions | 173 |
+| `resoluciones_concejo_municipal` | Municipal council resolutions | 167 |
+| **Total** | | **~20,318** |
 
-The ingested documents (Phase 1 output) are available on [Google Drive](https://drive.google.com/drive/folders/1_IPfa4m1mmz6wFPOLtEf3T4xYknJap7B?usp=drive_link).
+Assuming ~200 KB average per PDF, that's **~4 GB** total storage. The ingested documents
+(Phase 1 output) are available on [Google Drive](https://drive.google.com/drive/folders/1_IPfa4m1mmz6wFPOLtEf3T4xYknJap7B?usp=drive_link).
 
 ## Setup
 
