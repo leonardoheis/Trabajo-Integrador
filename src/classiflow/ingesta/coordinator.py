@@ -1,5 +1,3 @@
-from typing import Any
-
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
@@ -7,20 +5,39 @@ from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import (
     ContentValidationResult,
     DuplicateControlResult,
+    ExtractionResult,
     FileReceptionResult,
     FormatDecision,
     FormatValidationResult,
 )
-from classiflow.ingesta.domain.state import JobState
+from classiflow.ingesta.domain.state import JobState, NodeUpdate
 from classiflow.ingesta.nodes.extraction_step import ExtractionStep
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
 
+NodeUpdateValue = (
+    str
+    | FileReceptionResult
+    | FormatValidationResult
+    | ExtractionResult
+    | ContentValidationResult
+    | DuplicateControlResult
+)
+
 _AnyResult = (
     FileReceptionResult | FormatValidationResult | ContentValidationResult | DuplicateControlResult
 )
+
+
+def _dump(update: NodeUpdate) -> dict[str, NodeUpdateValue]:
+    # Not .model_dump(exclude_none=True): that recursively dumps nested BaseModel
+    # fields (reception, format_validation, ...) into plain dicts, but downstream
+    # routing (_route_node1 etc.) and node.run() do attribute access (r.passed) on
+    # them, expecting the actual result objects. Iterating the model instead yields
+    # each field's raw value undumped, so nested instances survive intact.
+    return {k: v for k, v in update if v is not None}
 
 
 def _get_rejection_reason(state: JobState) -> str:
@@ -72,40 +89,44 @@ def build_coordinator(
     *,
     extraction_step: ExtractionStep,
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
-    async def _node1(state: JobState) -> dict[str, Any]:
+    async def _node1(state: JobState) -> dict[str, NodeUpdateValue]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
         result = await node1.run(ctx, state.get("file_bytes"))
-        return {"reception": result}
+        return _dump(NodeUpdate(reception=result))
 
-    async def _node2(state: JobState) -> dict[str, Any]:
+    async def _node2(state: JobState) -> dict[str, NodeUpdateValue]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
         result = await node2.run(ctx, state["reception"])
-        return {"format_validation": result}
+        return _dump(NodeUpdate(format_validation=result))
 
-    async def _extract(state: JobState) -> dict[str, Any]:
+    async def _extract(state: JobState) -> dict[str, NodeUpdateValue]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
         file_bytes = state.get("file_bytes") or b""
         result = await extraction_step.run(ctx, file_bytes, state["filename"])
-        return {"text": result.text, "extraction": result}
+        return _dump(NodeUpdate(text=result.text, extraction=result))
 
-    async def _node3(state: JobState) -> dict[str, Any]:
+    async def _node3(state: JobState) -> dict[str, NodeUpdateValue]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
         result = await node3.run(ctx, state.get("text", ""), state["reception"])
-        return {"content_validation": result}
+        return _dump(NodeUpdate(content_validation=result))
 
-    async def _node4(state: JobState) -> dict[str, Any]:
+    async def _node4(state: JobState) -> dict[str, NodeUpdateValue]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
         result = await node4.run(ctx, state["reception"].sha256, state.get("text", ""))
-        return {"duplicate_control": result}
+        return _dump(NodeUpdate(duplicate_control=result))
 
-    def _accept(_state: JobState) -> dict[str, Any]:
-        return {"final_status": "accepted"}
+    def _accept(_state: JobState) -> dict[str, NodeUpdateValue]:
+        return _dump(NodeUpdate(final_status="accepted"))
 
-    def _reject(state: JobState) -> dict[str, Any]:
-        return {"final_status": "rejected", "rejection_reason": _get_rejection_reason(state)}
+    def _reject(state: JobState) -> dict[str, NodeUpdateValue]:
+        return _dump(
+            NodeUpdate(final_status="rejected", rejection_reason=_get_rejection_reason(state))
+        )
 
-    def _review(state: JobState) -> dict[str, Any]:
-        return {"final_status": "review", "rejection_reason": _get_rejection_reason(state)}
+    def _review(state: JobState) -> dict[str, NodeUpdateValue]:
+        return _dump(
+            NodeUpdate(final_status="review", rejection_reason=_get_rejection_reason(state))
+        )
 
     graph: StateGraph = StateGraph(JobState)  # type: ignore[type-arg]
     graph.add_node("node1", _node1)
