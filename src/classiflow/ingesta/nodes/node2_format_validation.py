@@ -62,7 +62,7 @@ class FormatValidationNode(BaseNode):
     def validate(self, filename: str, reception: FileReceptionResult) -> FormatValidationResult:
         decision = self.rule_based_check(filename, reception.detected_mime)
 
-        if decision is None:
+        if decision == FormatDecision.SLM_ESCALATE:
             return self._slm_check(filename, reception)
 
         if decision == FormatDecision.ACCEPT:
@@ -83,7 +83,7 @@ class FormatValidationNode(BaseNode):
             ),
         )
 
-    def rule_based_check(self, filename: str, detected_mime: str) -> FormatDecision | None:
+    def rule_based_check(self, filename: str, detected_mime: str) -> FormatDecision:
         extension = Path(filename).suffix.lower()
 
         if (
@@ -99,7 +99,7 @@ class FormatValidationNode(BaseNode):
 
         expected_extensions = self.config.mime_to_extensions.get(detected_mime, [])
         if expected_extensions and extension not in expected_extensions:
-            return None  # gray zone: MIME/extension mismatch → SLM escalation
+            return FormatDecision.SLM_ESCALATE  # gray zone: MIME/extension mismatch
 
         return FormatDecision.ACCEPT
 

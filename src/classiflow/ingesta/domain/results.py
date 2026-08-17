@@ -7,6 +7,11 @@ class FormatDecision(str, Enum):
     ACCEPT = "accept"
     REJECT = "reject"
     MANUAL_REVIEW = "manual_review"
+    # Internal-only: rule_based_check()'s signal to defer to the SLM -- never a value
+    # the SLM itself returns (see prompts/format_validation.py's prompt, which only
+    # asks it to choose accept/reject/manual_review), so it never reaches a final
+    # FormatValidationResult.decision.
+    SLM_ESCALATE = "slm_escalate"
 
 
 class ExtractionResult(BaseEntity):
