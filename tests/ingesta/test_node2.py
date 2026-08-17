@@ -6,11 +6,10 @@ from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.domain.job import JobStatus
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config import AllowedFormatsConfig
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import FileReceptionResult, FormatDecision
+from classiflow.ingesta.domain import FileReceptionResult, FormatDecision, JobContext
 from classiflow.ingesta.llm_provider import MockLlm
-from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
-from classiflow.ingesta.prompts.format_validation import build_format_chain
+from classiflow.ingesta.nodes import FormatValidationNode
+from classiflow.ingesta.prompts import build_format_chain
 from classiflow.services.audit.service import AuditService
 
 _SLM_ACCEPT_RESPONSE = '{"decision": "accept", "confidence": 0.9, "reasoning": "valid format"}'

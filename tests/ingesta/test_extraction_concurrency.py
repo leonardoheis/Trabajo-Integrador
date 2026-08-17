@@ -16,20 +16,22 @@ from classiflow.database.repositories.job import InMemoryJobRepository
 from classiflow.domain.job import JobStatus
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import ExtractionResult
+from classiflow.ingesta.domain import ExtractionResult, JobContext
 from classiflow.ingesta.llm_provider import MockLlm
-from classiflow.ingesta.nodes.extraction_step import ExtractionStep
-from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
-from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
-from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
-from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
+from classiflow.ingesta.nodes import (
+    ContentValidationNode,
+    DuplicateControlNode,
+    ExtractionStep,
+    FileReceptionNode,
+    FormatValidationNode,
+)
+from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.pipeline.service import PipelineService
 
 if TYPE_CHECKING:
     from classiflow.database.models import DocumentStep
-    from classiflow.ingesta.domain.state import JobState
+    from classiflow.ingesta.domain import JobState
 
 _MINIMAL_PDF = (
     b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"

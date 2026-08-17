@@ -5,9 +5,8 @@ import pytest
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.domain.job import JobStatus
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import ExtractionResult
-from classiflow.ingesta.nodes.extraction_step import ExtractionStep
+from classiflow.ingesta.domain import ExtractionResult, JobContext
+from classiflow.ingesta.nodes import ExtractionStep
 from classiflow.services.audit.service import AuditService
 
 _JOB_ID = "test-job-extract"

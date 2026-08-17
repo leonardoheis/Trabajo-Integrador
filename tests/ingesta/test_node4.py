@@ -8,8 +8,9 @@ from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.domain.job import JobStatus
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
+from classiflow.ingesta.domain import JobContext
+from classiflow.ingesta.nodes import DuplicateControlNode
+from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.services.audit.service import AuditService
 
 _DIM = 4

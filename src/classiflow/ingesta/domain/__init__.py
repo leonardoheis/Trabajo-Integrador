@@ -4,19 +4,22 @@ from .context import JobContext
 from .results import (
     ContentValidationResult,
     DuplicateControlResult,
+    ExtractionResult,
     FileReceptionResult,
     FormatDecision,
     FormatValidationResult,
 )
-from .state import JobState
+from .state import JobState, NodeUpdate
 
 __all__ = [
     "BaseEntity",
     "ContentValidationResult",
     "DuplicateControlResult",
+    "ExtractionResult",
     "FileReceptionResult",
     "FormatDecision",
     "FormatValidationResult",
     "JobContext",
     "JobState",
+    "NodeUpdate",
 ]

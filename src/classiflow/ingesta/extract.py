@@ -3,7 +3,7 @@ from collections.abc import Callable
 from loguru import logger
 
 from classiflow.ingesta.config_extraction import ExtractionConfig, get_extraction_config
-from classiflow.ingesta.domain.results import ExtractionResult
+from classiflow.ingesta.domain import ExtractionResult
 from classiflow.ingesta.extractors import ExtractionError, ExtractorBase
 
 # Lives here, not in coordinator.py, so nodes/extraction_step.py (which needs it too)

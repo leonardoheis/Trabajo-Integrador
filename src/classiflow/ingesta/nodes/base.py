@@ -4,7 +4,7 @@ from abc import abstractmethod
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.domain.job import JobStatus, NodeEvent
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.domain.context import JobContext
+from classiflow.ingesta.domain import JobContext
 from classiflow.services.audit.service import AuditService
 
 

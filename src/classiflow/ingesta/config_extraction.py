@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
 
-import yaml
 from pydantic import BaseModel
 
+from classiflow.ingesta.config_loader import load_yaml_config
 from classiflow.settings import Settings
 
 
@@ -15,5 +15,4 @@ class ExtractionConfig(BaseModel):
 
 @lru_cache(maxsize=1)
 def get_extraction_config() -> ExtractionConfig:
-    config_path = Path(Settings.extraction_config_path)
-    return ExtractionConfig.model_validate(yaml.safe_load(config_path.read_text(encoding="utf-8")))
+    return load_yaml_config(Path(Settings.extraction_config_path), ExtractionConfig)

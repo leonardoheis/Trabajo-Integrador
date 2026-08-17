@@ -6,8 +6,8 @@ import pytest
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.domain.job import JobStatus
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
+from classiflow.ingesta.domain import JobContext
+from classiflow.ingesta.nodes import FileReceptionNode
 from classiflow.services.audit.service import AuditService
 
 _MINIMAL_PDF = (

@@ -1,5 +1,5 @@
 import asyncio
-from typing import Annotated, cast
+from typing import TYPE_CHECKING, Annotated, cast
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends
@@ -22,17 +22,23 @@ from classiflow.domain.user import User
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
 from classiflow.ingesta.extract import TextExtractFn
-from classiflow.ingesta.nodes.extraction_step import ExtractionStep
-from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
-from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode, _FormatChain
-from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode, _ContentChain
-from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
-from classiflow.ingesta.prompts.content_validation import LegitimacyDecisionOutput
-from classiflow.ingesta.prompts.format_validation import FormatDecisionOutput
+from classiflow.ingesta.nodes import (
+    ContentValidationNode,
+    DuplicateControlNode,
+    ExtractionStep,
+    FileReceptionNode,
+    FormatValidationNode,
+)
+from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
+from classiflow.ingesta.prompts import FormatDecisionOutput, LegitimacyDecisionOutput
 from classiflow.injections.production import Container
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
+
+if TYPE_CHECKING:
+    from classiflow.ingesta.nodes.node2_format_validation import _FormatChain
+    from classiflow.ingesta.nodes.node3_content_validation import _ContentChain
 
 _bearer = HTTPBearer()
 

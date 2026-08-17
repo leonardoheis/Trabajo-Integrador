@@ -1,21 +1,24 @@
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import (
+from classiflow.ingesta.domain import (
     ContentValidationResult,
     DuplicateControlResult,
     ExtractionResult,
     FileReceptionResult,
     FormatDecision,
     FormatValidationResult,
+    JobContext,
+    JobState,
+    NodeUpdate,
 )
-from classiflow.ingesta.domain.state import JobState, NodeUpdate
-from classiflow.ingesta.nodes.extraction_step import ExtractionStep
-from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
-from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
-from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
-from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
+from classiflow.ingesta.nodes import (
+    ContentValidationNode,
+    DuplicateControlNode,
+    ExtractionStep,
+    FileReceptionNode,
+    FormatValidationNode,
+)
 
 NodeUpdateValue = (
     str

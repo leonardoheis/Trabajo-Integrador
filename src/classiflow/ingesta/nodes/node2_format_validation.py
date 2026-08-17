@@ -5,15 +5,15 @@ from typing import Protocol, cast, runtime_checkable
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config import AllowedFormatsConfig, get_allowed_formats
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import (
+from classiflow.ingesta.domain import (
     FileReceptionResult,
     FormatDecision,
     FormatValidationResult,
+    JobContext,
 )
 from classiflow.ingesta.llm_provider import get_llm_langchain
 from classiflow.ingesta.nodes.base import BaseNode
-from classiflow.ingesta.prompts.format_validation import FormatDecisionOutput, build_format_chain
+from classiflow.ingesta.prompts import FormatDecisionOutput, build_format_chain
 from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
 

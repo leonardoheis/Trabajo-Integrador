@@ -2,8 +2,7 @@ import asyncio
 
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import ExtractionResult
+from classiflow.ingesta.domain import ExtractionResult, JobContext
 from classiflow.ingesta.extract import TextExtractFn
 from classiflow.ingesta.nodes.base import BaseNode
 from classiflow.services.audit.service import AuditService

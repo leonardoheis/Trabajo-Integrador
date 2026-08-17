@@ -11,22 +11,22 @@ from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
-from classiflow.ingesta.domain.results import ExtractionResult
+from classiflow.ingesta.domain import ExtractionResult
 from classiflow.ingesta.extract import TextExtractFn
 from classiflow.ingesta.llm_provider import MockLlm
-from classiflow.ingesta.nodes.extraction_step import ExtractionStep
-from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
-from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
-from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
-from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
-from classiflow.ingesta.prompts.content_validation import (
-    LegitimacyDecisionOutput,
-    build_content_chain,
+from classiflow.ingesta.nodes import (
+    ContentValidationNode,
+    DuplicateControlNode,
+    ExtractionStep,
+    FileReceptionNode,
+    FormatValidationNode,
 )
+from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
+from classiflow.ingesta.prompts import LegitimacyDecisionOutput, build_content_chain
 from classiflow.services.audit.service import AuditService
 
 if TYPE_CHECKING:
-    from classiflow.ingesta.domain.state import JobState
+    from classiflow.ingesta.domain import JobState
 
 _MINIMAL_PDF = (
     b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"

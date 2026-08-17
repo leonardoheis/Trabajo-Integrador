@@ -4,7 +4,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 
-from classiflow.ingesta.domain.results import FormatDecision
+from classiflow.ingesta.domain import FormatDecision
 
 _TEMPLATE = """\
 This file's MIME type is already on the accepted list, but its extension \

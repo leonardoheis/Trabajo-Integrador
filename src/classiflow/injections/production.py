@@ -17,8 +17,7 @@ from classiflow.ingesta.nodes.node4_duplicate_control import (
     get_sentence_model,
     make_embed_fn,
 )
-from classiflow.ingesta.prompts.content_validation import build_content_chain
-from classiflow.ingesta.prompts.format_validation import build_format_chain
+from classiflow.ingesta.prompts import build_content_chain, build_format_chain
 from classiflow.services.auth.service import AuthService
 from classiflow.settings import Settings
 
