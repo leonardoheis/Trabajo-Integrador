@@ -29,9 +29,7 @@ class TextCleanerNode(BaseNode):
         config: EnrichmentConfig | None = None,
     ) -> None:
         super().__init__(audit, broadcaster)
-        self.config: EnrichmentConfig = (
-            config if config is not None else get_enrichment_config()
-        )
+        self.config: EnrichmentConfig = config if config is not None else get_enrichment_config()
 
     async def run(self, ctx: JobContext, text: str) -> TextCleaningResult:
         start = await self._emit_started(ctx)

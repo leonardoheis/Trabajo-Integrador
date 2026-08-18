@@ -322,13 +322,14 @@ In `src/classiflow/settings.py`, add after `EXTRACTION_CONFIG_PATH`:
 and add after the `extraction_config_path` property:
 
 ```python
-    @property
-    def enrichment_model_path(self) -> str:
-        return self.ENRICHMENT_MODEL_PATH
+@property
+def enrichment_model_path(self) -> str:
+    return self.ENRICHMENT_MODEL_PATH
 
-    @property
-    def enrichment_config_path(self) -> str:
-        return self.ENRICHMENT_CONFIG_PATH
+
+@property
+def enrichment_config_path(self) -> str:
+    return self.ENRICHMENT_CONFIG_PATH
 ```
 
 - [ ] **Step 4: Create `config/enrichment.yaml`**
@@ -673,6 +674,7 @@ Revision ID: 0004
 Revises: 0003
 Create Date: 2026-08-17
 """
+
 import sqlalchemy as sa
 
 from alembic import op
@@ -812,10 +814,13 @@ def _node() -> TextCleanerNode:
 
 class TestTextCleanerClean:
     def test_strips_lines_repeated_3_or_more_times(self) -> None:
-        text = "\n".join(
-            ["Municipalidad de Rosario", "Artículo 1", "Municipalidad de Rosario",
-             "Artículo 2", "Municipalidad de Rosario"]
-        )
+        text = "\n".join([
+            "Municipalidad de Rosario",
+            "Artículo 1",
+            "Municipalidad de Rosario",
+            "Artículo 2",
+            "Municipalidad de Rosario",
+        ])
         result = _node().clean(text)
         assert "Municipalidad de Rosario" not in result.cleaned_text
         assert "Artículo 1" in result.cleaned_text
@@ -837,9 +842,10 @@ class TestTextCleanerClean:
         # "a" + combining acute accent (NFD) vs precomposed "á" (NFC)
         decomposed = "Municipalidad de Rosarió"
         result = _node().clean(decomposed)
-        assert result.cleaned_text == "Municipalidad de Rosarió".replace(
-            "́", ""
-        ) or "́" not in result.cleaned_text
+        assert (
+            result.cleaned_text == "Municipalidad de Rosarió".replace("́", "")
+            or "́" not in result.cleaned_text
+        )
 
     def test_empty_text_yields_empty_result(self) -> None:
         result = _node().clean("")
@@ -1363,9 +1369,7 @@ class TestMetadataEnricherRun:
 
     async def test_emits_started_then_passed(self) -> None:
         audit_repo = InMemoryAuditRepository()
-        node = MetadataEnricherNode(
-            audit=AuditService(audit_repo), broadcaster=EventBroadcaster()
-        )
+        node = MetadataEnricherNode(audit=AuditService(audit_repo), broadcaster=EventBroadcaster())
         ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
         await node.run(
             ctx, filename="doc.pdf", language="es", sha256="b" * 64, stage2_extractor_used="ocr"
@@ -2055,44 +2059,42 @@ class PipelineService:
 Add the new method, after `_finalize_job`:
 
 ```python
-    async def _run_enrichment(self, job_id: str, filename: str, final_state: JobState) -> None:
-        reception = cast("FileReceptionResult", final_state["reception"])
-        content_validation = cast("ContentValidationResult", final_state["content_validation"])
-        extraction = cast("ExtractionResult", final_state["extraction"])
-        initial: EnrichmentState = {
-            "job_id": job_id,
-            "filename": filename,
-            "text": final_state["text"],
-            "language": content_validation.detected_language,
-            "sha256": reception.sha256,
-            "stage2_extractor_used": extraction.extractor_used,
-        }
-        max_retries = get_enrichment_config().max_enrichment_retries
-        last_error: EnrichmentError | None = None
-        for _attempt in range(max_retries + 1):
-            try:
-                result = cast(
-                    "EnrichmentState", await self._enrichment_coordinator.ainvoke(initial)
-                )
-            except EnrichmentError as exc:
-                last_error = exc
-                continue
-            await self._enriched_record_repo.save(
-                EnrichedRecord(
-                    job_id=job_id,
-                    cleaned_text=result["cleaned_text"],
-                    entities=result["entities"].model_dump(),
-                    metadata_=result["metadata"].model_dump(),
-                )
+async def _run_enrichment(self, job_id: str, filename: str, final_state: JobState) -> None:
+    reception = cast("FileReceptionResult", final_state["reception"])
+    content_validation = cast("ContentValidationResult", final_state["content_validation"])
+    extraction = cast("ExtractionResult", final_state["extraction"])
+    initial: EnrichmentState = {
+        "job_id": job_id,
+        "filename": filename,
+        "text": final_state["text"],
+        "language": content_validation.detected_language,
+        "sha256": reception.sha256,
+        "stage2_extractor_used": extraction.extractor_used,
+    }
+    max_retries = get_enrichment_config().max_enrichment_retries
+    last_error: EnrichmentError | None = None
+    for _attempt in range(max_retries + 1):
+        try:
+            result = cast("EnrichmentState", await self._enrichment_coordinator.ainvoke(initial))
+        except EnrichmentError as exc:
+            last_error = exc
+            continue
+        await self._enriched_record_repo.save(
+            EnrichedRecord(
+                job_id=job_id,
+                cleaned_text=result["cleaned_text"],
+                entities=result["entities"].model_dump(),
+                metadata_=result["metadata"].model_dump(),
             )
-            return
-        await self._job_repo.update_status(
-            job_id,
-            "review",
-            rejection_reason=f"Enrichment failed after retries: {last_error}",
-            review_action_needed="enrichment_failed",
-            failed_at_node="enrichment",
         )
+        return
+    await self._job_repo.update_status(
+        job_id,
+        "review",
+        rejection_reason=f"Enrichment failed after retries: {last_error}",
+        review_action_needed="enrichment_failed",
+        failed_at_node="enrichment",
+    )
 ```
 
 - [ ] **Step 4: Run test to verify it passes**

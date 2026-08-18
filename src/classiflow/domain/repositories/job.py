@@ -25,7 +25,7 @@ class IJobRepository(Protocol):
     # Each kwarg below is an independently-optional UNSET-sentinel field (see UnsetType
     # above); collapsing them into one param object would lose the per-field opt-in
     # this pattern exists for.
-    async def update_status(  # noqa: PLR0913
+    async def update_status(
         self,
         job_id: str,
         status: str,

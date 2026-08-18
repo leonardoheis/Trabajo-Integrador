@@ -101,6 +101,7 @@ defaults that fail safe on a malformed/partial SLM response rather than raising.
 class EntityExtractionInput(BaseEntity):
     cleaned_text: str
 
+
 class EntityExtractionOutput(BaseEntity):
     doc_type_hint: str | None = None
     number: str | None = None
@@ -109,7 +110,10 @@ class EntityExtractionOutput(BaseEntity):
     signatories: list[str] = []
     article_count: int | None = None
 
-def build_entity_extraction_chain(llm: BaseLLM) -> Runnable[EntityExtractionInput, EntityExtractionOutput]:
+
+def build_entity_extraction_chain(
+    llm: BaseLLM,
+) -> Runnable[EntityExtractionInput, EntityExtractionOutput]:
     return RunnableLambda(_format_prompt) | llm | StrOutputParser() | RunnableLambda(_extract)
 ```
 
