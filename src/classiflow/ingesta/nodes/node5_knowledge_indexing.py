@@ -18,19 +18,19 @@ def _build_document(indexed: IndexResult, job_id: str, sha256: str, filename: st
     Returns:
         Database Document model with all fields populated.
     """
-    metadata = indexed.metadata
+    metadata = indexed.metadata.for_storage()
     return Document(
         job_id=job_id,
         sha256=sha256,
         filename=filename,
-        doc_type=metadata.doc_type or None,
-        number=metadata.number or None,
-        year=metadata.year or None,
-        subject=metadata.subject or None,
-        sanction_date=metadata.sanction_date or None,
-        publication_date=metadata.publication_date or None,
-        bulletin_number=metadata.bulletin_number or None,
-        download_url=metadata.download_url or None,
+        doc_type=metadata.doc_type,
+        number=metadata.number,
+        year=metadata.year,
+        subject=metadata.subject,
+        sanction_date=metadata.sanction_date,
+        publication_date=metadata.publication_date,
+        bulletin_number=metadata.bulletin_number,
+        download_url=metadata.download_url,
         chunk_count=indexed.chunk_count,
     )
 

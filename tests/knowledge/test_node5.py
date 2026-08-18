@@ -171,3 +171,57 @@ class TestKnowledgeIndexingNode:
         await collect_task
 
         assert events[1].status == JobStatus.PASSED  # type: ignore[union-attr]
+
+
+class _MetadataRepoWithEmpty:
+    """Metadata repository that returns empty fields (unmatchd upload)."""
+
+    def resolve(self, filename: str) -> DocumentMetadata:
+        return DocumentMetadata(filename=filename)
+
+
+class TestDocumentMetadataForStorage:
+    """Test that empty fields are converted to None for database storage."""
+
+    async def test_empty_fields_become_none(
+        self, broadcaster: EventBroadcaster, document_repo: InMemoryDocumentRepository
+    ) -> None:
+        """Unmatched uploads have empty metadata fields, which convert to None in storage."""
+        indexer = IndexerService(
+            chunker=ChunkerService(chunk_size=200, chunk_overlap=40),
+            embedder=_Embedder(),
+            vector_store=InMemoryVectorStore(),
+            metadata_repo=_MetadataRepoWithEmpty(),
+        )
+        node = KnowledgeIndexingNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=broadcaster,
+            indexer=indexer,
+            document_repo=document_repo,
+        )
+
+        await node.run(_CTX, _SHA256, _TEXT)
+        saved = await document_repo.find_by_sha256(_SHA256)
+
+        assert saved is not None
+        assert saved.filename == _FILENAME
+        assert saved.doc_type is None
+        assert saved.number is None
+        assert saved.year is None
+        assert saved.subject is None
+        assert saved.download_url is None
+
+    async def test_nonempty_fields_stay_as_strings(
+        self, broadcaster: EventBroadcaster, document_repo: InMemoryDocumentRepository
+    ) -> None:
+        """Fields with values stay as strings, not converted to None."""
+        node = _make_node(InMemoryVectorStore(), document_repo, broadcaster)
+
+        await node.run(_CTX, _SHA256, _TEXT)
+        saved = await document_repo.find_by_sha256(_SHA256)
+
+        assert saved is not None
+        assert saved.doc_type == "Ordenanza"  # Not None
+        assert saved.number == "10902"  # Not None
+        assert saved.year == "2026"  # Not None
+        assert saved.subject == "Presupuesto municipal"  # Not None

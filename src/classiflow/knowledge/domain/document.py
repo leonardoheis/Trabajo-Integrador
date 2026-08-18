@@ -37,3 +37,21 @@ class DocumentMetadata(BaseEntity):
     def citation(self) -> str:
         """Human-readable identifier, e.g. `Decreto 810/2026`."""
         return format_citation(self.doc_type, self.number, self.year, self.filename)
+
+    def for_storage(self) -> "DocumentMetadata":
+        """Return a copy with empty strings converted to None for database storage.
+
+        Empty string means 'not in CSV'; None means 'should be NULL in DB'. This
+        makes the distinction explicit rather than using ambiguous `or None` operators
+        at call sites. Filename and source_csv are never converted (required/metadata).
+
+        Returns:
+            A new DocumentMetadata with storage-safe values.
+        """
+        return self.model_copy(
+            update={
+                k: v or None
+                for k, v in self.__dict__.items()
+                if k not in {"filename", "source_csv"} and isinstance(v, str)
+            }
+        )
