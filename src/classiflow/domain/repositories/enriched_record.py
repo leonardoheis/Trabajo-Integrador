@@ -1,0 +1,8 @@
+from typing import Protocol
+
+from classiflow.database.models import EnrichedRecord
+
+
+class IEnrichedRecordRepository(Protocol):
+    async def save(self, record: EnrichedRecord) -> None: ...
+    async def find_by_job_id(self, job_id: str) -> EnrichedRecord | None: ...
