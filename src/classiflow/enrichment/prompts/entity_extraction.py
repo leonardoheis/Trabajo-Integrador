@@ -63,9 +63,4 @@ def _format_prompt(chain_input: EntityExtractionInput) -> str:
 def build_entity_extraction_chain(
     llm: BaseLLM,
 ) -> Runnable[EntityExtractionInput, EntityExtractionOutput]:
-    return (
-        RunnableLambda(_format_prompt)
-        | llm
-        | StrOutputParser()
-        | RunnableLambda(_extract)
-    )
+    return RunnableLambda(_format_prompt) | llm | StrOutputParser() | RunnableLambda(_extract)
