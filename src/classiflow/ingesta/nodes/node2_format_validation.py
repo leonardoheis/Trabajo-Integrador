@@ -12,8 +12,8 @@ from classiflow.ingesta.domain import (
     JobContext,
 )
 from classiflow.ingesta.llm_provider import get_llm_langchain
-from classiflow.pipeline.base import BaseNode
 from classiflow.ingesta.prompts import FormatChainInput, FormatDecisionOutput, build_format_chain
+from classiflow.pipeline.base import BaseNode
 from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
 

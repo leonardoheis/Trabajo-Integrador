@@ -9,12 +9,12 @@ from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_content import ContentValidationConfig, get_content_validation_config
 from classiflow.ingesta.domain import ContentValidationResult, FileReceptionResult, JobContext
 from classiflow.ingesta.llm_provider import get_llm_langchain
-from classiflow.pipeline.base import BaseNode
 from classiflow.ingesta.prompts import (
     ContentChainInput,
     LegitimacyDecisionOutput,
     build_content_chain,
 )
+from classiflow.pipeline.base import BaseNode
 from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
 
