@@ -65,6 +65,49 @@ class TestTextCleanerClean:
         lines = result.cleaned_text.split("\n")
         assert "" not in lines
 
+    def test_strips_table_border_rows(self) -> None:
+        text = "Contenido real\n ----------  ------------  ---  ---  --- \nMás contenido"
+        result = _node().clean(text)
+        lines = result.cleaned_text.split("\n")
+        assert "Contenido real" in lines
+        assert "Más contenido" in lines
+        assert all(line.strip("- ") for line in lines)
+
+    def test_collapses_wide_internal_gaps(self) -> None:
+        text = "lo  yrsJinn promovidapor                  lo!,   inteur,:mtl!S"
+        result = _node().clean(text)
+        assert "  " not in result.cleaned_text
+
+    def test_gibberish_line_dropped_when_enabled(self) -> None:
+        config = EnrichmentConfig(repeated_line_min_count=3, gibberish_detection_enabled=True)
+        node = TextCleanerNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            config=config,
+        )
+        text = (
+            "Contenido real y legible\n1 h  l . 1  1 1 1 1 1  1 ,  1 1 1 . 1 1 1 1 1\nMás contenido"
+        )
+        result = node.clean(text)
+        assert "Contenido real y legible" in result.cleaned_text
+        assert "Más contenido" in result.cleaned_text
+        assert "1 h" not in result.cleaned_text
+
+    def test_gibberish_detection_off_by_default(self) -> None:
+        text = "1 h  l . 1  1 1 1 1 1  1 ,  1 1 1 . 1 1 1 1 1"
+        result = _node().clean(text)
+        assert "1 h" in result.cleaned_text
+
+    def test_short_line_never_flagged_as_gibberish(self) -> None:
+        config = EnrichmentConfig(repeated_line_min_count=3, gibberish_detection_enabled=True)
+        node = TextCleanerNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            config=config,
+        )
+        result = node.clean("Art. 2º.-")
+        assert "Art. 2º.-" in result.cleaned_text
+
 
 class TestTextCleanerRun:
     async def test_run_emits_started_and_passed(self) -> None:

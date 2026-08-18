@@ -10,10 +10,26 @@ from classiflow.pipeline.context import JobContext
 from classiflow.services.audit.service import AuditService
 
 _PAGE_NUMBER_RE = re.compile(r"^(p[aá]gina\s+)?\d+(\s*/\s*\d+)?$", re.IGNORECASE)
+# OCR renders table/form borders and underlines as runs of dashes -- a line with
+# nothing but dashes and whitespace carries no content.
+_TABLE_BORDER_RE = re.compile(r"^[\s\-]+$")
 # Strips characters that aren't letters (incl. accented Spanish), digits, whitespace,
 # or common punctuation seen in municipal act text -- OCR noise typically shows up as
 # runs of symbols outside this set.
 _NOISE_RE = re.compile(r"[^\w\sáéíóúñÁÉÍÓÚÑüÜ.,;:()\-\"'ºª/%°$¿¡?!]")
+# OCR misreads of table columns leave wide gaps between words on the same line.
+_MULTI_SPACE_RE = re.compile(r" {2,}")
+_GIBBERISH_MAX_SHORT_TOKEN_LEN = 2
+
+
+def _is_gibberish(stripped: str, config: EnrichmentConfig) -> bool:
+    if not config.gibberish_detection_enabled:
+        return False
+    tokens = stripped.split()
+    if len(tokens) < config.gibberish_min_tokens:
+        return False
+    short_count = sum(1 for token in tokens if len(token) <= _GIBBERISH_MAX_SHORT_TOKEN_LEN)
+    return (short_count / len(tokens)) >= config.gibberish_short_token_ratio
 
 
 class TextCleanerNode(BaseNode):
@@ -46,6 +62,15 @@ class TextCleanerNode(BaseNode):
         )
         return result
 
+    def _should_drop_line(self, stripped: str, counts: dict[str, int]) -> bool:
+        if counts[stripped] >= self.config.repeated_line_min_count:
+            return True
+        if _PAGE_NUMBER_RE.match(stripped):
+            return True
+        if _TABLE_BORDER_RE.match(stripped):
+            return True
+        return _is_gibberish(stripped, self.config)
+
     def clean(self, text: str) -> TextCleaningResult:
         # Normalize to NFC first so combining diacritics become precomposed chars
         # and won't be stripped by the noise regex
@@ -61,13 +86,9 @@ class TextCleanerNode(BaseNode):
         kept: list[str] = []
         for line in lines:
             stripped = line.strip()
-            if not stripped:
+            if not stripped or self._should_drop_line(stripped, counts):
                 continue
-            if counts[stripped] >= self.config.repeated_line_min_count:
-                continue
-            if _PAGE_NUMBER_RE.match(stripped):
-                continue
-            noise_stripped = _NOISE_RE.sub("", stripped)
+            noise_stripped = _MULTI_SPACE_RE.sub(" ", _NOISE_RE.sub("", stripped))
             if noise_stripped:
                 kept.append(noise_stripped)
 
