@@ -81,10 +81,11 @@ class PipelineService:
 
         failed_at_node = await self._persist_steps(job_id, final_state)
         await self._finalize_job(job_id, final_state, failed_at_node)
-        unload_slm()
 
         if final_state.get("final_status") == "accepted":
             await self._run_enrichment(job_id, filename, final_state)
+
+        unload_slm()
 
         await self._broadcaster.emit(
             NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.DONE)
@@ -154,17 +155,17 @@ class PipelineService:
                 result = cast(
                     "EnrichmentState", await self._enrichment_coordinator.ainvoke(initial)
                 )
+                await self._enriched_record_repo.save(
+                    EnrichedRecord(
+                        job_id=job_id,
+                        cleaned_text=result["cleaned_text"],
+                        entities=result["entities"].model_dump(),
+                        metadata_=result["metadata"].model_dump(),
+                    )
+                )
             except EnrichmentError as exc:
                 last_error = exc
                 continue
-            await self._enriched_record_repo.save(
-                EnrichedRecord(
-                    job_id=job_id,
-                    cleaned_text=result["cleaned_text"],
-                    entities=result["entities"].model_dump(),
-                    metadata_=result["metadata"].model_dump(),
-                )
-            )
             return
         await self._job_repo.update_status(
             job_id,

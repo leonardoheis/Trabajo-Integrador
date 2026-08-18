@@ -1,9 +1,14 @@
 import pytest
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.enrichment.config_enrichment import EnrichmentConfig
 from classiflow.enrichment.exceptions import EntityExtractionFailedError
 from classiflow.enrichment.nodes.entity_extractor import EntityExtractorNode
-from classiflow.enrichment.prompts.entity_extraction import build_entity_extraction_chain
+from classiflow.enrichment.prompts.entity_extraction import (
+    EntityExtractionInput,
+    EntityExtractionOutput,
+    build_entity_extraction_chain,
+)
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.llm_provider import MockLlm
 from classiflow.pipeline.context import JobContext
@@ -16,6 +21,18 @@ _VALID_RESPONSE = (
     '{"doc_type_hint": "decreto", "number": "42", "year": 2020, '
     '"issuing_body": "Intendencia", "signatories": [], "article_count": 1}'
 )
+
+
+class _RecordingChain:
+    """Fake `_EntityChain` that records the text it was invoked with."""
+
+    def __init__(self, response: EntityExtractionOutput) -> None:
+        self.response = response
+        self.seen_text: str | None = None
+
+    def invoke(self, inp: EntityExtractionInput) -> EntityExtractionOutput:
+        self.seen_text = inp.cleaned_text
+        return self.response
 
 
 def _node(response: str) -> EntityExtractorNode:
@@ -36,6 +53,18 @@ class TestEntityExtractorExtract:
     def test_extract_raises_domain_error_on_malformed_response(self) -> None:
         with pytest.raises(EntityExtractionFailedError, match="No valid JSON object"):
             _node("not json").extract("Artículo 1º ...")
+
+    def test_extract_truncates_text_to_entity_excerpt_len(self) -> None:
+        output = EntityExtractionOutput(doc_type_hint="decreto")
+        chain = _RecordingChain(output)
+        node = EntityExtractorNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            entity_chain=chain,
+            config=EnrichmentConfig(entity_excerpt_len=10),
+        )
+        node.extract("a" * 100)
+        assert chain.seen_text == "a" * 10
 
 
 class TestEntityExtractorRun:

@@ -9,3 +9,9 @@ repeated_line_min_count: 3
 # How many times the enrichment coordinator retries after a failure (e.g. the
 # entity-extraction LLM call erroring) before the job is marked for review.
 max_enrichment_retries: 2
+
+# Max characters of cleaned_text sent into the entity-extraction prompt. Bounds the
+# prompt to what fits in the enrichment model's n_ctx=2048 (see
+# ingesta/llm_provider.py) -- real municipal documents routinely exceed that context
+# window uncapped.
+entity_excerpt_len: 5000

@@ -10,6 +10,7 @@ from classiflow.settings import Settings
 class EnrichmentConfig(BaseModel):
     repeated_line_min_count: int = 3
     max_enrichment_retries: int = 2
+    entity_excerpt_len: int = 5000
 
 
 @lru_cache(maxsize=1)

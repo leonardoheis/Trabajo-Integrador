@@ -57,14 +57,14 @@ Attach context from outside the document body:
 | `source` | Hardcoded `"manual_upload"` — the only live ingestion path since the `scrapper/` directory was deleted (no source produces `"municipal_dataset"`/`"web_scraping"` documents anymore). `csv_category` is dropped entirely for the same reason. |
 | `filename` | original filename |
 | `language` | from Stage 1 Node 3 (already detected, not re-detected) |
-| `sha256` | from Stage 1 Node 4 (already computed) |
+| `sha256` | from Stage 1 Node 1 (`FileReceptionResult.sha256`, already computed) |
 | `stage2_extractor_used` | from the `"extraction"` `DocumentStep.detail` |
 
 ## DB Model — EnrichedRecord
 
 | Field | Type | Notes |
 |---|---|---|
-| `id` | UUID | PK |
+| `id` | int | PK (autoincrement) |
 | `job_id` | str | FK → `Job` (same key `DocumentStep` already uses) |
 | `cleaned_text` | str | |
 | `entities` | JSON | EntityExtraction fields above |

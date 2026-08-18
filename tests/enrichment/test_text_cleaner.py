@@ -52,6 +52,19 @@ class TestTextCleanerClean:
         result = _node().clean("")
         assert not result.cleaned_text
 
+    def test_strips_ocr_noise_but_keeps_ordinal_and_currency(self) -> None:
+        text = "Artículo 1° — Presupuesto $500.000 #@%&*junk"
+        result = _node().clean(text)
+        assert "1°" in result.cleaned_text
+        assert "$500.000" in result.cleaned_text
+        assert "#@%&*" not in result.cleaned_text
+
+    def test_line_that_is_entirely_noise_is_dropped_not_blank(self) -> None:
+        text = "Contenido real\n#@%&*\nMás contenido"
+        result = _node().clean(text)
+        lines = result.cleaned_text.split("\n")
+        assert "" not in lines
+
 
 class TestTextCleanerRun:
     async def test_run_emits_started_and_passed(self) -> None:

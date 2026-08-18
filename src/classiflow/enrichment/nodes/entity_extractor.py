@@ -2,6 +2,7 @@ import asyncio
 from typing import Protocol, cast, runtime_checkable
 
 from classiflow.database.repositories.audit import AuditDetail
+from classiflow.enrichment.config_enrichment import EnrichmentConfig, get_enrichment_config
 from classiflow.enrichment.domain.results import EntityExtractionResult
 from classiflow.enrichment.exceptions import EntityExtractionFailedError
 from classiflow.enrichment.prompts.entity_extraction import (
@@ -34,9 +35,11 @@ class EntityExtractorNode(BaseNode):
         broadcaster: EventBroadcaster,
         *,
         entity_chain: "_EntityChain | None" = None,
+        config: EnrichmentConfig | None = None,
     ) -> None:
         super().__init__(audit, broadcaster)
         self.entity_chain: _EntityChain | None = entity_chain
+        self.config: EnrichmentConfig = config if config is not None else get_enrichment_config()
 
     async def run(self, ctx: JobContext, cleaned_text: str) -> EntityExtractionResult:
         start = await self._emit_started(ctx)
@@ -63,16 +66,19 @@ class EntityExtractorNode(BaseNode):
         return result
 
     def extract(self, cleaned_text: str) -> EntityExtractionResult:
-        if self.entity_chain is not None:
-            chain: _EntityChain = self.entity_chain
-        else:
-            chain = cast(
-                "_EntityChain",
-                build_entity_extraction_chain(get_llm_langchain(Settings.enrichment_model_path)),
-            )
+        excerpt = cleaned_text[: self.config.entity_excerpt_len]
         try:
-            output = chain.invoke(EntityExtractionInput(cleaned_text=cleaned_text))
-        except (ValueError, LlmProviderError) as exc:
+            if self.entity_chain is not None:
+                chain: _EntityChain = self.entity_chain
+            else:
+                chain = cast(
+                    "_EntityChain",
+                    build_entity_extraction_chain(
+                        get_llm_langchain(Settings.enrichment_model_path)
+                    ),
+                )
+            output = chain.invoke(EntityExtractionInput(cleaned_text=excerpt))
+        except (ValueError, LlmProviderError, OSError, RuntimeError) as exc:
             raise EntityExtractionFailedError(reason=str(exc)) from exc
         return EntityExtractionResult(
             doc_type_hint=output.doc_type_hint,

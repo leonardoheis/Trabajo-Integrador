@@ -13,7 +13,7 @@ _PAGE_NUMBER_RE = re.compile(r"^(p[aá]gina\s+)?\d+(\s*/\s*\d+)?$", re.IGNORECAS
 # Strips characters that aren't letters (incl. accented Spanish), digits, whitespace,
 # or common punctuation seen in municipal act text -- OCR noise typically shows up as
 # runs of symbols outside this set.
-_NOISE_RE = re.compile(r"[^\w\sáéíóúñÁÉÍÓÚÑüÜ.,;:()\-\"'ºª/%]")
+_NOISE_RE = re.compile(r"[^\w\sáéíóúñÁÉÍÓÚÑüÜ.,;:()\-\"'ºª/%°$¿¡?!]")
 
 
 class TextCleanerNode(BaseNode):
@@ -67,6 +67,8 @@ class TextCleanerNode(BaseNode):
                 continue
             if _PAGE_NUMBER_RE.match(stripped):
                 continue
-            kept.append(_NOISE_RE.sub("", stripped))
+            noise_stripped = _NOISE_RE.sub("", stripped)
+            if noise_stripped:
+                kept.append(noise_stripped)
 
         return TextCleaningResult(cleaned_text="\n".join(kept))
