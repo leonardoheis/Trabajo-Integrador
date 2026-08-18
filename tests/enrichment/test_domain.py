@@ -11,7 +11,7 @@ from classiflow.enrichment.exceptions import EntityExtractionFailedError
 
 class TestResultDefaults:
     def test_text_cleaning_result_defaults(self) -> None:
-        assert TextCleaningResult().cleaned_text == ""  # noqa: PLC1901
+        assert not TextCleaningResult().cleaned_text
 
     def test_entity_extraction_result_defaults(self) -> None:
         result = EntityExtractionResult()
@@ -21,8 +21,8 @@ class TestResultDefaults:
 
     def test_metadata_enrichment_result_defaults(self) -> None:
         result = MetadataEnrichmentResult()
-        assert result.source == ""  # noqa: PLC1901
-        assert result.language == ""  # noqa: PLC1901
+        assert not result.source
+        assert not result.language
 
 
 class TestEnrichmentUpdate:
