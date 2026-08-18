@@ -112,6 +112,13 @@ ignore = [
     "EM101",    # field name strings in @dataclass exceptions are not message literals
 ]
 
+[tool.ruff.lint.pylint]
+# Mirrors [tool.pylint.design] max-args below -- FastAPI's Depends()-per-dependency
+# style means DI-composing functions (get_pipeline_service et al.) legitimately grow
+# one param per wired collaborator; 7 already matched pylint's own limit, ruff's
+# PLR0913/PLR0917 (default 5) just wasn't set to match it yet.
+max-args = 7
+
 [tool.ruff.format]
 # Set Ruff to imitate Black
 quote-style = "double"

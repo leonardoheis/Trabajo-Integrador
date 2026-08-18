@@ -12,13 +12,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from classiflow.database.base import get_session
 from classiflow.database.repositories.audit import SqlAuditRepository
 from classiflow.database.repositories.document_steps import SqlDocumentStepsRepository
+from classiflow.database.repositories.enriched_record import SqlEnrichedRecordRepository
 from classiflow.database.repositories.hash import IHashRepository, SqlHashRepository
 from classiflow.database.repositories.human_decision import SqlHumanDecisionRepository
 from classiflow.database.repositories.job import SqlJobRepository
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
+from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
 from classiflow.domain.repositories.human_decision import IHumanDecisionRepository
 from classiflow.domain.repositories.job import IJobRepository
 from classiflow.domain.user import User
+from classiflow.enrichment.coordinator import build_enrichment_coordinator
+from classiflow.enrichment.nodes import EntityExtractorNode, MetadataEnricherNode, TextCleanerNode
+from classiflow.enrichment.prompts.entity_extraction import (
+    EntityExtractionInput,
+    EntityExtractionOutput,
+)
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
 from classiflow.ingesta.extract import TextExtractFn
@@ -42,6 +50,7 @@ from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
 
 if TYPE_CHECKING:
+    from classiflow.enrichment.nodes.entity_extractor import _EntityChain
     from classiflow.ingesta.nodes.node2_format_validation import _FormatChain
     from classiflow.ingesta.nodes.node3_content_validation import _ContentChain
 
@@ -140,6 +149,48 @@ def get_node4(
     )
 
 
+def get_enriched_record_repo(session: DbSession) -> IEnrichedRecordRepository:
+    return SqlEnrichedRecordRepository(session)
+
+
+def get_text_cleaner(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+) -> TextCleanerNode:
+    return TextCleanerNode(audit=audit_service, broadcaster=broadcaster)
+
+
+@inject
+def get_entity_extractor(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+    entity_chain: Annotated[
+        Runnable[EntityExtractionInput, EntityExtractionOutput],
+        Depends(Provide[Container.entity_extraction_chain]),
+    ],
+) -> EntityExtractorNode:
+    return EntityExtractorNode(
+        audit=audit_service,
+        broadcaster=broadcaster,
+        entity_chain=cast("_EntityChain", entity_chain),
+    )
+
+
+def get_metadata_enricher(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+) -> MetadataEnricherNode:
+    return MetadataEnricherNode(audit=audit_service, broadcaster=broadcaster)
+
+
+def get_enrichment_coordinator(
+    text_cleaner: Annotated[TextCleanerNode, Depends(get_text_cleaner)],
+    entity_extractor: Annotated[EntityExtractorNode, Depends(get_entity_extractor)],
+    metadata_enricher: Annotated[MetadataEnricherNode, Depends(get_metadata_enricher)],
+) -> CompiledStateGraph:  # type: ignore[type-arg]
+    return build_enrichment_coordinator(text_cleaner, entity_extractor, metadata_enricher)
+
+
 @inject
 def get_extraction_step(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
@@ -172,12 +223,18 @@ def get_coordinator(
 def get_pipeline_service(
     job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
     document_steps_repo: Annotated[IDocumentStepsRepository, Depends(get_document_steps_repo)],
+    enriched_record_repo: Annotated[IEnrichedRecordRepository, Depends(get_enriched_record_repo)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
     coordinator: Annotated[CompiledStateGraph, Depends(get_coordinator)],  # type: ignore[type-arg]
+    enrichment_coordinator: Annotated[  # type: ignore[type-arg]
+        CompiledStateGraph, Depends(get_enrichment_coordinator)
+    ],
 ) -> PipelineService:
     return PipelineService(
         job_repo=job_repo,
         document_steps_repo=document_steps_repo,
+        enriched_record_repo=enriched_record_repo,
         broadcaster=broadcaster,
         coordinator=coordinator,
+        enrichment_coordinator=enrichment_coordinator,
     )

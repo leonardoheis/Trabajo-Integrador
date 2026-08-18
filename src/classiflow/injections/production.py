@@ -6,6 +6,7 @@ from dependency_injector import containers, providers
 
 from classiflow.database.base import get_session
 from classiflow.database.repositories.user import SqlUserRepository
+from classiflow.enrichment.prompts.entity_extraction import build_entity_extraction_chain
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_extraction import get_extraction_config
 from classiflow.ingesta.extract import TextExtractor
@@ -82,6 +83,12 @@ class Container(containers.DeclarativeContainer):
     # instead of adding a redundant llm constructor param to either node.
     node2_format_chain = providers.Callable(build_format_chain, node2_llm)
     node3_content_chain = providers.Callable(build_content_chain, node3_llm)
+
+    # Same Callable-wrapping-a-cache reasoning as node2_llm/node3_llm above -- a fresh
+    # get_llm_langchain(path) call per resolution, sharing the same @lru_cache(maxsize=4)
+    # slot, so unload_slm()'s cache_clear() still releases this model's VRAM too.
+    enrichment_llm = providers.Callable(get_llm_langchain, Settings.enrichment_model_path)
+    entity_extraction_chain = providers.Callable(build_entity_extraction_chain, enrichment_llm)
 
 
 @cache
