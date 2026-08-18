@@ -103,3 +103,21 @@ class HumanDecision(Base):
     )
 
     job: Mapped[Job] = relationship("Job", back_populates="decisions")
+
+
+class EnrichedRecord(Base):
+    __tablename__ = "enriched_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    cleaned_text: Mapped[str] = mapped_column(Text, nullable=False)
+    entities: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    # Named metadata_ (not metadata) because `metadata` is reserved on every SQLAlchemy
+    # Declarative class (Base.metadata is the schema's MetaData object) -- the DB column
+    # itself is still named "metadata", only the Python attribute differs.
+    metadata_: Mapped[dict[str, object]] = mapped_column("metadata", JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )

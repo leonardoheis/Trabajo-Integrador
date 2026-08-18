@@ -3,7 +3,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from classiflow.ingesta.config_loader import load_yaml_config
+from classiflow.config_loader import load_yaml_config
 
 _CONFIG_PATH = Path(__file__).parents[3] / "config" / "allowed_formats.yaml"
 

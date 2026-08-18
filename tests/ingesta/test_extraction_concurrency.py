@@ -11,6 +11,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
+from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.database.repositories.job import InMemoryJobRepository
 from classiflow.domain.job import JobStatus
@@ -161,8 +162,10 @@ async def test_extractor_used_is_queryable_from_document_step() -> None:
     service = PipelineService(
         job_repo=InMemoryJobRepository(),
         document_steps_repo=document_steps_repo,
+        enriched_record_repo=InMemoryEnrichedRecordRepository(),  # unused: only _persist_steps runs
         broadcaster=EventBroadcaster(),
         coordinator=cast("CompiledStateGraph", None),  # unused: only _persist_steps runs
+        enrichment_coordinator=cast("CompiledStateGraph", None),  # unused: only _persist_steps runs
     )
     job_id = "persisted-job"
     final_state: JobState = {

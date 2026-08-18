@@ -3,16 +3,26 @@ import asyncio
 import numpy as np
 import numpy.typing as npt
 from dependency_injector import containers, providers
+from langchain_core.runnables import Runnable
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
+from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.database.repositories.human_decision import InMemoryHumanDecisionRepository
 from classiflow.database.repositories.job import InMemoryJobRepository
 from classiflow.database.repositories.user import InMemoryUserRepository
+from classiflow.enrichment.coordinator import build_enrichment_coordinator
+from classiflow.enrichment.nodes import EntityExtractorNode, MetadataEnricherNode, TextCleanerNode
+from classiflow.enrichment.prompts.entity_extraction import (
+    EntityExtractionInput,
+    EntityExtractionOutput,
+    build_entity_extraction_chain,
+)
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
 from classiflow.ingesta.domain import ExtractionResult
+from classiflow.ingesta.llm_provider import MockLlm
 from classiflow.ingesta.nodes import (
     ContentValidationNode,
     DuplicateControlNode,
@@ -43,6 +53,16 @@ def _test_embed(_text: str) -> npt.NDArray[np.float32]:
     return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
 
+_TEST_ENTITY_RESPONSE = (
+    '{"doc_type_hint": "ordenanza", "number": "1", "year": 2024, '
+    '"issuing_body": "Concejo Municipal", "signatories": [], "article_count": 1}'
+)
+
+
+def _test_entity_chain() -> Runnable[EntityExtractionInput, EntityExtractionOutput]:
+    return build_entity_extraction_chain(MockLlm(response=_TEST_ENTITY_RESPONSE))
+
+
 class TestContainer(containers.DeclarativeContainer):
     hash_repo = providers.Factory(InMemoryHashRepository)
     audit_repo = providers.Factory(InMemoryAuditRepository)
@@ -52,6 +72,8 @@ class TestContainer(containers.DeclarativeContainer):
     document_steps_repo = providers.Singleton(InMemoryDocumentStepsRepository)
     human_decision_repo = providers.Singleton(InMemoryHumanDecisionRepository)
     job_repo = providers.Singleton(InMemoryJobRepository)
+    enriched_record_repo = providers.Singleton(InMemoryEnrichedRecordRepository)
+    entity_extraction_chain = providers.Singleton(_test_entity_chain)
 
     audit_service = providers.Factory(AuditService, repo=audit_repo)
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
@@ -86,6 +108,24 @@ class TestContainer(containers.DeclarativeContainer):
         hash_repo=hash_repo,
         embedding_store=providers.Factory(EmbeddingStore, dim=4, embed_fn=_test_embed),
     )
+    enrichment_text_cleaner = providers.Factory(
+        TextCleanerNode, audit=audit_service, broadcaster=broadcaster
+    )
+    enrichment_entity_extractor = providers.Factory(
+        EntityExtractorNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        entity_chain=entity_extraction_chain,
+    )
+    enrichment_metadata_enricher = providers.Factory(
+        MetadataEnricherNode, audit=audit_service, broadcaster=broadcaster
+    )
+    enrichment_coordinator = providers.Factory(
+        build_enrichment_coordinator,
+        text_cleaner=enrichment_text_cleaner,
+        entity_extractor=enrichment_entity_extractor,
+        metadata_enricher=enrichment_metadata_enricher,
+    )
     coordinator = providers.Factory(
         build_coordinator,
         node1=node1,
@@ -98,6 +138,8 @@ class TestContainer(containers.DeclarativeContainer):
         PipelineService,
         job_repo=job_repo,
         document_steps_repo=document_steps_repo,
+        enriched_record_repo=enriched_record_repo,
         broadcaster=broadcaster,
         coordinator=coordinator,
+        enrichment_coordinator=enrichment_coordinator,
     )

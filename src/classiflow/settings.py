@@ -27,6 +27,8 @@ class _Settings(BaseSettings):
     OCR_LANG: str = os.getenv("OCR_LANG", "es")
     OCR_RENDER_DPI: int = int(os.getenv("OCR_RENDER_DPI", "200"))
     EXTRACTION_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "extraction.yaml")
+    ENRICHMENT_MODEL_PATH: str = _DEFAULT_MODEL
+    ENRICHMENT_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "enrichment.yaml")
     SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.8"))
     SLM_TOP_P: float = float(os.getenv("SLM_TOP_P", "0.95"))
     SLM_SEED: int = int(os.getenv("SLM_SEED", "42"))
@@ -72,6 +74,14 @@ class _Settings(BaseSettings):
     @property
     def extraction_config_path(self) -> str:
         return self.EXTRACTION_CONFIG_PATH
+
+    @property
+    def enrichment_model_path(self) -> str:
+        return self.ENRICHMENT_MODEL_PATH
+
+    @property
+    def enrichment_config_path(self) -> str:
+        return self.ENRICHMENT_CONFIG_PATH
 
     @property
     def slm_temperature(self) -> float:

@@ -1,0 +1,30 @@
+# Stage 3 (Refinement & Enrichment) thresholds.
+# enrichment/nodes/text_cleaner.py and PipelineService's retry-then-review
+# enrichment trigger use this config.
+
+# A line appearing this many times or more across the document is treated as a
+# running header/footer and stripped.
+repeated_line_min_count: 3
+
+# How many times the enrichment coordinator retries after a failure (e.g. the
+# entity-extraction LLM call erroring) before the job is marked for review.
+max_enrichment_retries: 2
+
+# Max characters of cleaned_text sent into the entity-extraction prompt. Bounds the
+# prompt to what fits in the enrichment model's n_ctx=2048 (see
+# ingesta/llm_provider.py) -- real municipal documents routinely exceed that context
+# window uncapped.
+entity_excerpt_len: 5000
+
+# Gibberish-line detection: drop lines that are almost entirely OCR failure (dense
+# runs of 1-2 character fragments), rather than noise mixed into otherwise-real text.
+# Off by default -- validated against one real document so far; enable once tuned
+# against a broader sample. See docs/superpowers/specs/2026-08-18-text-cleaner-ocr-heuristics-design.md.
+gibberish_detection_enabled: true
+
+# Fraction of a line's whitespace-separated tokens that must be <= 2 characters for
+# the line to be flagged as gibberish.
+gibberish_short_token_ratio: 0.6
+
+# Lines with fewer tokens than this are never flagged -- too little signal to judge.
+gibberish_min_tokens: 4
