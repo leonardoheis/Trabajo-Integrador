@@ -207,3 +207,6 @@ models/**
 
 # ---- Claude Code worktrees (local working directories, never committed) ----
 .claude/worktrees/
+
+# ---- superpowers subagent-driven-development scratch workspace ----
+.superpowers/
