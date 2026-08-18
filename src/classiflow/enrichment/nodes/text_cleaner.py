@@ -49,6 +49,10 @@ class TextCleanerNode(BaseNode):
         return result
 
     def clean(self, text: str) -> TextCleaningResult:
+        # Normalize to NFC first so combining diacritics become precomposed chars
+        # and won't be stripped by the noise regex
+        text = unicodedata.normalize("NFC", text)
+
         lines = text.split("\n")
         counts: dict[str, int] = {}
         for line in lines:
@@ -67,4 +71,4 @@ class TextCleanerNode(BaseNode):
                 continue
             kept.append(_NOISE_RE.sub("", stripped))
 
-        return TextCleaningResult(cleaned_text=unicodedata.normalize("NFC", "\n".join(kept)))
+        return TextCleaningResult(cleaned_text="\n".join(kept))

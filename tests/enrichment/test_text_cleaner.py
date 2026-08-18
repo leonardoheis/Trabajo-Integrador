@@ -1,3 +1,5 @@
+import unicodedata
+
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.enrichment.config_enrichment import EnrichmentConfig
 from classiflow.enrichment.nodes.text_cleaner import TextCleanerNode
@@ -40,12 +42,11 @@ class TestTextCleanerClean:
         assert "3/10" not in result.cleaned_text
 
     def test_normalizes_unicode_to_nfc(self) -> None:
-        # "a" + combining acute accent (NFD) vs precomposed "á" (NFC)
-        decomposed = "Municipalidad de Rosarió"
-        result = _node().clean(decomposed)
-        assert result.cleaned_text == "Municipalidad de Rosarió".replace(
-            "́", ""
-        ) or "́" not in result.cleaned_text
+        nfd_text = unicodedata.normalize("NFD", "Municipalidad de Rosarió")
+        assert not unicodedata.is_normalized("NFC", nfd_text)  # sanity: input really is NFD
+        result = _node().clean(nfd_text)
+        assert unicodedata.is_normalized("NFC", result.cleaned_text)
+        assert result.cleaned_text == unicodedata.normalize("NFC", nfd_text)
 
     def test_empty_text_yields_empty_result(self) -> None:
         result = _node().clean("")
