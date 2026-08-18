@@ -68,9 +68,9 @@ mode).
 class EnrichmentConfig(BaseModel):
     ...
     gibberish_detection_enabled: bool = False
-    gibberish_short_token_ratio: float = 0.6   # fraction of ≤2-char tokens to flag a line
-    gibberish_min_tokens: int = 4              # lines shorter than this are never flagged
-                                                # (too little signal to judge reliably)
+    gibberish_short_token_ratio: float = 0.6  # fraction of ≤2-char tokens to flag a line
+    gibberish_min_tokens: int = 4  # lines shorter than this are never flagged
+    # (too little signal to judge reliably)
 ```
 
 A line is dropped when `gibberish_detection_enabled` is true, it has at least
@@ -122,10 +122,10 @@ positive, only remove a specific, now-confirmed false-positive class.
 class EnrichmentConfig(BaseModel):
     ...
     fuzzy_dedup_enabled: bool = False
-    fuzzy_dedup_max_line_len: int = 80          # only lines this short are candidates
-    fuzzy_dedup_similarity_threshold: float = 0.5   # difflib ratio() to count as "same" line
-    fuzzy_dedup_min_count: int = 3               # cluster size needed to strip, mirrors
-                                                  # repeated_line_min_count's role
+    fuzzy_dedup_max_line_len: int = 80  # only lines this short are candidates
+    fuzzy_dedup_similarity_threshold: float = 0.5  # difflib ratio() to count as "same" line
+    fuzzy_dedup_min_count: int = 3  # cluster size needed to strip, mirrors
+    # repeated_line_min_count's role
 ```
 
 **Open risk, stated explicitly:** 0.5 is already close to the noise floor — it's the

@@ -39,37 +39,35 @@
 Add to `tests/enrichment/test_text_cleaner.py` (config fixture per-test since this needs a feature-on variant distinct from the module's shared `_CONFIG`):
 
 ```python
-    def test_gibberish_line_dropped_when_enabled(self) -> None:
-        config = EnrichmentConfig(
-            repeated_line_min_count=3, gibberish_detection_enabled=True
-        )
-        node = TextCleanerNode(
-            audit=AuditService(InMemoryAuditRepository()),
-            broadcaster=EventBroadcaster(),
-            config=config,
-        )
-        text = "Contenido real y legible\n1 h  l . 1  1 1 1 1 1  1 ,  1 1 1 . 1 1 1 1 1\nMás contenido"
-        result = node.clean(text)
-        assert "Contenido real y legible" in result.cleaned_text
-        assert "Más contenido" in result.cleaned_text
-        assert "1 h" not in result.cleaned_text
+def test_gibberish_line_dropped_when_enabled(self) -> None:
+    config = EnrichmentConfig(repeated_line_min_count=3, gibberish_detection_enabled=True)
+    node = TextCleanerNode(
+        audit=AuditService(InMemoryAuditRepository()),
+        broadcaster=EventBroadcaster(),
+        config=config,
+    )
+    text = "Contenido real y legible\n1 h  l . 1  1 1 1 1 1  1 ,  1 1 1 . 1 1 1 1 1\nMás contenido"
+    result = node.clean(text)
+    assert "Contenido real y legible" in result.cleaned_text
+    assert "Más contenido" in result.cleaned_text
+    assert "1 h" not in result.cleaned_text
 
-    def test_gibberish_detection_off_by_default(self) -> None:
-        text = "1 h  l . 1  1 1 1 1 1  1 ,  1 1 1 . 1 1 1 1 1"
-        result = _node().clean(text)
-        assert "1 h" in result.cleaned_text
 
-    def test_short_line_never_flagged_as_gibberish(self) -> None:
-        config = EnrichmentConfig(
-            repeated_line_min_count=3, gibberish_detection_enabled=True
-        )
-        node = TextCleanerNode(
-            audit=AuditService(InMemoryAuditRepository()),
-            broadcaster=EventBroadcaster(),
-            config=config,
-        )
-        result = node.clean("Art. 2º.-")
-        assert "Art. 2º.-" in result.cleaned_text
+def test_gibberish_detection_off_by_default(self) -> None:
+    text = "1 h  l . 1  1 1 1 1 1  1 ,  1 1 1 . 1 1 1 1 1"
+    result = _node().clean(text)
+    assert "1 h" in result.cleaned_text
+
+
+def test_short_line_never_flagged_as_gibberish(self) -> None:
+    config = EnrichmentConfig(repeated_line_min_count=3, gibberish_detection_enabled=True)
+    node = TextCleanerNode(
+        audit=AuditService(InMemoryAuditRepository()),
+        broadcaster=EventBroadcaster(),
+        config=config,
+    )
+    result = node.clean("Art. 2º.-")
+    assert "Art. 2º.-" in result.cleaned_text
 ```
 
 Add `from classiflow.enrichment.config_enrichment import EnrichmentConfig` to the test file's imports if not already present (it already imports `EnrichmentConfig` per the module's `_CONFIG = EnrichmentConfig(repeated_line_min_count=3)` line — reuse that import).
@@ -193,83 +191,86 @@ other directly).
 Add to `tests/enrichment/test_text_cleaner.py`:
 
 ```python
-    def test_fuzzy_duplicate_headers_dropped_when_enabled(self) -> None:
-        config = EnrichmentConfig(
-            repeated_line_min_count=3,
-            fuzzy_dedup_enabled=True,
-            fuzzy_dedup_similarity_threshold=0.5,
-            fuzzy_dedup_min_count=3,
-        )
-        node = TextCleanerNode(
-            audit=AuditService(InMemoryAuditRepository()),
-            broadcaster=EventBroadcaster(),
-            config=config,
-        )
-        text = "\n".join([
-            "Municipalidad de Rosario",
-            "Artículo 1",
-            "eAttmicijiat-clad de rJ!lioJa'tio",
-            "Artículo 2",
-            "eAum'cijiaáclacl ele $to:Ja!Ü",
-            "Artículo 3",
-        ])
-        result = node.clean(text)
-        assert "Municipalidad de Rosario" not in result.cleaned_text
-        assert "eAttmicijiat-clad" not in result.cleaned_text
-        assert "eAum'cijiaáclacl" not in result.cleaned_text
-        # Sequential/enumerated content must survive -- verified against real OCR
-        # data that naive similarity alone would wrongly cluster these together
-        # (see spec Decision 3's digit-template guard).
-        assert "Artículo 1" in result.cleaned_text
-        assert "Artículo 2" in result.cleaned_text
-        assert "Artículo 3" in result.cleaned_text
+def test_fuzzy_duplicate_headers_dropped_when_enabled(self) -> None:
+    config = EnrichmentConfig(
+        repeated_line_min_count=3,
+        fuzzy_dedup_enabled=True,
+        fuzzy_dedup_similarity_threshold=0.5,
+        fuzzy_dedup_min_count=3,
+    )
+    node = TextCleanerNode(
+        audit=AuditService(InMemoryAuditRepository()),
+        broadcaster=EventBroadcaster(),
+        config=config,
+    )
+    text = "\n".join([
+        "Municipalidad de Rosario",
+        "Artículo 1",
+        "eAttmicijiat-clad de rJ!lioJa'tio",
+        "Artículo 2",
+        "eAum'cijiaáclacl ele $to:Ja!Ü",
+        "Artículo 3",
+    ])
+    result = node.clean(text)
+    assert "Municipalidad de Rosario" not in result.cleaned_text
+    assert "eAttmicijiat-clad" not in result.cleaned_text
+    assert "eAum'cijiaáclacl" not in result.cleaned_text
+    # Sequential/enumerated content must survive -- verified against real OCR
+    # data that naive similarity alone would wrongly cluster these together
+    # (see spec Decision 3's digit-template guard).
+    assert "Artículo 1" in result.cleaned_text
+    assert "Artículo 2" in result.cleaned_text
+    assert "Artículo 3" in result.cleaned_text
 
-    def test_enumerated_lines_not_treated_as_fuzzy_duplicates(self) -> None:
-        config = EnrichmentConfig(
-            repeated_line_min_count=99,  # disable exact-match stripping for this test
-            fuzzy_dedup_enabled=True,
-            fuzzy_dedup_similarity_threshold=0.5,
-            fuzzy_dedup_min_count=3,
-        )
-        node = TextCleanerNode(
-            audit=AuditService(InMemoryAuditRepository()),
-            broadcaster=EventBroadcaster(),
-            config=config,
-        )
-        text = "Artículo 1\nArtículo 2\nArtículo 3"
-        result = node.clean(text)
-        assert "Artículo 1" in result.cleaned_text
-        assert "Artículo 2" in result.cleaned_text
-        assert "Artículo 3" in result.cleaned_text
 
-    def test_fuzzy_dedup_off_by_default(self) -> None:
-        text = "\n".join([
-            "Municipalidad de Rosario",
-            "Artículo 1",
-            "eAttmicijiat-clad de rJ!lioJa'tio",
-        ])
-        result = _node().clean(text)
-        assert "Municipalidad de Rosario" in result.cleaned_text
-        assert "eAttmicijiat-clad" in result.cleaned_text
+def test_enumerated_lines_not_treated_as_fuzzy_duplicates(self) -> None:
+    config = EnrichmentConfig(
+        repeated_line_min_count=99,  # disable exact-match stripping for this test
+        fuzzy_dedup_enabled=True,
+        fuzzy_dedup_similarity_threshold=0.5,
+        fuzzy_dedup_min_count=3,
+    )
+    node = TextCleanerNode(
+        audit=AuditService(InMemoryAuditRepository()),
+        broadcaster=EventBroadcaster(),
+        config=config,
+    )
+    text = "Artículo 1\nArtículo 2\nArtículo 3"
+    result = node.clean(text)
+    assert "Artículo 1" in result.cleaned_text
+    assert "Artículo 2" in result.cleaned_text
+    assert "Artículo 3" in result.cleaned_text
 
-    def test_fuzzy_dedup_ignores_long_lines(self) -> None:
-        config = EnrichmentConfig(
-            repeated_line_min_count=3,
-            fuzzy_dedup_enabled=True,
-            fuzzy_dedup_max_line_len=20,
-            fuzzy_dedup_similarity_threshold=0.5,
-            fuzzy_dedup_min_count=2,
-        )
-        node = TextCleanerNode(
-            audit=AuditService(InMemoryAuditRepository()),
-            broadcaster=EventBroadcaster(),
-            config=config,
-        )
-        long_a = "Este es un párrafo largo que supera el límite de longitud configurado."
-        long_b = "Este es otro párrafo largo que supera el límite de longitud configurado."
-        result = node.clean(f"{long_a}\n{long_b}")
-        assert long_a in result.cleaned_text
-        assert long_b in result.cleaned_text
+
+def test_fuzzy_dedup_off_by_default(self) -> None:
+    text = "\n".join([
+        "Municipalidad de Rosario",
+        "Artículo 1",
+        "eAttmicijiat-clad de rJ!lioJa'tio",
+    ])
+    result = _node().clean(text)
+    assert "Municipalidad de Rosario" in result.cleaned_text
+    assert "eAttmicijiat-clad" in result.cleaned_text
+
+
+def test_fuzzy_dedup_ignores_long_lines(self) -> None:
+    config = EnrichmentConfig(
+        repeated_line_min_count=3,
+        fuzzy_dedup_enabled=True,
+        fuzzy_dedup_max_line_len=20,
+        fuzzy_dedup_similarity_threshold=0.5,
+        fuzzy_dedup_min_count=2,
+    )
+    node = TextCleanerNode(
+        audit=AuditService(InMemoryAuditRepository()),
+        broadcaster=EventBroadcaster(),
+        config=config,
+    )
+    long_a = "Este es un párrafo largo que supera el límite de longitud configurado."
+    long_b = "Este es otro párrafo largo que supera el límite de longitud configurado."
+    result = node.clean(f"{long_a}\n{long_b}")
+    assert long_a in result.cleaned_text
+    assert long_b in result.cleaned_text
 ```
 
 Add `_EXPECTED_FUZZY_MAX_LEN = 80`, `_EXPECTED_FUZZY_SIMILARITY = 0.5`, `_EXPECTED_FUZZY_MIN_COUNT = 3` to `tests/enrichment/test_config_enrichment.py` alongside a new test:
