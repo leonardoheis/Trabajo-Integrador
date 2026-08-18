@@ -21,6 +21,7 @@ from classiflow.ingesta.nodes.node4_duplicate_control import (
 from classiflow.ingesta.prompts import build_content_chain, build_format_chain
 from classiflow.services.auth.service import AuthService
 from classiflow.settings import Settings
+from classiflow.storage.document_storage import LocalDiskStorage
 
 
 def _extraction_concurrency_limit() -> int:
@@ -41,6 +42,10 @@ class Container(containers.DeclarativeContainer):
     user_repo = providers.Factory(SqlUserRepository, session=db_session)
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
+
+    # Singleton: stateless (root path fixed at construction), no per-request teardown
+    # needed -- same reasoning as broadcaster above.
+    document_storage = providers.Singleton(LocalDiskStorage)
 
     # ThreadSafeSingleton (not Singleton): construction races are real — multiple
     # coordinator jobs' background tasks can hit OCR around the same time — and

@@ -18,20 +18,30 @@ missing required fields and a persistence failure from the repository layer.
 ```python
 from dataclasses import dataclass
 
+
 class AuditError(Exception): ...
+
 
 @dataclass
 class MissingFieldError(AuditError):
     field: str
-    def __post_init__(self) -> None: super().__init__(str(self))
-    def __str__(self) -> str: return f"{self.field} is required"
+
+    def __post_init__(self) -> None:
+        super().__init__(str(self))
+
+    def __str__(self) -> str:
+        return f"{self.field} is required"
+
 
 @dataclass
 class PersistenceError(AuditError):
     job_id: str
     agent: str
     event: str
-    def __post_init__(self) -> None: super().__init__(str(self))
+
+    def __post_init__(self) -> None:
+        super().__init__(str(self))
+
     def __str__(self) -> str:
         return f"Failed to persist for job={self.job_id} agent={self.agent} event={self.event}"
 ```
@@ -97,6 +107,7 @@ No executable statements, no function definitions, no side-effectful calls.
 ```python
 # WRONG — runs at import time
 configure_container()
+
 
 # WRONG — function definitions belong in a proper module
 def configure_container() -> Container: ...
@@ -228,10 +239,13 @@ Never use `pydantic.BaseModel` directly for domain objects.
 # WRONG
 from pydantic import BaseModel
 
+
 class JobState(BaseModel): ...
+
 
 # RIGHT
 from classiflow.ingesta.domain.base import BaseEntity
+
 
 class JobState(BaseEntity): ...
 ```
@@ -267,5 +281,83 @@ from a prior PR. This caused `container.wire(packages=["classiflow"])` to run at
 importing every module in the package — including system-library-backed modules like
 `ingesta/mime.py` (which does `import magic` → needs `libmagic` installed). Removing the
 call from `__init__.py` fixed the issue. The call belongs exclusively in `create_app()` (T16).
+
+---
+
+## `@inject` is mandatory on every `Provide[...]` consumer
+
+**Context:** Running Stage 3 end-to-end from a notebook crashed with
+`AttributeError: 'Provide' object has no attribute 'emit'`. `get_node1`,
+`get_text_cleaner`, and `get_metadata_enricher` in `api/dependencies.py` used
+`Depends(Provide[Container.broadcaster])` without the `@inject` decorator.
+
+**Decision:** Every function with a `Depends(Provide[Container.x])` parameter must carry
+`@inject`. No exceptions, even when neighboring functions "work" without it.
+
+**Why:**
+- `Provide.__call__()` returns `self` — without `@inject` patching the call site, FastAPI
+  passes the raw marker object straight through instead of the resolved dependency.
+- The failure is silent until the marker is actually used, far from the wiring bug.
+- The automated suite cannot catch this: `TestContainer`/FastAPI overrides bypass the
+  `Provide` resolution path entirely. Only a manual end-to-end run against the real
+  `Container` surfaces it — which is why the playground notebooks exist.
+
+---
+
+## No `# noqa` — restructure instead
+
+**Context:** A test needed to swap `PipelineService`'s coordinator for a fake, and the
+obvious patch (`service._coordinator = fake  # noqa: SLF001`) suppresses a lint finding.
+
+**Decision:** Never suppress with `# noqa`. Restructure so the finding doesn't fire:
+add a constructor/builder seam (`_build_service(..., coordinator_override=...)`) instead
+of reaching into a private attribute; name magic numbers; rewrite comparisons.
+
+**Why:** Suppressions rot — they outlive the reason they were added and hide real
+findings later. A seam that makes the test honest also documents the legitimate
+extension point.
+
+---
+
+## ASYNC240 — no blocking `pathlib.Path` calls in async functions
+
+**Context:** Async storage tests asserted `Path(p).exists()` and failed ruff's ASYNC240.
+
+**Decision:** Inside `async def`, use `await anyio.Path(p).exists()` /
+`.read_bytes()` (anyio is already a dependency — pytest runs on `anyio_mode = "auto"`).
+Pure path arithmetic (`Path(p).parent`, `/` joins) is fine — only I/O methods block.
+
+**Why:** Blocking filesystem calls on the event loop freeze every other coroutine;
+the production code already routes its own filesystem work through
+`asyncio.to_thread(...)` for the same reason (see `LocalDiskStorage`).
+
+---
+
+## Spanish fixture text vs codespell — remediate, don't ignore
+
+**Context:** codespell flagged `excede` (valid Spanish, "exceeds") in a Spanish test
+string inside a plan document, aborting the pre-commit gate.
+
+**Decision:** Reword the text to an unflagged synonym (`supera`) rather than adding the
+word to an `ignore-words-list`. Explicit user ruling: "not ignore the error, remediate it".
+
+**Why:** Ignore lists grow unbounded and mask genuine typos in English text; the fixture
+meaning is unchanged by choosing a synonym codespell doesn't confuse with English.
+
+---
+
+## Ruff formats fenced code blocks in Markdown and notebooks too
+
+**Context:** `poe check` failed twice on `.md` spec/plan documents whose embedded Python
+code blocks weren't ruff-format-clean — including docs written by subagents in isolated
+worktrees where the gate never ran.
+
+**Decision:** Any file containing fenced Python (` ```python `) — specs, plans,
+notebooks — goes through `ruff format` before handing the verification gate to the user.
+Docs produced outside the main working tree get formatted on arrival.
+
+**Why:** This repo's ruff config (`extend-select = ["ALL"]`, format check in `poe lint`)
+treats embedded code blocks as first-class code; "it's just documentation" doesn't exempt
+a file from the gate.
 
 ---

@@ -1435,7 +1435,7 @@ class TestPrimaryClassifierRun:
             config=ClassificationConfig(max_input_tokens=5),
         )
         ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
-        result = await node.run(ctx, "Decreto 42, largo texto que excede el límite")
+        result = await node.run(ctx, "Decreto 42, largo texto que supera el límite")
         assert result.label == "decretos"
 ```
 

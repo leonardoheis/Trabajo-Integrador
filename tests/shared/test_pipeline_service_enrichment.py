@@ -1,6 +1,9 @@
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
+import anyio
 import numpy as np
 import numpy.typing as npt
 from fastapi import BackgroundTasks
@@ -28,6 +31,10 @@ from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.ingesta.prompts import build_content_chain
 from classiflow.services.audit.service import AuditService
 from classiflow.services.pipeline.service import PipelineService
+from classiflow.storage.document_storage import LocalDiskStorage
+
+if TYPE_CHECKING:
+    from langgraph.graph.state import CompiledStateGraph
 
 _SPANISH_TEXT = (
     "El Concejo Municipal de Rosario sanciona la siguiente ordenanza: "
@@ -74,7 +81,12 @@ class _ServiceUnderTest:
     enriched_record_repo: InMemoryEnrichedRecordRepository
 
 
-def _build_service(entity_response: str) -> _ServiceUnderTest:
+def _build_service(
+    entity_response: str,
+    tmp_path: Path,
+    *,
+    coordinator_override: "CompiledStateGraph | None" = None,  # type: ignore[type-arg]
+) -> _ServiceUnderTest:
     audit = AuditService(InMemoryAuditRepository())
     broadcaster = EventBroadcaster()
 
@@ -122,8 +134,9 @@ def _build_service(entity_response: str) -> _ServiceUnderTest:
         document_steps_repo=InMemoryDocumentStepsRepository(),
         enriched_record_repo=enriched_record_repo,
         broadcaster=broadcaster,
-        coordinator=coordinator,
+        coordinator=coordinator if coordinator_override is None else coordinator_override,
         enrichment_coordinator=enrichment_coordinator,
+        document_storage=LocalDiskStorage(root=str(tmp_path)),
     )
     return _ServiceUnderTest(
         service=service, job_repo=job_repo, enriched_record_repo=enriched_record_repo
@@ -131,8 +144,8 @@ def _build_service(entity_response: str) -> _ServiceUnderTest:
 
 
 class TestPipelineServiceEnrichmentHappyPath:
-    async def test_accepted_job_gets_enriched_record(self) -> None:
-        under_test = _build_service(_VALID_ENTITY_RESPONSE)
+    async def test_accepted_job_gets_enriched_record(self, tmp_path: Path) -> None:
+        under_test = _build_service(_VALID_ENTITY_RESPONSE, tmp_path)
         background_tasks = BackgroundTasks()
         job_id = await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
         for task in background_tasks.tasks:
@@ -150,8 +163,8 @@ class TestPipelineServiceEnrichmentHappyPath:
 
 
 class TestPipelineServiceEnrichmentFailurePath:
-    async def test_enrichment_failure_marks_job_for_review(self) -> None:
-        under_test = _build_service("not json at all")
+    async def test_enrichment_failure_marks_job_for_review(self, tmp_path: Path) -> None:
+        under_test = _build_service("not json at all", tmp_path)
         background_tasks = BackgroundTasks()
         job_id = await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
         for task in background_tasks.tasks:
@@ -166,3 +179,45 @@ class TestPipelineServiceEnrichmentFailurePath:
 
         record = await under_test.enriched_record_repo.find_by_job_id(job_id)
         assert record is None
+
+
+class TestPipelineServiceStaging:
+    async def test_accepted_job_stages_file_bytes(self, tmp_path: Path) -> None:
+        under_test = _build_service(_VALID_ENTITY_RESPONSE, tmp_path)
+        background_tasks = BackgroundTasks()
+        job_id = await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
+        for task in background_tasks.tasks:
+            await task()
+
+        staged_path = anyio.Path(tmp_path / "staging" / f"{job_id}_ordenanza.pdf")
+        assert await staged_path.exists()
+        assert await staged_path.read_bytes() == _MINIMAL_PDF
+
+    async def test_job_rejected_before_extraction_is_never_staged(self, tmp_path: Path) -> None:
+        # A fake coordinator standing in for "node2 rejected the file before extraction"
+        # -- final_state has no "extraction" key, the exact condition _run() gates
+        # save_staged on. Injected via _build_service rather than patching the private
+        # attribute, keeping the test on the constructor seam.
+        class _RejectsBeforeExtractionCoordinator:
+            async def ainvoke(self, state: dict[str, object]) -> dict[str, object]:
+                return {
+                    "job_id": state["job_id"],
+                    "filename": state["filename"],
+                    "final_status": "rejected",
+                    "rejection_reason": "bad format",
+                }
+
+        under_test = _build_service(
+            _VALID_ENTITY_RESPONSE,
+            tmp_path,
+            coordinator_override=cast("CompiledStateGraph", _RejectsBeforeExtractionCoordinator()),
+        )
+        background_tasks = BackgroundTasks()
+        job_id = await under_test.service.start(background_tasks, "bad.pdf", _MINIMAL_PDF)
+        for task in background_tasks.tasks:
+            await task()
+
+        job = await under_test.job_repo.find_by_job_id(job_id)
+        assert job is not None
+        assert job.status == "rejected"
+        assert not await anyio.Path(tmp_path / "staging" / f"{job_id}_bad.pdf").exists()

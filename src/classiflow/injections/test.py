@@ -1,4 +1,5 @@
 import asyncio
+import tempfile
 
 import numpy as np
 import numpy.typing as npt
@@ -34,6 +35,7 @@ from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
+from classiflow.storage.document_storage import LocalDiskStorage
 
 # ponytail: fixed Spanish sample instead of real extraction — tests need deterministic,
 # non-empty, allowed-language text to reach node3/node4, and shouldn't pay for real
@@ -63,6 +65,13 @@ def _test_entity_chain() -> Runnable[EntityExtractionInput, EntityExtractionOutp
     return build_entity_extraction_chain(MockLlm(response=_TEST_ENTITY_RESPONSE))
 
 
+# ponytail: reuse the real LocalDiskStorage against a throwaway temp directory instead
+# of inventing a fake in-memory storage class -- one less code path to diverge from
+# production, and TestContainer is module-scoped so a pytest tmp_path fixture isn't
+# available here.
+_TEST_STORAGE_ROOT = tempfile.mkdtemp(prefix="classiflow-test-storage-")
+
+
 class TestContainer(containers.DeclarativeContainer):
     hash_repo = providers.Factory(InMemoryHashRepository)
     audit_repo = providers.Factory(InMemoryAuditRepository)
@@ -73,6 +82,7 @@ class TestContainer(containers.DeclarativeContainer):
     human_decision_repo = providers.Singleton(InMemoryHumanDecisionRepository)
     job_repo = providers.Singleton(InMemoryJobRepository)
     enriched_record_repo = providers.Singleton(InMemoryEnrichedRecordRepository)
+    document_storage = providers.Singleton(LocalDiskStorage, root=_TEST_STORAGE_ROOT)
     entity_extraction_chain = providers.Singleton(_test_entity_chain)
 
     audit_service = providers.Factory(AuditService, repo=audit_repo)
@@ -142,4 +152,5 @@ class TestContainer(containers.DeclarativeContainer):
         broadcaster=broadcaster,
         coordinator=coordinator,
         enrichment_coordinator=enrichment_coordinator,
+        document_storage=document_storage,
     )

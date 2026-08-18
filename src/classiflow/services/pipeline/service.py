@@ -22,6 +22,7 @@ from classiflow.ingesta.domain import (
     JobState,
 )
 from classiflow.ingesta.llm_provider import unload_slm
+from classiflow.storage.document_storage import IDocumentStorage
 
 if TYPE_CHECKING:
     from classiflow.enrichment.domain.state import EnrichmentState
@@ -52,6 +53,7 @@ class PipelineService:
         broadcaster: EventBroadcaster,
         coordinator: CompiledStateGraph,  # type: ignore[type-arg]
         enrichment_coordinator: CompiledStateGraph,  # type: ignore[type-arg]
+        document_storage: IDocumentStorage,
     ) -> None:
         self._job_repo = job_repo
         self._document_steps_repo = document_steps_repo
@@ -59,6 +61,7 @@ class PipelineService:
         self._broadcaster = broadcaster
         self._coordinator = coordinator
         self._enrichment_coordinator = enrichment_coordinator
+        self._document_storage = document_storage
 
     async def start(
         self, background_tasks: BackgroundTasks, filename: str, file_bytes: bytes
@@ -81,6 +84,11 @@ class PipelineService:
 
         failed_at_node = await self._persist_steps(job_id, final_state)
         await self._finalize_job(job_id, final_state, failed_at_node)
+
+        # Gated on extraction (not final_status): jobs that later land in review still
+        # need their bytes staged so Stage 4's Routing can move the real file later.
+        if final_state.get("extraction") is not None:
+            await self._document_storage.save_staged(job_id, filename, file_bytes)
 
         if final_state.get("final_status") == "accepted":
             await self._run_enrichment(job_id, filename, final_state)
@@ -136,7 +144,9 @@ class PipelineService:
             extracted_text=extracted_text,
         )
 
-    async def _run_enrichment(self, job_id: str, filename: str, final_state: JobState) -> None:
+    async def _run_enrichment(
+        self, job_id: str, filename: str, final_state: JobState
+    ) -> EnrichedRecord | None:
         reception = final_state["reception"]
         content_validation = final_state["content_validation"]
         extraction = final_state["extraction"]
@@ -155,18 +165,17 @@ class PipelineService:
                 result = cast(
                     "EnrichmentState", await self._enrichment_coordinator.ainvoke(initial)
                 )
-                await self._enriched_record_repo.save(
-                    EnrichedRecord(
-                        job_id=job_id,
-                        cleaned_text=result["cleaned_text"],
-                        entities=result["entities"].model_dump(),
-                        metadata_=result["metadata"].model_dump(),
-                    )
+                record = EnrichedRecord(
+                    job_id=job_id,
+                    cleaned_text=result["cleaned_text"],
+                    entities=result["entities"].model_dump(),
+                    metadata_=result["metadata"].model_dump(),
                 )
+                await self._enriched_record_repo.save(record)
             except EnrichmentError as exc:
                 last_error = exc
                 continue
-            return
+            return record
         await self._job_repo.update_status(
             job_id,
             "review",
@@ -174,3 +183,4 @@ class PipelineService:
             review_action_needed="enrichment_failed",
             failed_at_node="enrichment",
         )
+        return None

@@ -48,6 +48,7 @@ from classiflow.injections.production import Container
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
+from classiflow.storage.document_storage import IDocumentStorage
 
 if TYPE_CHECKING:
     from classiflow.enrichment.nodes.entity_extractor import _EntityChain
@@ -232,6 +233,7 @@ def get_pipeline_service(
     enrichment_coordinator: Annotated[  # type: ignore[type-arg]
         CompiledStateGraph, Depends(get_enrichment_coordinator)
     ],
+    document_storage: Annotated[IDocumentStorage, Depends(Provide[Container.document_storage])],
 ) -> PipelineService:
     return PipelineService(
         job_repo=job_repo,
@@ -240,4 +242,5 @@ def get_pipeline_service(
         broadcaster=broadcaster,
         coordinator=coordinator,
         enrichment_coordinator=enrichment_coordinator,
+        document_storage=document_storage,
     )

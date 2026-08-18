@@ -213,3 +213,6 @@ storage/documents/**
 
 # ---- superpowers subagent-driven-development scratch workspace ----
 .superpowers/
+
+# ----- Ignore Memory.md (local only) ----
+MEMORY.md
