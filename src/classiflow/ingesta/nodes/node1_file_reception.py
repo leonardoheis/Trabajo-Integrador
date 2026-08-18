@@ -5,7 +5,7 @@ from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config import get_allowed_formats
 from classiflow.ingesta.domain import FileReceptionResult, JobContext
 from classiflow.ingesta.mime import MimeDetector, detect_mime
-from classiflow.ingesta.nodes.base import BaseNode
+from classiflow.pipeline.base import BaseNode
 from classiflow.services.audit.service import AuditService
 
 

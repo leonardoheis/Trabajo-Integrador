@@ -9,7 +9,7 @@ from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_content import ContentValidationConfig, get_content_validation_config
 from classiflow.ingesta.domain import ContentValidationResult, FileReceptionResult, JobContext
 from classiflow.ingesta.llm_provider import get_llm_langchain
-from classiflow.ingesta.nodes.base import BaseNode
+from classiflow.pipeline.base import BaseNode
 from classiflow.ingesta.prompts import (
     ContentChainInput,
     LegitimacyDecisionOutput,

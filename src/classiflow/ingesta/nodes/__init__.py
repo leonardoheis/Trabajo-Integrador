@@ -1,5 +1,5 @@
 from classiflow.ingesta.mime import MimeDetector
-from classiflow.ingesta.nodes.base import BaseNode
+from classiflow.pipeline.base import BaseNode
 from classiflow.ingesta.nodes.extraction_step import ExtractionStep
 from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
 from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode

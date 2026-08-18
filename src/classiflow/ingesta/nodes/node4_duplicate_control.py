@@ -13,7 +13,7 @@ from classiflow.database.repositories.hash import IHashRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_duplicate import DuplicateControlConfig, get_duplicate_control_config
 from classiflow.ingesta.domain import DuplicateControlResult, JobContext
-from classiflow.ingesta.nodes.base import BaseNode
+from classiflow.pipeline.base import BaseNode
 from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
 
