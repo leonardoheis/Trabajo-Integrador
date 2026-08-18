@@ -29,6 +29,7 @@ class _Settings(BaseSettings):
     EXTRACTION_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "extraction.yaml")
     ENRICHMENT_MODEL_PATH: str = _DEFAULT_MODEL
     ENRICHMENT_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "enrichment.yaml")
+    DOCUMENT_STORAGE_ROOT: str = str(_PROJECT_ROOT / "storage" / "documents")
     SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.8"))
     SLM_TOP_P: float = float(os.getenv("SLM_TOP_P", "0.95"))
     SLM_SEED: int = int(os.getenv("SLM_SEED", "42"))
@@ -82,6 +83,10 @@ class _Settings(BaseSettings):
     @property
     def enrichment_config_path(self) -> str:
         return self.ENRICHMENT_CONFIG_PATH
+
+    @property
+    def document_storage_root(self) -> str:
+        return self.DOCUMENT_STORAGE_ROOT
 
     @property
     def slm_temperature(self) -> float:

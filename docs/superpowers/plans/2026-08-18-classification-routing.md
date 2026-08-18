@@ -466,46 +466,44 @@ Update `_run` to stage the bytes right after `_finalize_job`, before the enrichm
 Change `_run_enrichment`'s return type — it now returns the saved `EnrichedRecord` on success, `None` after retries are exhausted. `_run()` itself does not capture the return value yet (Task 16 does):
 
 ```python
-    async def _run_enrichment(
-        self, job_id: str, filename: str, final_state: JobState
-    ) -> EnrichedRecord | None:
-        reception = final_state["reception"]
-        content_validation = final_state["content_validation"]
-        extraction = final_state["extraction"]
-        initial: EnrichmentState = {
-            "job_id": job_id,
-            "filename": filename,
-            "text": final_state["text"],
-            "language": content_validation.detected_language,
-            "sha256": reception.sha256,
-            "stage2_extractor_used": extraction.extractor_used,
-        }
-        max_retries = get_enrichment_config().max_enrichment_retries
-        last_error: EnrichmentError | None = None
-        for _attempt in range(max_retries + 1):
-            try:
-                result = cast(
-                    "EnrichmentState", await self._enrichment_coordinator.ainvoke(initial)
-                )
-                record = EnrichedRecord(
-                    job_id=job_id,
-                    cleaned_text=result["cleaned_text"],
-                    entities=result["entities"].model_dump(),
-                    metadata_=result["metadata"].model_dump(),
-                )
-                await self._enriched_record_repo.save(record)
-            except EnrichmentError as exc:
-                last_error = exc
-                continue
-            return record
-        await self._job_repo.update_status(
-            job_id,
-            "review",
-            rejection_reason=f"Enrichment failed after retries: {last_error}",
-            review_action_needed="enrichment_failed",
-            failed_at_node="enrichment",
-        )
-        return None
+async def _run_enrichment(
+    self, job_id: str, filename: str, final_state: JobState
+) -> EnrichedRecord | None:
+    reception = final_state["reception"]
+    content_validation = final_state["content_validation"]
+    extraction = final_state["extraction"]
+    initial: EnrichmentState = {
+        "job_id": job_id,
+        "filename": filename,
+        "text": final_state["text"],
+        "language": content_validation.detected_language,
+        "sha256": reception.sha256,
+        "stage2_extractor_used": extraction.extractor_used,
+    }
+    max_retries = get_enrichment_config().max_enrichment_retries
+    last_error: EnrichmentError | None = None
+    for _attempt in range(max_retries + 1):
+        try:
+            result = cast("EnrichmentState", await self._enrichment_coordinator.ainvoke(initial))
+            record = EnrichedRecord(
+                job_id=job_id,
+                cleaned_text=result["cleaned_text"],
+                entities=result["entities"].model_dump(),
+                metadata_=result["metadata"].model_dump(),
+            )
+            await self._enriched_record_repo.save(record)
+        except EnrichmentError as exc:
+            last_error = exc
+            continue
+        return record
+    await self._job_repo.update_status(
+        job_id,
+        "review",
+        rejection_reason=f"Enrichment failed after retries: {last_error}",
+        review_action_needed="enrichment_failed",
+        failed_at_node="enrichment",
+    )
+    return None
 ```
 
 - [ ] **Step 4: Wire `document_storage` into `Container` (production.py)**
@@ -718,9 +716,7 @@ class TestSqlClassificationRecordRepository:
         pending = await repo.list_needing_human_review()
         assert [r.job_id for r in pending] == [_JOB]
 
-    async def test_list_needing_human_review_excludes_accepted(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_list_needing_human_review_excludes_accepted(self, session: AsyncSession) -> None:
         repo = SqlClassificationRecordRepository(session)
         await repo.save(_classification_record(job_id=_JOB, review_route="accept"))
         assert await repo.list_needing_human_review() == []
@@ -838,9 +834,7 @@ def upgrade() -> None:
         sa.Column("all_scores", sa.JSON, nullable=False),
         sa.Column("second_opinion_label", sa.String(100), nullable=True),
         sa.Column("second_opinion_confidence", sa.Float, nullable=False, server_default="0.0"),
-        sa.Column(
-            "classifier_disagreement", sa.Boolean, nullable=False, server_default=sa.false()
-        ),
+        sa.Column("classifier_disagreement", sa.Boolean, nullable=False, server_default=sa.false()),
         sa.Column("ood_metrics", sa.JSON, nullable=True),
         sa.Column("svm_scores", sa.JSON, nullable=False),
         sa.Column(
@@ -849,18 +843,14 @@ def upgrade() -> None:
         sa.Column("review_route", sa.String(20), nullable=False),
         sa.Column("smells", sa.JSON, nullable=False),
         sa.Column("risk_score", sa.Integer, nullable=False, server_default="0"),
-        sa.Column(
-            "smell_review_suggested", sa.Boolean, nullable=False, server_default=sa.false()
-        ),
+        sa.Column("smell_review_suggested", sa.Boolean, nullable=False, server_default=sa.false()),
         sa.Column("foreign_municipality", sa.String(255), nullable=True),
         sa.Column("judged_by_llm", sa.Boolean, nullable=False, server_default=sa.false()),
         sa.Column("stored_path", sa.String(500), nullable=True),
         sa.Column("human_overridden", sa.Boolean, nullable=False, server_default=sa.false()),
         sa.Column("created_at", sa.DateTime, server_default=sa.func.now(), nullable=False),
     )
-    op.create_index(
-        "ix_classification_records_job_id", "classification_records", ["job_id"]
-    )
+    op.create_index("ix_classification_records_job_id", "classification_records", ["job_id"])
 
 
 def downgrade() -> None:
@@ -1097,17 +1087,19 @@ In `src/classiflow/settings.py`, add after `DOCUMENT_STORAGE_ROOT`:
 and add after the `document_storage_root` property:
 
 ```python
-    @property
-    def classification_model_path(self) -> str:
-        return self.CLASSIFICATION_MODEL_PATH
+@property
+def classification_model_path(self) -> str:
+    return self.CLASSIFICATION_MODEL_PATH
 
-    @property
-    def classification_config_path(self) -> str:
-        return self.CLASSIFICATION_CONFIG_PATH
 
-    @property
-    def judge_model_path(self) -> str:
-        return self.JUDGE_MODEL_PATH
+@property
+def classification_config_path(self) -> str:
+    return self.CLASSIFICATION_CONFIG_PATH
+
+
+@property
+def judge_model_path(self) -> str:
+    return self.JUDGE_MODEL_PATH
 ```
 
 - [ ] **Step 4: Create `config/classification.yaml`**
@@ -1961,7 +1953,12 @@ from classiflow.classification.bert.svm_reviewer import (
 
 
 def _fitted_svc(positive_center: float) -> SVC:
-    x = np.array([[positive_center], [positive_center + 0.1], [-positive_center], [-positive_center - 0.1]])
+    x = np.array([
+        [positive_center],
+        [positive_center + 0.1],
+        [-positive_center],
+        [-positive_center - 0.1],
+    ])
     y = np.array([1, 1, 0, 0])
     svc = SVC(kernel="linear")
     svc.fit(x, y)
@@ -2017,12 +2014,16 @@ class TestLoadSmellThresholds:
 
 class TestResolveSmellThresholds:
     def test_empty_thresholds_falls_back_to_decision_thresholds(self) -> None:
-        decision = OodThresholds(mahalanobis_p=0.01, cosine_z=5.0, knn_distance=3.0, tfidf_cosine_z=2.0)
+        decision = OodThresholds(
+            mahalanobis_p=0.01, cosine_z=5.0, knn_distance=3.0, tfidf_cosine_z=2.0
+        )
         resolved = resolve_smell_thresholds(SmellThresholds(), decision)
         assert resolved == decision
 
     def test_customized_key_overrides_decision_threshold(self) -> None:
-        decision = OodThresholds(mahalanobis_p=0.01, cosine_z=5.0, knn_distance=3.0, tfidf_cosine_z=2.0)
+        decision = OodThresholds(
+            mahalanobis_p=0.01, cosine_z=5.0, knn_distance=3.0, tfidf_cosine_z=2.0
+        )
         smell = SmellThresholds(thresholds={"cosine": 1.0})
         resolved = resolve_smell_thresholds(smell, decision)
         assert resolved.cosine_z == 1.0
@@ -2545,9 +2546,7 @@ def load_svm_classifiers(path: Path) -> dict[str, SVC] | None:
     return classifiers
 
 
-def svm_scores(
-    embedding: npt.NDArray[np.float64], classifiers: dict[str, SVC]
-) -> dict[str, float]:
+def svm_scores(embedding: npt.NDArray[np.float64], classifiers: dict[str, SVC]) -> dict[str, float]:
     # Each class's one-vs-rest decision-function margin for this embedding -- positive
     # means inside that class's SVM boundary, negative means outside. Not a probability,
     # not calibrated -- raw evidence for the caller to weigh itself.
@@ -2781,9 +2780,7 @@ class TestOodScorerScore:
             ood_cosine_threshold=13.0,
             ood_knn_distance_threshold=5.0,
         )
-        metrics = scorer.score(
-            "texto de prueba", np.array([0.15, 0.15]), pred_idx=0, config=config
-        )
+        metrics = scorer.score("texto de prueba", np.array([0.15, 0.15]), pred_idx=0, config=config)
         assert metrics is not None
         assert isinstance(metrics, OodMetrics)
         assert metrics.in_distribution is True
@@ -2840,7 +2837,10 @@ from classiflow.classification.bert.ood_stats import (
     resolve_ood_thresholds,
     tfidf_cosine_z_score,
 )
-from classiflow.classification.bert.smell_thresholds import SmellThresholds, resolve_smell_thresholds
+from classiflow.classification.bert.smell_thresholds import (
+    SmellThresholds,
+    resolve_smell_thresholds,
+)
 from classiflow.classification.config_classification import ClassificationConfig
 from classiflow.classification.exceptions import ClassificationArtifactError
 from classiflow.domain.base import BaseEntity
@@ -2855,9 +2855,9 @@ class OodMetrics(BaseEntity):
     knn_distance: float
     tfidf_cosine_z: float | None = None
     in_distribution: bool
-    mahalanobis_calibration_status: Literal["calibrated", "not_calibrated", "refused_degenerate"] = (
-        "calibrated"
-    )
+    mahalanobis_calibration_status: Literal[
+        "calibrated", "not_calibrated", "refused_degenerate"
+    ] = "calibrated"
     cosine_calibration_status: Literal["calibrated", "not_calibrated"] = "calibrated"
     knn_distance_calibration_status: Literal["calibrated", "not_calibrated"] = "calibrated"
     tfidf_calibration_status: Literal["calibrated", "not_calibrated"] | None = None
@@ -3373,8 +3373,8 @@ class BertClassifier:
         log.info("Loading BETO classifier from %s", model_path)
         self.config = config
         self.tokenizer = tokenizer or AutoTokenizer.from_pretrained(model_path)
-        self.model: TransformerModel = (
-            model or AutoModelForSequenceClassification.from_pretrained(model_path)
+        self.model: TransformerModel = model or AutoModelForSequenceClassification.from_pretrained(
+            model_path
         )
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model.eval()
@@ -3473,7 +3473,10 @@ Update `src/classiflow/classification/bert/__init__.py`:
 
 ```python
 from classiflow.classification.bert.classifier import BertClassifier
-from classiflow.classification.bert.label_mapping import classifier_disagreement, normalize_bert_label
+from classiflow.classification.bert.label_mapping import (
+    classifier_disagreement,
+    normalize_bert_label,
+)
 
 __all__ = ["BertClassifier", "classifier_disagreement", "normalize_bert_label"]
 ```
@@ -3752,13 +3755,17 @@ def _node(config: ClassificationConfig) -> ForeignMunicipalityNode:
 class TestForeignMunicipalityDetect:
     def test_returns_none_for_trained_municipality(self) -> None:
         node = _node(
-            ClassificationConfig(foreign_municipality_enabled=True, ood_trained_municipality="rosario")
+            ClassificationConfig(
+                foreign_municipality_enabled=True, ood_trained_municipality="rosario"
+            )
         )
         assert node.detect("La Municipalidad de Rosario informa...") is None
 
     def test_returns_name_for_a_different_municipality(self) -> None:
         node = _node(
-            ClassificationConfig(foreign_municipality_enabled=True, ood_trained_municipality="rosario")
+            ClassificationConfig(
+                foreign_municipality_enabled=True, ood_trained_municipality="rosario"
+            )
         )
         assert node.detect("La Municipalidad de Cordoba informa...") == "Cordoba"
 
@@ -3899,7 +3906,9 @@ _CONFIG = ClassificationConfig(confidence_threshold=0.75, smell_review_risk_thre
 
 def _node() -> SmellsRiskNode:
     return SmellsRiskNode(
-        audit=AuditService(InMemoryAuditRepository()), broadcaster=EventBroadcaster(), config=_CONFIG
+        audit=AuditService(InMemoryAuditRepository()),
+        broadcaster=EventBroadcaster(),
+        config=_CONFIG,
     )
 
 
@@ -4015,7 +4024,9 @@ class TestSmellsRiskRun:
     async def test_run_emits_started_then_passed(self) -> None:
         broadcaster = EventBroadcaster()
         audit_repo = InMemoryAuditRepository()
-        node = SmellsRiskNode(audit=AuditService(audit_repo), broadcaster=broadcaster, config=_CONFIG)
+        node = SmellsRiskNode(
+            audit=AuditService(audit_repo), broadcaster=broadcaster, config=_CONFIG
+        )
         ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
         await node.run(
             ctx,
@@ -4213,7 +4224,9 @@ _CONFIG = ClassificationConfig(confidence_threshold=0.75)
 
 def _node() -> ConfidenceGateNode:
     return ConfidenceGateNode(
-        audit=AuditService(InMemoryAuditRepository()), broadcaster=EventBroadcaster(), config=_CONFIG
+        audit=AuditService(InMemoryAuditRepository()),
+        broadcaster=EventBroadcaster(),
+        config=_CONFIG,
     )
 
 
@@ -4253,7 +4266,9 @@ class TestConfidenceGateRun:
     async def test_run_emits_started_then_passed(self) -> None:
         broadcaster = EventBroadcaster()
         audit_repo = InMemoryAuditRepository()
-        node = ConfidenceGateNode(audit=AuditService(audit_repo), broadcaster=broadcaster, config=_CONFIG)
+        node = ConfidenceGateNode(
+            audit=AuditService(audit_repo), broadcaster=broadcaster, config=_CONFIG
+        )
         ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
         route = await node.run(
             ctx, confidence=0.9, foreign_municipality=None, classifier_disagreement=False
@@ -5074,7 +5089,9 @@ def _build_graph(
     second_opinion = SecondOpinionNode(
         audit=audit, broadcaster=broadcaster, classifier=_NoSecondOpinionClassifier(), config=config
     )
-    foreign_municipality = ForeignMunicipalityNode(audit=audit, broadcaster=broadcaster, config=config)
+    foreign_municipality = ForeignMunicipalityNode(
+        audit=audit, broadcaster=broadcaster, config=config
+    )
     smells_risk = SmellsRiskNode(audit=audit, broadcaster=broadcaster, config=config)
     confidence_gate = ConfidenceGateNode(audit=audit, broadcaster=broadcaster, config=config)
     llm_judge = LlmJudgeNode(
@@ -5086,7 +5103,13 @@ def _build_graph(
         audit=audit, broadcaster=broadcaster, storage=storage, classification_repo=repo
     )
     graph = build_classification_coordinator(
-        primary, second_opinion, foreign_municipality, smells_risk, confidence_gate, llm_judge, routing
+        primary,
+        second_opinion,
+        foreign_municipality,
+        smells_risk,
+        confidence_gate,
+        llm_judge,
+        routing,
     )
     return graph, repo
 
@@ -5174,7 +5197,9 @@ from classiflow.classification.nodes.smells_risk import SmellsRiskNode
 from classiflow.classification.prompts.llm_judge import JudgeInput
 from classiflow.pipeline.context import JobContext
 
-ClassificationUpdateValue = str | float | int | bool | dict[str, float] | dict[str, object] | list[str]
+ClassificationUpdateValue = (
+    str | float | int | bool | dict[str, float] | dict[str, object] | list[str]
+)
 
 _LLM_JUDGE_ROUTE = "llm_judge"
 
@@ -5192,7 +5217,9 @@ def build_classification_coordinator(
     llm_judge: LlmJudgeNode,
     routing: RoutingNode,
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
-    async def _primary_classifier(state: ClassificationState) -> dict[str, ClassificationUpdateValue]:
+    async def _primary_classifier(
+        state: ClassificationState,
+    ) -> dict[str, ClassificationUpdateValue]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
         result = await primary_classifier.run(ctx, state["cleaned_text"])
         return _dump(
@@ -5219,7 +5246,9 @@ def build_classification_coordinator(
             )
         )
 
-    async def _foreign_municipality(state: ClassificationState) -> dict[str, ClassificationUpdateValue]:
+    async def _foreign_municipality(
+        state: ClassificationState,
+    ) -> dict[str, ClassificationUpdateValue]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
         result = await foreign_municipality.run(ctx, state["cleaned_text"])
         return _dump(ClassificationUpdate(foreign_municipality=result))
@@ -5934,7 +5963,9 @@ _TEST_JUDGE_RESPONSE = '{"accept": true, "reasoning": "test"}'
 _TEST_CLASSIFICATION_CONFIG = ClassificationConfig(second_opinion_enabled=False)
 
 
-def _test_classification_chain() -> Runnable[PrimaryClassificationInput, PrimaryClassificationOutput]:
+def _test_classification_chain() -> Runnable[
+    PrimaryClassificationInput, PrimaryClassificationOutput
+]:
     return build_classification_chain(MockLlm(response=_TEST_PRIMARY_RESPONSE))
 
 
@@ -6121,9 +6152,7 @@ from classiflow.injections.test import TestContainer
 pytestmark = pytest.mark.usefixtures("_jwt_secret")
 
 
-async def _seed_human_review_job(
-    test_container: TestContainer, job_id: str, filename: str
-) -> None:
+async def _seed_human_review_job(test_container: TestContainer, job_id: str, filename: str) -> None:
     await test_container.job_repo().create(Job(job_id=job_id, filename=filename, status="accepted"))
     await test_container.classification_record_repo().save(
         ClassificationRecord(
@@ -6174,7 +6203,9 @@ class TestClassificationDecisionEndpoint:
         response = client.post("/classification/no-such-job/decision", json={"label": "ordenanzas"})
         assert response.status_code == HTTPStatus.UNAUTHORIZED
 
-    def test_unknown_job_returns_404(self, client: TestClient, auth_headers: dict[str, str]) -> None:
+    def test_unknown_job_returns_404(
+        self, client: TestClient, auth_headers: dict[str, str]
+    ) -> None:
         response = client.post(
             "/classification/no-such-job/decision",
             json={"label": "ordenanzas"},
@@ -6542,7 +6573,9 @@ class TestPipelineServiceConcurrencyCap:
             enriched_record_repo=InMemoryEnrichedRecordRepository(),
             broadcaster=EventBroadcaster(),
             coordinator=cast("CompiledStateGraph", coordinator),
-            enrichment_coordinator=cast("CompiledStateGraph", None),  # unused: final_status != accepted
+            enrichment_coordinator=cast(
+                "CompiledStateGraph", None
+            ),  # unused: final_status != accepted
             document_storage=cast("IDocumentStorage", None),  # unused: extraction key absent
             classification_coordinator=cast("CompiledStateGraph", None),  # unused: not accepted
             job_semaphore=asyncio.Semaphore(2),

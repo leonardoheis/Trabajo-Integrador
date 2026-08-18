@@ -195,6 +195,9 @@ desktop.ini
 models/**
 !models/**/.gitkeep
 
+# ---- Local document storage root (staged uploads, classified/review-queue files) ----
+storage/documents/**
+
 # ---- Un-ignore the main dev database (other *.db files stay ignored) ----
 !data/classiflow.db
 

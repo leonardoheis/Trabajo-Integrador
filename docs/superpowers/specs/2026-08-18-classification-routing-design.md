@@ -186,7 +186,10 @@ Routing isn't that part.
 ```python
 class RoutingNode(BaseNode):
     def __init__(
-        self, audit, broadcaster, storage: IDocumentStorage,
+        self,
+        audit,
+        broadcaster,
+        storage: IDocumentStorage,
         classification_repo: IClassificationRecordRepository,
     ) -> None: ...
 
