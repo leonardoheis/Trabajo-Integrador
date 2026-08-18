@@ -1,15 +1,19 @@
+from typing import TYPE_CHECKING
+
 import pytest
 from langgraph.graph.state import CompiledStateGraph
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.enrichment.coordinator import build_enrichment_coordinator
-from classiflow.enrichment.domain.state import EnrichmentState
 from classiflow.enrichment.exceptions import EntityExtractionFailedError
 from classiflow.enrichment.nodes import EntityExtractorNode, MetadataEnricherNode, TextCleanerNode
 from classiflow.enrichment.prompts.entity_extraction import build_entity_extraction_chain
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.llm_provider import MockLlm
 from classiflow.services.audit.service import AuditService
+
+if TYPE_CHECKING:
+    from classiflow.enrichment.domain.state import EnrichmentState
 
 _VALID_RESPONSE = (
     '{"doc_type_hint": "ordenanza", "number": "1", "year": 2024, '
