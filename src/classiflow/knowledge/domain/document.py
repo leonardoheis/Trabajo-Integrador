@@ -1,6 +1,19 @@
 from classiflow.domain.base import BaseEntity
 
 
+def format_citation(doc_type: str, number: str, year: str, filename: str) -> str:
+    """Format a municipal document citation, e.g. `Decreto 810/2026`.
+
+    Falls back to filename when the document was not matched to a CSV row.
+
+    Returns:
+        Human-readable citation string.
+    """
+    if doc_type and number and year:
+        return f"{doc_type} {number}/{year}"
+    return filename
+
+
 class DocumentMetadata(BaseEntity):
     """Municipal metadata for one document, resolved from the scrapper CSVs.
 
@@ -22,10 +35,5 @@ class DocumentMetadata(BaseEntity):
 
     @property
     def citation(self) -> str:
-        """Human-readable identifier, e.g. `Decreto 810/2026`.
-
-        Falls back to the filename when the document was not matched to a CSV row.
-        """
-        if self.doc_type and self.number and self.year:
-            return f"{self.doc_type} {self.number}/{self.year}"
-        return self.filename
+        """Human-readable identifier, e.g. `Decreto 810/2026`."""
+        return format_citation(self.doc_type, self.number, self.year, self.filename)

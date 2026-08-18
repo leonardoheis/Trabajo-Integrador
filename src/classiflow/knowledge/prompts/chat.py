@@ -1,6 +1,7 @@
 from itertools import starmap
 
 from classiflow.knowledge.domain.chat import RetrievedChunk
+from classiflow.knowledge.domain.document import format_citation
 
 SYSTEM_PROMPT = (
     "Sos un asistente que responde preguntas sobre documentación normativa de la "
@@ -19,11 +20,7 @@ _NO_CONTEXT = "No se encontraron pasajes relevantes en la base de conocimiento p
 
 def _passage(index: int, chunk: RetrievedChunk) -> str:
     citation = chunk.to_source()
-    label = (
-        f"{citation.doc_type} {citation.number}/{citation.year}"
-        if citation.doc_type and citation.number and citation.year
-        else citation.filename
-    )
+    label = format_citation(citation.doc_type, citation.number, citation.year, citation.filename)
     return f"[{index}] {label}\n{chunk.text}"
 
 

@@ -8,8 +8,31 @@ from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import KnowledgeIndexingResult
 from classiflow.ingesta.nodes.base import BaseNode
 from classiflow.knowledge.exceptions import KnowledgeError
-from classiflow.knowledge.indexer import IndexerService
+from classiflow.knowledge.indexer import IndexerService, IndexResult
 from classiflow.services.audit.service import AuditService
+
+
+def _build_document(indexed: IndexResult, job_id: str, sha256: str, filename: str) -> Document:
+    """Build a Document record from an IndexResult.
+
+    Returns:
+        Database Document model with all fields populated.
+    """
+    metadata = indexed.metadata
+    return Document(
+        job_id=job_id,
+        sha256=sha256,
+        filename=filename,
+        doc_type=metadata.doc_type or None,
+        number=metadata.number or None,
+        year=metadata.year or None,
+        subject=metadata.subject or None,
+        sanction_date=metadata.sanction_date or None,
+        publication_date=metadata.publication_date or None,
+        bulletin_number=metadata.bulletin_number or None,
+        download_url=metadata.download_url or None,
+        chunk_count=indexed.chunk_count,
+    )
 
 
 class KnowledgeIndexingNode(BaseNode):
@@ -38,7 +61,7 @@ class KnowledgeIndexingNode(BaseNode):
 
     async def run(self, ctx: JobContext, sha256: str, text: str) -> KnowledgeIndexingResult:
         start = await self._emit_started(ctx)
-        result = await self._index(ctx, sha256, text)
+        result = await self._index(ctx.job_id, ctx.filename, sha256, text)
         await self._emit_and_audit(
             ctx,
             start,
@@ -58,31 +81,18 @@ class KnowledgeIndexingNode(BaseNode):
         )
         return result
 
-    async def _index(self, ctx: JobContext, sha256: str, text: str) -> KnowledgeIndexingResult:
+    async def _index(
+        self, job_id: str, filename: str, sha256: str, text: str
+    ) -> KnowledgeIndexingResult:
         try:
-            indexed = await self.indexer.index(ctx.job_id, ctx.filename, sha256, text)
+            indexed = await self.indexer.index(job_id, filename, sha256, text)
         except KnowledgeError as exc:
-            logger.warning("Knowledge indexing failed for job {}: {}", ctx.job_id, exc)
+            logger.warning("Knowledge indexing failed for job {}: {}", job_id, exc)
             return KnowledgeIndexingResult(passed=True, indexed=False, rejection_reason=str(exc))
 
         metadata = indexed.metadata
         if indexed.chunk_count:
-            await self.document_repo.save(
-                Document(
-                    job_id=ctx.job_id,
-                    sha256=sha256,
-                    filename=ctx.filename,
-                    doc_type=metadata.doc_type or None,
-                    number=metadata.number or None,
-                    year=metadata.year or None,
-                    subject=metadata.subject or None,
-                    sanction_date=metadata.sanction_date or None,
-                    publication_date=metadata.publication_date or None,
-                    bulletin_number=metadata.bulletin_number or None,
-                    download_url=metadata.download_url or None,
-                    chunk_count=indexed.chunk_count,
-                )
-            )
+            await self.document_repo.save(_build_document(indexed, job_id, sha256, filename))
 
         return KnowledgeIndexingResult(
             passed=True,
