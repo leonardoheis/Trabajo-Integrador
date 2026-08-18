@@ -93,6 +93,7 @@ def get_audit_service(session: DbSession) -> AuditService:
     return AuditService(SqlAuditRepository(session))
 
 
+@inject
 def get_node1(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
@@ -153,6 +154,7 @@ def get_enriched_record_repo(session: DbSession) -> IEnrichedRecordRepository:
     return SqlEnrichedRecordRepository(session)
 
 
+@inject
 def get_text_cleaner(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
@@ -176,6 +178,7 @@ def get_entity_extractor(
     )
 
 
+@inject
 def get_metadata_enricher(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
