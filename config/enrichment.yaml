@@ -1,0 +1,11 @@
+# Stage 3 (Refinement & Enrichment) thresholds.
+# enrichment/nodes/text_cleaner.py and PipelineService's retry-then-review
+# enrichment trigger use this config.
+
+# A line appearing this many times or more across the document is treated as a
+# running header/footer and stripped.
+repeated_line_min_count: 3
+
+# How many times the enrichment coordinator retries after a failure (e.g. the
+# entity-extraction LLM call erroring) before the job is marked for review.
+max_enrichment_retries: 2
