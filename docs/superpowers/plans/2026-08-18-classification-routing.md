@@ -1668,9 +1668,29 @@ __all__ = ["PrimaryClassifierNode"]
 - [ ] **Step 6: Run test to verify it passes**
 
 Run: `pytest tests/classification/test_primary_classification_chain.py tests/classification/test_primary_classifier.py -v`
-Expected: PASS
+Expected: PASS — both files are `MockLlm`-based, so this passes with no real model file present.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Download the primary classifier model (manual, one-time — needed only to exercise the real node)**
+
+`Settings.CLASSIFICATION_MODEL_PATH` defaults to `models/Llama-3.2-3B-Instruct-Q4_K_M.gguf`
+(set when `CLASSIFICATION_MODEL_PATH` was introduced in Task 4, later changed from
+`_DEFAULT_MODEL` to this dedicated model) — deliberately different from Phi-4-mini
+(Node2/Node3/enrichment's shared model) so this node's errors don't systematically
+correlate with theirs, while staying in a similarly cheap/fast footprint appropriate
+for a node that runs on every document (unlike the Judge tier). That file does not
+exist under `models/` yet. Nothing in this task's own automated tests needs it (both
+test files above build their chain from `MockLlm`, never `get_llm_langchain`), but it
+must be present before `PrimaryClassifierNode`/`build_classification_chain` can be
+exercised for real.
+
+Hand to the user (per this project's convention — do not download or run yourself):
+download the `Q4_K_M` quantization (~2.02GB) from
+`https://huggingface.co/Mungert/Llama-3.2-3B-Instruct-GGUF`, verify it against the
+installed `llama-cpp-python` version's supported GGUF/quantization format, then save
+it as `models/Llama-3.2-3B-Instruct-Q4_K_M.gguf` (gitignored per the existing
+`models/**` + `.gitkeep` pattern — no commit needed for the model file itself).
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/classiflow/classification/prompts/ src/classiflow/classification/nodes/ src/classiflow/classification/exceptions.py tests/classification/test_primary_classification_chain.py tests/classification/test_primary_classifier.py

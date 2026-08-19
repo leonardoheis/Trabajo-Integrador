@@ -11,6 +11,13 @@ _DEFAULT_MODEL = str(_MODELS_DIR / "Phi-4-mini-instruct-Q4_K_M.gguf")
 # Not yet present under models/ -- must be downloaded before Task 13 (LlmJudgeNode) can be
 # exercised end-to-end; MockLlm-based unit tests don't need the real file.
 _JUDGE_MODEL = str(_MODELS_DIR / "gemma-4-E4B-it-Q4_K_M.gguf")
+# Primary classifier runs on every document (unlike the Judge above), so it stays in
+# Phi-4-mini's footprint (~2.5GB Q4_K_M) rather than a larger model -- Llama 3.2 3B is
+# the closest match (~2.0GB) and adds real model diversity from Node2/Node3/enrichment's
+# shared Phi-4-mini, plus multilingual tuning relevant to Spanish municipal documents.
+# Not yet present under models/ -- must be downloaded before Task 5 (PrimaryClassifierNode)
+# can be exercised end-to-end; MockLlm-based unit tests don't need the real file.
+_CLASSIFICATION_MODEL = str(_MODELS_DIR / "Llama-3.2-3B-Instruct-Q4_K_M.gguf")
 
 
 class _Settings(BaseSettings):
@@ -35,7 +42,7 @@ class _Settings(BaseSettings):
     ENRICHMENT_MODEL_PATH: str = _DEFAULT_MODEL
     ENRICHMENT_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "enrichment.yaml")
     DOCUMENT_STORAGE_ROOT: str = str(_PROJECT_ROOT / "storage" / "documents")
-    CLASSIFICATION_MODEL_PATH: str = _DEFAULT_MODEL
+    CLASSIFICATION_MODEL_PATH: str = _CLASSIFICATION_MODEL
     CLASSIFICATION_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "classification.yaml")
     JUDGE_MODEL_PATH: str = _JUDGE_MODEL
     SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.8"))
