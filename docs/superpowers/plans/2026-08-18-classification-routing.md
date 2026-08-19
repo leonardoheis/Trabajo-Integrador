@@ -1330,7 +1330,7 @@ Same chain pattern as `enrichment/prompts/entity_extraction.py`. Unlike that fil
 - Consumes: `classiflow.domain.base.BaseEntity`, `classiflow.classification.domain.results.PrimaryClassificationOutput` (Task 4), `classiflow.classification.config_classification.{ClassificationConfig, get_classification_config}` (Task 4), `classiflow.pipeline.base.BaseNode`, `classiflow.pipeline.context.JobContext` (existing), `classiflow.ingesta.llm_provider.{get_llm_langchain, MockLlm}`, `classiflow.ingesta.exceptions.LlmProviderError`, `Settings.classification_model_path` (Task 4).
 - Produces: `PrimaryClassificationInput(BaseEntity, cleaned_text: str)`, `build_classification_chain(llm: BaseLLM) -> Runnable[PrimaryClassificationInput, PrimaryClassificationOutput]`. `classiflow.classification.exceptions.PrimaryClassificationFailedError(reason: str)`. `PrimaryClassifierNode(BaseNode)` — `__init__(audit, broadcaster, *, classification_chain=None, config=None)`, `async run(ctx, cleaned_text) -> PrimaryClassificationOutput` (raises `PrimaryClassificationFailedError` on chain failure), `classify(cleaned_text) -> PrimaryClassificationOutput` (sync, directly testable, truncates to `config.max_input_tokens` chars).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/classification/test_primary_classification_chain.py
@@ -1439,12 +1439,12 @@ class TestPrimaryClassifierRun:
         assert result.label == "decretos"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/classification/test_primary_classification_chain.py tests/classification/test_primary_classifier.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.prompts'`
 
-- [ ] **Step 3: Add `PrimaryClassificationFailedError` to `exceptions.py`**
+- [x] **Step 3: Add `PrimaryClassificationFailedError` to `exceptions.py`**
 
 Append to `src/classiflow/classification/exceptions.py`:
 
@@ -1460,7 +1460,7 @@ class PrimaryClassificationFailedError(ClassificationError):
         return f"Primary classification failed: {self.reason}"
 ```
 
-- [ ] **Step 4: Implement the chain**
+- [x] **Step 4: Implement the chain**
 
 ```python
 # src/classiflow/classification/prompts/primary_classification.py
@@ -1564,7 +1564,7 @@ from classiflow.classification.prompts.primary_classification import (
 __all__ = ["PrimaryClassificationInput", "build_classification_chain"]
 ```
 
-- [ ] **Step 5: Implement the node**
+- [x] **Step 5: Implement the node**
 
 ```python
 # src/classiflow/classification/nodes/primary_classifier.py
@@ -1665,32 +1665,22 @@ from classiflow.classification.nodes.primary_classifier import PrimaryClassifier
 __all__ = ["PrimaryClassifierNode"]
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `pytest tests/classification/test_primary_classification_chain.py tests/classification/test_primary_classifier.py -v`
 Expected: PASS — both files are `MockLlm`-based, so this passes with no real model file present.
 
-- [ ] **Step 7: Download the primary classifier model (manual, one-time — needed only to exercise the real node)**
+- [x] **Step 7: No download needed — reuses the existing Phi-4-mini model**
 
-`Settings.CLASSIFICATION_MODEL_PATH` defaults to `models/Llama-3.2-3B-Instruct-Q4_K_M.gguf`
-(set when `CLASSIFICATION_MODEL_PATH` was introduced in Task 4, later changed from
-`_DEFAULT_MODEL` to this dedicated model) — deliberately different from Phi-4-mini
-(Node2/Node3/enrichment's shared model) so this node's errors don't systematically
-correlate with theirs, while staying in a similarly cheap/fast footprint appropriate
-for a node that runs on every document (unlike the Judge tier). That file does not
-exist under `models/` yet. Nothing in this task's own automated tests needs it (both
-test files above build their chain from `MockLlm`, never `get_llm_langchain`), but it
-must be present before `PrimaryClassifierNode`/`build_classification_chain` can be
-exercised for real.
+`Settings.CLASSIFICATION_MODEL_PATH` reverted to `_DEFAULT_MODEL`
+(`models/Phi-4-mini-instruct-Q4_K_M.gguf`), the same file Node2/Node3/enrichment
+already share and that's already present on disk — an explicit choice to accept
+shared-model risk (a Phi-4-mini weakness would show up at every stage that touches
+it, not just the primary classifier) in exchange for zero new download and one fewer
+model to manage. `PrimaryClassifierNode`/`build_classification_chain` can be
+exercised for real with no setup step.
 
-Hand to the user (per this project's convention — do not download or run yourself):
-download the `Q4_K_M` quantization (~2.02GB) from
-`https://huggingface.co/Mungert/Llama-3.2-3B-Instruct-GGUF`, verify it against the
-installed `llama-cpp-python` version's supported GGUF/quantization format, then save
-it as `models/Llama-3.2-3B-Instruct-Q4_K_M.gguf` (gitignored per the existing
-`models/**` + `.gitkeep` pattern — no commit needed for the model file itself).
-
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/classiflow/classification/prompts/ src/classiflow/classification/nodes/ src/classiflow/classification/exceptions.py tests/classification/test_primary_classification_chain.py tests/classification/test_primary_classifier.py

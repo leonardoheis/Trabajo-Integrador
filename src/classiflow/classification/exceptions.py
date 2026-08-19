@@ -28,3 +28,14 @@ class ClassificationNotInReviewError(ClassificationError):
             f"Classification for job {self.job_id} is not awaiting human review "
             f"(review_route={self.review_route})"
         )
+
+
+@dataclass
+class PrimaryClassificationFailedError(ClassificationError):
+    reason: str
+
+    def __post_init__(self) -> None:
+        super().__init__(str(self))
+
+    def __str__(self) -> str:
+        return f"Primary classification failed: {self.reason}"
