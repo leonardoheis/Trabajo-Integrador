@@ -41,7 +41,7 @@ New top-level `classiflow/storage/` package (sibling to `ingesta/`/`enrichment/`
 - Consumes: `classiflow.settings.Settings.document_storage_root` (new property, this task).
 - Produces: `IDocumentStorage` (Protocol: `async def save_staged(self, job_id: str, filename: str, file_bytes: bytes) -> str`, `async def move_to_final(self, job_id: str, filename: str, subdirectory: str) -> str`). `LocalDiskStorage(root: str | None = None)` — `root` defaults to `Settings.document_storage_root` when omitted. Both methods return the resulting absolute path as `str`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/storage/test_document_storage.py
@@ -123,12 +123,12 @@ class TestLocalDiskStorageMoveToFinal:
 ```
 (empty — package marker, mirrors `tests/enrichment/__init__.py`)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/storage/test_document_storage.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.storage'`
 
-- [ ] **Step 3: Add `Settings.DOCUMENT_STORAGE_ROOT`**
+- [x] **Step 3: Add `Settings.DOCUMENT_STORAGE_ROOT`**
 
 In `src/classiflow/settings.py`, add after `ENRICHMENT_CONFIG_PATH`:
 
@@ -144,7 +144,7 @@ and add after the `enrichment_config_path` property:
         return self.DOCUMENT_STORAGE_ROOT
 ```
 
-- [ ] **Step 4: Implement `LocalDiskStorage`**
+- [x] **Step 4: Implement `LocalDiskStorage`**
 
 ```python
 # src/classiflow/storage/document_storage.py
@@ -207,7 +207,7 @@ from classiflow.storage.document_storage import IDocumentStorage, LocalDiskStora
 __all__ = ["IDocumentStorage", "LocalDiskStorage"]
 ```
 
-- [ ] **Step 5: Add `.gitignore` entry**
+- [x] **Step 5: Add `.gitignore` entry**
 
 In `.gitignore`, add after the `models/**` / `!models/**/.gitkeep` block (before the "Un-ignore the main dev database" section):
 
@@ -216,12 +216,12 @@ In `.gitignore`, add after the `models/**` / `!models/**/.gitkeep` block (before
 storage/documents/**
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `pytest tests/storage/test_document_storage.py -v`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/classiflow/storage/ src/classiflow/settings.py .gitignore tests/storage/
@@ -246,7 +246,7 @@ Wires `IDocumentStorage` (Task 1) into `PipelineService`, adds the one `save_sta
 - Consumes: `classiflow.storage.document_storage.{IDocumentStorage, LocalDiskStorage}` (Task 1).
 - Produces: `PipelineService.__init__(job_repo, document_steps_repo, enriched_record_repo, broadcaster, coordinator, enrichment_coordinator, document_storage)`. `PipelineService._run_enrichment(job_id, filename, final_state) -> EnrichedRecord | None` (was implicitly `-> None`). `Container.document_storage` (production), `TestContainer.document_storage` (test).
 
-- [ ] **Step 1: Extend the failing test — staging assertion + fixture plumbing**
+- [x] **Step 1: Extend the failing test — staging assertion + fixture plumbing**
 
 In `tests/shared/test_pipeline_service_enrichment.py`, add to the imports:
 
@@ -404,12 +404,12 @@ class TestPipelineServiceStaging:
         assert not (tmp_path / "staging" / f"{job_id}_bad.pdf").exists()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/shared/test_pipeline_service_enrichment.py -v`
 Expected: FAIL with `TypeError: __init__() got an unexpected keyword argument 'document_storage'`
 
-- [ ] **Step 3: Update `PipelineService`**
+- [x] **Step 3: Update `PipelineService`**
 
 In `src/classiflow/services/pipeline/service.py`, add to imports:
 
@@ -506,7 +506,7 @@ async def _run_enrichment(
     return None
 ```
 
-- [ ] **Step 4: Wire `document_storage` into `Container` (production.py)**
+- [x] **Step 4: Wire `document_storage` into `Container` (production.py)**
 
 In `src/classiflow/injections/production.py`, add import:
 
@@ -522,7 +522,7 @@ Add inside `Container`, after `broadcaster`:
     document_storage = providers.Singleton(LocalDiskStorage)
 ```
 
-- [ ] **Step 5: Wire `document_storage` into `TestContainer` (injections/test.py)**
+- [x] **Step 5: Wire `document_storage` into `TestContainer` (injections/test.py)**
 
 Add imports:
 
@@ -563,7 +563,7 @@ Update `pipeline_service`:
     )
 ```
 
-- [ ] **Step 6: Wire `document_storage` into `api/dependencies.py`'s `get_pipeline_service`**
+- [x] **Step 6: Wire `document_storage` into `api/dependencies.py`'s `get_pipeline_service`**
 
 Add import:
 
@@ -597,7 +597,7 @@ def get_pipeline_service(
     )
 ```
 
-- [ ] **Step 7: Fix the other direct `PipelineService(...)` construction site**
+- [x] **Step 7: Fix the other direct `PipelineService(...)` construction site**
 
 In `tests/ingesta/test_extraction_concurrency.py`, add `IDocumentStorage` to the existing `TYPE_CHECKING` block:
 
@@ -622,17 +622,17 @@ Update the `PipelineService(...)` construction (this test only exercises `_persi
     )
 ```
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `pytest tests/shared/test_pipeline_service_enrichment.py tests/ingesta/test_extraction_concurrency.py -v`
 Expected: PASS
 
-- [ ] **Step 9: Run the full existing test suite (regression check)**
+- [x] **Step 9: Run the full existing test suite (regression check)**
 
 Run: `pytest tests -v`
 Expected: PASS across the board — `tests/api` picks up the new `Container.document_storage`/`TestContainer.document_storage` wiring automatically through `get_pipeline_service`.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/classiflow/services/pipeline/service.py src/classiflow/injections/production.py src/classiflow/injections/test.py src/classiflow/api/dependencies.py tests/shared/test_pipeline_service_enrichment.py tests/ingesta/test_extraction_concurrency.py
@@ -657,7 +657,7 @@ Adds the BERT spec's original field list plus this spec's three additions (`judg
 - Produces: `classiflow.database.models.ClassificationRecord` (`id: int` PK autoincrement, `job_id: str` FK→`jobs.job_id`, `enriched_id: int` FK→`enriched_records.id`, `label: str | None`, `confidence: float`, `all_scores: dict[str, object]`, `second_opinion_label: str | None`, `second_opinion_confidence: float`, `classifier_disagreement: bool`, `ood_metrics: dict[str, object] | None`, `svm_scores: dict[str, object]`, `svm_agrees_with_prediction: bool`, `review_route: str`, `smells: list[str]`, `risk_score: int`, `smell_review_suggested: bool`, `foreign_municipality: str | None`, `judged_by_llm: bool`, `stored_path: str | None`, `human_overridden: bool`, `created_at: datetime`). `classiflow.domain.repositories.classification_record.IClassificationRecordRepository` (Protocol: `save(record) -> None`, `find_by_job_id(job_id) -> ClassificationRecord | None`, `list_needing_human_review() -> list[ClassificationRecord]`). `SqlClassificationRecordRepository`, `InMemoryClassificationRecordRepository`.
 - Consumes: `classiflow.database.base.Base`, `classiflow.database.models.EnrichedRecord` (Task existing), `Job`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/shared/test_repositories.py` (add `ClassificationRecord` to the existing `classiflow.database.models` import, and `InMemoryClassificationRecordRepository`/`SqlClassificationRecordRepository` to a new import line):
 
@@ -742,12 +742,12 @@ class TestInMemoryClassificationRecordRepository:
         assert [r.job_id for r in pending] == [_JOB]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/shared/test_repositories.py -k ClassificationRecord -v`
 Expected: FAIL with `ImportError` (nothing exists yet)
 
-- [ ] **Step 3: Add `ClassificationRecord` to `database/models.py`**
+- [x] **Step 3: Add `ClassificationRecord` to `database/models.py`**
 
 Add `Float` to the existing `sqlalchemy` import line, then append the class after `EnrichedRecord`:
 
@@ -791,7 +791,7 @@ class ClassificationRecord(Base):
     )
 ```
 
-- [ ] **Step 4: Write the Alembic migration**
+- [x] **Step 4: Write the Alembic migration**
 
 ```python
 # alembic/versions/0005_add_classification_records.py
@@ -857,7 +857,7 @@ def downgrade() -> None:
     op.drop_table("classification_records")
 ```
 
-- [ ] **Step 5: Write the repository Protocol**
+- [x] **Step 5: Write the repository Protocol**
 
 ```python
 # src/classiflow/domain/repositories/classification_record.py
@@ -894,7 +894,7 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 6: Write the Sql/InMemory implementations**
+- [x] **Step 6: Write the Sql/InMemory implementations**
 
 ```python
 # src/classiflow/database/repositories/classification_record.py
@@ -943,16 +943,16 @@ class InMemoryClassificationRecordRepository:
         return [r for r in self._records.values() if r.review_route == _HUMAN_REVIEW_ROUTE]
 ```
 
-- [ ] **Step 7: Apply the migration to the local dev DB**
+- [x] **Step 7: Apply the migration to the local dev DB**
 
 Hand to the user (per this project's convention — do not run yourself): `uv run alembic upgrade head`
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `pytest tests/shared/test_repositories.py -k ClassificationRecord -v`
 Expected: PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/classiflow/database/models.py alembic/versions/0005_add_classification_records.py src/classiflow/domain/repositories/classification_record.py src/classiflow/domain/repositories/__init__.py src/classiflow/database/repositories/classification_record.py tests/shared/test_repositories.py
@@ -982,7 +982,7 @@ New top-level `classiflow/classification/` package (sibling to `enrichment/`, no
 - Consumes: `classiflow.config_loader.load_yaml_config`, `classiflow.domain.base.BaseEntity`.
 - Produces: `ClassificationConfig` (fields: `confidence_threshold: float = 0.75`, `smell_review_risk_threshold: int = 4`, `max_input_tokens: int = 512`, `second_opinion_enabled: bool = True`, `foreign_municipality_enabled: bool = True`, `bert_model_path: str = "models/bert_tunning_beto_v2"`, `ood_mahalanobis_p_threshold: float = 0.001`, `ood_cosine_threshold: float = 13.7366`, `ood_knn_distance_threshold: float = 26.125`, `ood_tfidf_cosine_threshold: float = 2.5`, `ood_pca_components: int = 64`, `ood_trained_municipality: str = "rosario"`), `get_classification_config() -> ClassificationConfig` (`@lru_cache(maxsize=1)`). `Settings.classification_model_path`, `Settings.classification_config_path`, `Settings.judge_model_path`. `ClassificationError(Exception)` base, `ClassificationRecordNotFoundError(job_id: str)`, `ClassificationNotInReviewError(job_id: str, review_route: str)`. `PrimaryClassificationOutput(BaseEntity)`, `JudgeOutput(BaseEntity)`, `RoutingResult(BaseEntity)` (`domain/results.py`). `ClassificationState` (`TypedDict`, required: `job_id`, `filename`, `cleaned_text`, `enriched_id` — the last needed by Routing, Task 14, to build `RoutingInput`/`ClassificationRecord`; optional fields accumulate as each node runs), `ClassificationUpdate(BaseEntity)` (`domain/state.py`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/classification/test_config_classification.py
@@ -1069,12 +1069,12 @@ class TestClassificationNotInReviewError:
 ```
 (empty — package marker, mirrors `tests/enrichment/__init__.py`)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/classification -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification'`
 
-- [ ] **Step 3: Add Settings fields**
+- [x] **Step 3: Add Settings fields**
 
 In `src/classiflow/settings.py`, add after `DOCUMENT_STORAGE_ROOT`:
 
@@ -1102,7 +1102,7 @@ def judge_model_path(self) -> str:
     return self.JUDGE_MODEL_PATH
 ```
 
-- [ ] **Step 4: Create `config/classification.yaml`**
+- [x] **Step 4: Create `config/classification.yaml`**
 
 ```yaml
 # Stage 4 (Classification & Routing) thresholds. Per the BERT spec
@@ -1128,7 +1128,7 @@ ood_pca_components: 64
 ood_trained_municipality: rosario
 ```
 
-- [ ] **Step 5: Implement `config_classification.py`**
+- [x] **Step 5: Implement `config_classification.py`**
 
 ```python
 # src/classiflow/classification/config_classification.py
@@ -1161,7 +1161,7 @@ def get_classification_config() -> ClassificationConfig:
     return load_yaml_config(Path(Settings.classification_config_path), ClassificationConfig)
 ```
 
-- [ ] **Step 6: Implement `exceptions.py`**
+- [x] **Step 6: Implement `exceptions.py`**
 
 ```python
 # src/classiflow/classification/exceptions.py
@@ -1197,7 +1197,7 @@ class ClassificationNotInReviewError(ClassificationError):
         )
 ```
 
-- [ ] **Step 7: Implement `domain/results.py`**
+- [x] **Step 7: Implement `domain/results.py`**
 
 ```python
 # src/classiflow/classification/domain/results.py
@@ -1221,7 +1221,7 @@ class RoutingResult(BaseEntity):
     stored_path: str
 ```
 
-- [ ] **Step 8: Implement `domain/state.py`**
+- [x] **Step 8: Implement `domain/state.py`**
 
 ```python
 # src/classiflow/classification/domain/state.py
@@ -1278,7 +1278,7 @@ class ClassificationUpdate(BaseEntity):
     stored_path: str | None = None
 ```
 
-- [ ] **Step 9: Implement package `__init__.py` files**
+- [x] **Step 9: Implement package `__init__.py` files**
 
 ```python
 # src/classiflow/classification/domain/__init__.py
@@ -1299,12 +1299,12 @@ __all__ = [
 ```
 (empty for now — populated with re-exports as later tasks add symbols, mirrors `enrichment/__init__.py`'s Task 3 starting point)
 
-- [ ] **Step 10: Run test to verify it passes**
+- [x] **Step 10: Run test to verify it passes**
 
 Run: `pytest tests/classification -v`
 Expected: PASS
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add config/classification.yaml src/classiflow/classification/ src/classiflow/settings.py tests/classification/
@@ -4725,9 +4725,28 @@ __all__ = [
 - [ ] **Step 6: Run tests to verify they pass**
 
 Run: `pytest tests/classification/test_llm_judge_chain.py tests/classification/test_llm_judge_node.py -v`
-Expected: PASS
+Expected: PASS — both files are `MockLlm`-based, so this passes with no real model file present.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Download the Judge model (manual, one-time — needed only to exercise the real node)**
+
+`Settings.JUDGE_MODEL_PATH` defaults to `models/gemma-4-E4B-it-Q4_K_M.gguf` (set when
+`JUDGE_MODEL_PATH` was introduced in Task 4), distinct from `_DEFAULT_MODEL`
+(Phi-4-mini-instruct) used everywhere else — a bigger model is worth the extra
+inference cost here since the Judge only runs on the minority of documents the
+primary classifier already couldn't confidently resolve. That file does not exist
+under `models/` yet. Nothing in this task's own automated tests needs it (both test
+files above build their chain from `MockLlm`, never `get_llm_langchain`), but it must
+be present before `LlmJudgeNode`/`build_judge_chain` can be exercised for real — e.g.
+manually via a notebook, or once Task 15's coordinator wires it into an end-to-end run.
+
+Hand to the user (per this project's convention — do not download or run yourself):
+verify a Gemma 4 E4B instruction-tuned GGUF build (e.g. from the `unsloth/gemma-4-E4B-it-GGUF`
+family on Hugging Face) against the installed `llama-cpp-python` version's supported
+GGUF/quantization format, then save it as `models/gemma-4-E4B-it-Q4_K_M.gguf` (gitignored
+per the existing `models/**` + `.gitkeep` pattern — no commit needed for the model file
+itself).
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/classiflow/classification/exceptions.py src/classiflow/classification/prompts/ src/classiflow/classification/nodes/llm_judge.py src/classiflow/classification/nodes/__init__.py tests/classification/test_llm_judge_chain.py tests/classification/test_llm_judge_node.py
