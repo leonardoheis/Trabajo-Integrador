@@ -1713,7 +1713,7 @@ Ports the inference-time subset of `bert_tunning`'s scoring code (verified by re
 - Consumes: `classiflow.classification.config_classification.ClassificationConfig` (Task 4), `classiflow.classification.exceptions.ClassificationArtifactError` (this task).
 - Produces: `classiflow.classification.bert.embeddings.{LoadedModel, extract_embeddings, extract_embeddings_and_predictions}`. `classiflow.classification.bert.ood_stats.{EmbeddingStats, LexicalStats, CalibratedThresholds, ArtifactMetadata, OodArtifact, OodThresholds, OodCalibrationStatus, mahalanobis_min_distance, cosine_min_distance, mahalanobis_chi2_p_value_from_distance, empirical_survival_p_value, compute_train_mahalanobis_distances, mahalanobis_empirical_p_value, cosine_z_score, knn_mean_distance, build_tfidf_vectorizer, tfidf_cosine_z_score, resolve_ood_thresholds, resolve_ood_calibration_status, load_stats}`. `classiflow.classification.bert.svm_reviewer.{load_svm_classifiers, svm_scores, svm_top_label}`. `classiflow.classification.bert.smell_thresholds.{SmellThresholds, SmellSignalKey, load_smell_thresholds, resolve_smell_thresholds}`. `classiflow.classification.bert.text_cleaning.{ForeignMunicipalityMatch, clean_text, detect_foreign_municipality}`.
 
-- [ ] **Step 1: Add the three new runtime dependencies**
+- [x] **Step 1: Add the three new runtime dependencies**
 
 In `pyproject.toml`, add to `dependencies` (after `torchvision`):
 
@@ -1733,7 +1733,7 @@ ignore_missing_imports = true
 
 Hand to the user (per this project's convention — do not run yourself): `uv sync --dev`
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 ```python
 # tests/classification/bert/__init__.py
@@ -2075,12 +2075,12 @@ class TestDetectForeignMunicipality:
         assert detect_foreign_municipality("Texto sin mención alguna.", _ROSARIO_CONFIG) is None
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run: `pytest tests/classification/bert -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.bert'`
 
-- [ ] **Step 4: Add `ClassificationArtifactError` to `exceptions.py`**
+- [x] **Step 4: Add `ClassificationArtifactError` to `exceptions.py`**
 
 Append to `src/classiflow/classification/exceptions.py`:
 
@@ -2096,7 +2096,7 @@ class ClassificationArtifactError(ClassificationError):
         return f"Classification artifact error: {self.reason}"
 ```
 
-- [ ] **Step 5: Port `embeddings.py`**
+- [x] **Step 5: Port `embeddings.py`**
 
 ```python
 # src/classiflow/classification/bert/embeddings.py
@@ -2173,7 +2173,7 @@ def extract_embeddings_and_predictions(
     return np.vstack(embedding_batches), predicted_ids
 ```
 
-- [ ] **Step 6: Port `ood_stats.py`**
+- [x] **Step 6: Port `ood_stats.py`**
 
 ```python
 # src/classiflow/classification/bert/ood_stats.py
@@ -2532,7 +2532,7 @@ def load_stats(path: Path) -> OodArtifact:
     )
 ```
 
-- [ ] **Step 7: Port `svm_reviewer.py`**
+- [x] **Step 7: Port `svm_reviewer.py`**
 
 ```python
 # src/classiflow/classification/bert/svm_reviewer.py
@@ -2568,7 +2568,7 @@ def svm_top_label(scores: dict[str, float]) -> str:
     return max(scores, key=lambda name: scores[name])
 ```
 
-- [ ] **Step 8: Port `smell_thresholds.py`**
+- [x] **Step 8: Port `smell_thresholds.py`**
 
 ```python
 # src/classiflow/classification/bert/smell_thresholds.py
@@ -2628,7 +2628,7 @@ def resolve_smell_thresholds(
     )
 ```
 
-- [ ] **Step 9: Port `text_cleaning.py`**
+- [x] **Step 9: Port `text_cleaning.py`**
 
 ```python
 # src/classiflow/classification/bert/text_cleaning.py
@@ -2686,12 +2686,12 @@ def detect_foreign_municipality(
 ```
 (empty for now — populated with re-exports once Task 8's `classifier.py` needs a public surface)
 
-- [ ] **Step 10: Run tests to verify they pass**
+- [x] **Step 10: Run tests to verify they pass**
 
 Run: `pytest tests/classification/bert -v`
 Expected: PASS
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add pyproject.toml src/classiflow/classification/exceptions.py src/classiflow/classification/bert/ tests/classification/bert/

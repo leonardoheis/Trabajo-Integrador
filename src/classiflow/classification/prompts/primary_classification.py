@@ -6,27 +6,102 @@ from langchain_core.language_models import BaseLLM
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable, RunnableLambda
 
+from classiflow.classification.domain.categories import DocumentCategory
 from classiflow.classification.domain.results import PrimaryClassificationOutput
 from classiflow.domain.base import BaseEntity
 
-# Classiflow's 10 municipal document categories (README.md). BETO v2 (the Second
-# Opinion Agent, classification/bert/) was only ever trained on 8 of these -- the
-# primary LLM classifier is the only signal that can pick "convenios" or
-# "compendios_de_boletines" at all. See the BERT spec's Decision 5 label-normalization
-# map for the full BETO-to-Classiflow correspondence.
-_CATEGORIES = (
-    "boletines",
-    "compendios_de_boletines",
-    "convenios",
-    "declaraciones_concejo_municipal",
-    "decreto_ordenanzas",
-    "decretos",
-    "decretos_concejo_municipal",
-    "ordenanzas",
-    "resoluciones",
-    "resoluciones_concejo_municipal",
-)
-_CATEGORIES_BLOCK = "\n".join(f"- {c}" for c in _CATEGORIES)
+# Canonical label set lives in classification/domain/categories.py (DocumentCategory) --
+# the single source of truth for "what are the 10 valid labels," shared with Task 8's
+# BETO label-normalization map. BETO v2 (the Second Opinion Agent, classification/bert/)
+# was only ever trained on 8 of these -- the primary LLM classifier is the only signal
+# that can pick CONVENIOS or COMPENDIOS_DE_BOLETINES at all. See the BERT spec's
+# Decision 5 label-normalization map for the full BETO-to-Classiflow correspondence.
+#
+# Definitions below are domain knowledge about Argentine municipal act types
+# (Concejo Municipal as the legislative body vs. Departamento Ejecutivo/Intendencia
+# as the executive), NOT sourced from this project's own docs -- nothing in this repo
+# defines these 10 categories. Validate against real corpus excerpts before trusting
+# them, especially the three tightest pairs: decretos vs. decreto_ordenanzas vs.
+# decretos_concejo_municipal; resoluciones vs. resoluciones_concejo_municipal;
+# boletines vs. compendios_de_boletines. Anchors (literal opening phrases) over
+# abstract prose -- Phi-4-mini pattern-matches "EL INTENDENTE MUNICIPAL DECRETA" far
+# more reliably than it reasons about "acts of executive character." These rich
+# definitions stay local to this prompt -- only the canonical label set is shared.
+_CATEGORY_DEFS: dict[DocumentCategory, str] = {
+    # The Spanish gazette name below is the real title, not a typo of "Official" --
+    # both codespell-flagged occurrences are that literal proper noun.
+    DocumentCategory.BOLETINES: (
+        "Boletín Oficial Municipal: periodic official publication that "  # codespell:ignore oficial
+        "republishes acts already sanctioned elsewhere (decretos, resoluciones, "
+        "ordenanzas) for a single period. Opens with "
+        '"Boletín Oficial Municipal N°" + a date/issue number; '  # codespell:ignore oficial
+        "reads as a compilation of multiple distinct acts under one issue."
+    ),
+    DocumentCategory.COMPENDIOS_DE_BOLETINES: (
+        "Compendio de Boletines: a bundled index/volume covering a RANGE of boletín "
+        'issues (e.g. "Compendio de Boletines Nros. X al Y"), not a single issue. Key '
+        "anchor: a number range or 'compendio', not a single issue number."
+    ),
+    DocumentCategory.CONVENIOS: (
+        "Convenio: a bilateral/multilateral agreement between the Municipalidad and "
+        "another party (another municipality, the province, nación, a university, "
+        'union, company). Names both parties explicitly ("...celebrado entre la '
+        'Municipalidad de Rosario y..."), numbered clauses (PRIMERA, SEGUNDA...), '
+        "signatures from both sides."
+    ),
+    DocumentCategory.DECLARACIONES_CONCEJO_MUNICIPAL: (
+        "Declaración del Concejo Municipal: the Concejo (legislative body) "
+        "expressing an opinion, adhesion, recognition, or repudiation -- NOT "
+        'binding, creates no legal obligation. Opens with "EL CONCEJO MUNICIPAL '
+        "DECLARA\" (not 'sanciona' or 'decreta')."
+    ),
+    DocumentCategory.DECRETO_ORDENANZAS: (
+        "Decreto-Ordenanza: an EXCEPTIONAL act -- the Departamento Ejecutivo "
+        "legislating with ordinance-level force while the Concejo is in recess, "
+        "under an extraordinary faculty granted by the municipal charter, subject "
+        "to later Concejo ratification. Anchor: explicit invocation of that "
+        'extraordinary faculty / recess, plus the term "Decreto-Ordenanza" itself. '
+        "Rare -- do not default here just because a decreto has ordinance-like "
+        "content."
+    ),
+    DocumentCategory.DECRETOS: (
+        "Decreto: an ordinary unilateral act of the Intendente/Departamento "
+        "Ejecutivo, within normal (non-recess) executive powers, general or "
+        'particular in scope. Opens with "EL INTENDENTE MUNICIPAL DECRETA". This is '
+        "the default executive-act category -- use decreto_ordenanzas only when the "
+        "recess/extraordinary-faculty anchor is present."
+    ),
+    DocumentCategory.DECRETOS_CONCEJO_MUNICIPAL: (
+        "Decreto del Concejo Municipal: an act of the Concejo (legislative body) "
+        "with the verb DECRETA, on internal/administrative matters of the Concejo "
+        "itself (e.g. council-member leave, internal appointments) -- narrower in "
+        "scope than an ordenanza. Anchor: issuing body is 'Concejo Municipal' / "
+        "'Honorable Concejo Municipal', verb is DECRETA."
+    ),
+    DocumentCategory.ORDENANZAS: (
+        "Ordenanza: a general, binding rule sanctioned by the Concejo Municipal "
+        "(the municipal equivalent of a law), applying to citizens broadly, subject "
+        'to executive promulgation. Opens with "EL CONCEJO MUNICIPAL SANCIONA CON '
+        'FUERZA DE ORDENANZA".'
+    ),
+    DocumentCategory.RESOLUCIONES: (
+        "Resolución: a narrower administrative act, typically from a "
+        "Secretaría/Dirección municipal or the Ejecutivo on a specific internal "
+        "matter (e.g. a single appointment or expense approval) -- lower in "
+        'hierarchy than a decreto. Opens with "...RESUELVE", issuing body is an '
+        "executive office, not the Concejo."
+    ),
+    DocumentCategory.RESOLUCIONES_CONCEJO_MUNICIPAL: (
+        "Resolución del Concejo Municipal: like decretos_concejo_municipal but with "
+        "the verb RESUELVE instead of DECRETA -- typically parliamentary/procedural "
+        "matters (commissions, internal Concejo business). Anchor: issuing body is "
+        "'Concejo Municipal', verb is RESUELVE. This is the hardest pair to separate "
+        "from decretos_concejo_municipal -- when both the Concejo-issuer anchor and "
+        "internal-matter anchor are present, the deciding signal is specifically "
+        "which verb (DECRETA vs. RESUELVE) introduces the operative part of the act."
+    ),
+}
+_CATEGORIES_BLOCK = "\n".join(f"- {label.value}: {desc}" for label, desc in _CATEGORY_DEFS.items())
 
 
 class PrimaryClassificationInput(BaseEntity):
@@ -35,8 +110,24 @@ class PrimaryClassificationInput(BaseEntity):
 
 _TEMPLATE = """\
 Task: classify this excerpt of an official municipal document of the \
-Municipalidad de Rosario into exactly one of the following categories:
+Municipalidad de Rosario into exactly one of the following categories. Each \
+category is given with the phrase(s) it typically opens with -- use those as \
+your primary signal, since document content can otherwise look similar \
+across categories.
+
 {categories}
+
+Rules:
+- Pick exactly one label, exactly as written above (the part before the colon).
+- The issuing body (Departamento Ejecutivo/Intendente vs. Concejo Municipal) \
+and the operative verb (decreta/resuelve/sanciona/declara) are stronger \
+signals than the general topic of the text.
+- decreto_ordenanzas and compendios_de_boletines are rare categories -- only \
+pick them when their specific anchor (recess/extraordinary-faculty language; \
+a range of boletín numbers) is actually present, not just because the text \
+resembles a decreto or a boletín.
+- If genuinely torn between two categories, pick the more likely one but \
+reflect the uncertainty with a lower confidence rather than a high one.
 
 Text: {cleaned_text}
 

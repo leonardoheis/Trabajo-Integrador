@@ -38,6 +38,9 @@ dependencies = [
     "torch>=2.7.1",
     # Not used directly -- pulled in transitively by easyocr (torchvision.transforms).
     "torchvision>=0.22.1",
+    "scipy>=1.14",
+    "scikit-learn>=1.5",
+    "transformers>=4.44",
 ]
 
 [dependency-groups]
@@ -157,7 +160,7 @@ warn_unused_configs = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers", "markitdown", "pymupdf", "easyocr"]
+module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers", "markitdown", "pymupdf", "easyocr", "scipy.*", "sklearn.*", "transformers"]
 ignore_missing_imports = true
 
 #########################

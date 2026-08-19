@@ -39,3 +39,14 @@ class PrimaryClassificationFailedError(ClassificationError):
 
     def __str__(self) -> str:
         return f"Primary classification failed: {self.reason}"
+
+
+@dataclass
+class ClassificationArtifactError(ClassificationError):
+    reason: str
+
+    def __post_init__(self) -> None:
+        super().__init__(str(self))
+
+    def __str__(self) -> str:
+        return f"Classification artifact error: {self.reason}"
