@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.svm import SVC
 
 from classiflow.classification.bert.svm_reviewer import (
+    SvmClassScore,
     load_svm_classifiers,
     svm_scores,
     svm_top_label,
@@ -37,17 +38,23 @@ class TestSvmScores:
     def test_returns_one_score_per_classifier(self) -> None:
         classifiers = {"class_a": _fitted_svc(5.0), "class_b": _fitted_svc(1.0)}
         scores = svm_scores(np.array([5.0]), classifiers)
-        assert set(scores) == {"class_a", "class_b"}
-        assert all(isinstance(v, float) for v in scores.values())
+        assert {s.class_name for s in scores} == {"class_a", "class_b"}
+        assert all(isinstance(s.margin, float) for s in scores)
 
 
 class TestSvmTopLabel:
     def test_returns_highest_scoring_class(self) -> None:
         assert (
-            svm_top_label({"class_a": _EXPECTED_SCORE_A, "class_b": _EXPECTED_SCORE_B_NEGATIVE})
+            svm_top_label([
+                SvmClassScore("class_a", _EXPECTED_SCORE_A),
+                SvmClassScore("class_b", _EXPECTED_SCORE_B_NEGATIVE),
+            ])
             == "class_a"
         )
         assert (
-            svm_top_label({"class_a": _EXPECTED_SCORE_A_NEGATIVE, "class_b": _EXPECTED_SCORE_B})
+            svm_top_label([
+                SvmClassScore("class_a", _EXPECTED_SCORE_A_NEGATIVE),
+                SvmClassScore("class_b", _EXPECTED_SCORE_B),
+            ])
             == "class_b"
         )

@@ -3123,7 +3123,7 @@ Ports `bert_tunning`'s `src/inference/classify.py` (verified by reading it direc
 - Consumes: everything from Tasks 6–7, `classiflow.classification.config_classification.ClassificationConfig`, `classiflow.classification.exceptions.ClassificationArtifactError`.
 - Produces: `SecondOpinionResult(BaseEntity)` (`label: str`, `confidence: float`, `all_scores: dict[str, float]`, `svm_scores: dict[str, float]`, `svm_predicted_label: str`, `svm_agrees_with_prediction: bool`, `ood_metrics: OodMetrics | None`) in `domain/results.py`. `classification.bert.label_mapping.{normalize_bert_label(bert_label: str) -> str | None, classifier_disagreement(primary_label: str, second_opinion_label: str) -> bool}`. `classification.bert.classifier.{TransformerModelConfig, TransformerModelOutput, TransformerModel, BertClassifier}` — `BertClassifier(model_path, config, *, tokenizer=None, model=None)`, `.predict(text: str) -> SecondOpinionResult`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/classification/bert/test_label_mapping.py
@@ -3246,12 +3246,12 @@ class TestBertClassifierSvmClassMappingValidation:
             )
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/classification/bert/test_label_mapping.py tests/classification/bert/test_classifier.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.bert.label_mapping'`
 
-- [ ] **Step 3: Add `SecondOpinionResult` to `domain/results.py`**
+- [x] **Step 3: Add `SecondOpinionResult` to `domain/results.py`**
 
 Append to `src/classiflow/classification/domain/results.py` (add `from classiflow.classification.bert.ood_scorer import OodMetrics` to its imports):
 
@@ -3269,7 +3269,7 @@ class SecondOpinionResult(BaseEntity):
     ood_metrics: OodMetrics | None = None
 ```
 
-- [ ] **Step 4: Implement `label_mapping.py`**
+- [x] **Step 4: Implement `label_mapping.py`**
 
 ```python
 # src/classiflow/classification/bert/label_mapping.py
@@ -3309,7 +3309,7 @@ def classifier_disagreement(primary_label: str, second_opinion_label: str) -> bo
     return normalized != primary_label
 ```
 
-- [ ] **Step 5: Implement `classifier.py`**
+- [x] **Step 5: Implement `classifier.py`**
 
 ```python
 # src/classiflow/classification/bert/classifier.py
@@ -3491,12 +3491,12 @@ from classiflow.classification.bert.label_mapping import (
 __all__ = ["BertClassifier", "classifier_disagreement", "normalize_bert_label"]
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `pytest tests/classification/bert/test_label_mapping.py tests/classification/bert/test_classifier.py -v`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/classiflow/classification/domain/results.py src/classiflow/classification/bert/label_mapping.py src/classiflow/classification/bert/classifier.py src/classiflow/classification/bert/__init__.py tests/classification/bert/test_label_mapping.py tests/classification/bert/test_classifier.py

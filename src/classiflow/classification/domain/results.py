@@ -1,5 +1,6 @@
 from pydantic import Field
 
+from classiflow.classification.bert.ood_scorer import OodMetrics
 from classiflow.domain.base import BaseEntity
 
 
@@ -16,3 +17,13 @@ class JudgeOutput(BaseEntity):
 
 class RoutingResult(BaseEntity):
     stored_path: str
+
+
+class SecondOpinionResult(BaseEntity):
+    label: str
+    confidence: float
+    all_scores: dict[str, float] = Field(default_factory=dict)
+    svm_scores: dict[str, float] = Field(default_factory=dict)
+    svm_predicted_label: str = ""
+    svm_agrees_with_prediction: bool = True
+    ood_metrics: OodMetrics | None = None

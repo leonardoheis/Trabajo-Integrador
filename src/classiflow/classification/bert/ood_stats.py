@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 # sklearn.feature_extraction.text.TfidfVectorizer has no type stubs
 # (ignore_missing_imports=true) -- a Protocol capturing only the method actually called
 # here keeps Any from leaking into this module's checked signatures, same pattern as
-# _FittedClassifier in svm_reviewer.py. FittedVectorizer (not _-prefixed): ood_scorer.py
+# FittedClassifier in svm_reviewer.py. FittedVectorizer (not _-prefixed): ood_scorer.py
 # also needs it for _tfidf_vectorizer's return type, so this is a real shared type now.
 
 
