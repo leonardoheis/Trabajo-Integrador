@@ -1,5 +1,6 @@
 from typing import TypedDict
 
+from classiflow.classification.bert.ood_scorer import OodMetrics
 from classiflow.domain.base import BaseEntity
 
 
@@ -22,8 +23,12 @@ class ClassificationState(_ClassificationStateRequired, total=False):
     second_opinion_label: str
     second_opinion_confidence: float
     classifier_disagreement: bool
-    # {} = the node ran but produced no OOD signal. Key absent = it never ran.
-    ood_metrics: dict[str, object]
+    # Key absent covers both "second opinion never ran" and "ran, but OOD scoring
+    # produced no signal (no ood_stats.npz for this model)" -- second_opinion_label's
+    # own ""/absent distinction above is the authoritative "did the node run" signal;
+    # ood_metrics never needs an independent one, since a reader already knows from
+    # second_opinion_label whether to expect this key at all.
+    ood_metrics: OodMetrics
     svm_scores: dict[str, float]
     svm_agrees_with_prediction: bool
     # "" = foreign_municipality_enabled and the node confirmed the document is
@@ -44,10 +49,13 @@ class ClassificationUpdate(BaseEntity):
 
     On every field, `None` means "this update didn't set this field" (dropped by the
     `{k: v for k, v in update if v is not None}` dump, so it never overwrites the
-    merged state). For second_opinion_label/ood_metrics/foreign_municipality
-    specifically: a node reporting "ran, found nothing" must pass "" / {} — never
-    None — or the result becomes indistinguishable from "this node didn't run" once
-    merged into ClassificationState.
+    merged state). For second_opinion_label/foreign_municipality specifically: a node
+    reporting "ran, found nothing" must pass "" — never None — or the result becomes
+    indistinguishable from "this node didn't run" once merged into ClassificationState.
+    ood_metrics has no such requirement -- second_opinion_label's own ""/None
+    distinction already tells a reader whether the second-opinion node ran at all, so
+    ood_metrics=None (whether because the node never ran, or it ran but OOD scoring
+    itself produced nothing) is unambiguous once read alongside second_opinion_label.
     """
 
     label: str | None = None
@@ -56,7 +64,7 @@ class ClassificationUpdate(BaseEntity):
     second_opinion_label: str | None = None
     second_opinion_confidence: float | None = None
     classifier_disagreement: bool | None = None
-    ood_metrics: dict[str, object] | None = None
+    ood_metrics: OodMetrics | None = None
     svm_scores: dict[str, float] | None = None
     svm_agrees_with_prediction: bool | None = None
     foreign_municipality: str | None = None

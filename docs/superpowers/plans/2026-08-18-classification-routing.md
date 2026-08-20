@@ -3742,7 +3742,7 @@ Pure-logic `BaseNode` wrapping Task 6's `detect_foreign_municipality`, per `task
 - Consumes: `classiflow.classification.bert.text_cleaning.detect_foreign_municipality` (Task 6), `classiflow.classification.config_classification.{ClassificationConfig, get_classification_config}` (Task 4).
 - Produces: `ForeignMunicipalityNode(BaseNode)` — `__init__(audit, broadcaster, *, config=None)`, `async run(ctx, cleaned_text) -> str | None`, `detect(cleaned_text) -> str | None` (sync, directly testable; returns `None` when `config.foreign_municipality_enabled` is `False` or no foreign municipality is named).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/classification/test_foreign_municipality_node.py
@@ -3800,12 +3800,12 @@ class TestForeignMunicipalityRun:
         assert records[0].event == "passed"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/classification/test_foreign_municipality_node.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.nodes.foreign_municipality'`
 
-- [ ] **Step 3: Implement the node**
+- [x] **Step 3: Implement the node**
 
 ```python
 # src/classiflow/classification/nodes/foreign_municipality.py
@@ -3869,12 +3869,12 @@ from classiflow.classification.nodes.second_opinion import SecondOpinionNode
 __all__ = ["ForeignMunicipalityNode", "PrimaryClassifierNode", "SecondOpinionNode"]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/classification/test_foreign_municipality_node.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/classification/nodes/foreign_municipality.py src/classiflow/classification/nodes/__init__.py tests/classification/test_foreign_municipality_node.py
