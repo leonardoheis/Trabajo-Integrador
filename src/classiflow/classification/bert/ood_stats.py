@@ -22,7 +22,8 @@ log = logging.getLogger(__name__)
 # sklearn.feature_extraction.text.TfidfVectorizer has no type stubs
 # (ignore_missing_imports=true) -- a Protocol capturing only the method actually called
 # here keeps Any from leaking into this module's checked signatures, same pattern as
-# _FittedClassifier in svm_reviewer.py.
+# _FittedClassifier in svm_reviewer.py. FittedVectorizer (not _-prefixed): ood_scorer.py
+# also needs it for _tfidf_vectorizer's return type, so this is a real shared type now.
 
 
 @runtime_checkable
@@ -31,7 +32,7 @@ class _SparseMatrix(Protocol):
 
 
 @runtime_checkable
-class _FittedVectorizer(Protocol):
+class FittedVectorizer(Protocol):
     def transform(self, raw_documents: list[str]) -> _SparseMatrix: ...
 
 
@@ -98,7 +99,7 @@ def _cosine_min_distance_raw(
     return float(cosine_distances(point.reshape(1, -1), centroids).min())
 
 
-def build_tfidf_vectorizer(stats: OodArtifact) -> _FittedVectorizer | None:
+def build_tfidf_vectorizer(stats: OodArtifact) -> FittedVectorizer | None:
     # Reconstructs a fixed-vocabulary vectorizer from the two arrays load_stats round-trips
     # through ood_stats.npz -- bit-identical .transform() output to the vectorizer
     # bert_tunning originally fit. None when this model's ood_stats.npz predates the
@@ -106,12 +107,12 @@ def build_tfidf_vectorizer(stats: OodArtifact) -> _FittedVectorizer | None:
     if not stats.lexical.is_fitted():
         return None
     vocabulary = {term: i for i, term in enumerate(stats.lexical.vocabulary_terms)}
-    vectorizer: _FittedVectorizer = TfidfVectorizer(vocabulary=vocabulary)
+    vectorizer: FittedVectorizer = TfidfVectorizer(vocabulary=vocabulary)
     vectorizer.idf_ = stats.lexical.idf  # type: ignore[attr-defined]
     return vectorizer
 
 
-def tfidf_cosine_z_score(text: str, stats: OodArtifact, vectorizer: _FittedVectorizer) -> float:
+def tfidf_cosine_z_score(text: str, stats: OodArtifact, vectorizer: FittedVectorizer) -> float:
     point = vectorizer.transform([clean_text(text)]).toarray()[0]
     cosine_raw = _cosine_min_distance_raw(point, stats.lexical.centroids)
     lexical = stats.lexical
