@@ -4217,7 +4217,7 @@ Pure logic. Per `tasks/plan_stage4.md`'s `decide_review_route` and spec Decision
 - Consumes: `classiflow.classification.config_classification.{ClassificationConfig, get_classification_config}` (Task 4).
 - Produces: `ConfidenceGateNode(BaseNode)` — `__init__(audit, broadcaster, *, config=None)`, `async run(ctx, *, confidence, foreign_municipality, classifier_disagreement) -> str`, `decide(*, confidence, foreign_municipality, classifier_disagreement) -> str` (sync, directly testable; returns `"accept" | "llm_judge" | "human_review"`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/classification/test_confidence_gate_node.py
@@ -4288,12 +4288,12 @@ class TestConfidenceGateRun:
         assert records[0].event == "passed"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/classification/test_confidence_gate_node.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.nodes.confidence_gate'`
 
-- [ ] **Step 3: Implement the node**
+- [x] **Step 3: Implement the node**
 
 ```python
 # src/classiflow/classification/nodes/confidence_gate.py
@@ -4383,12 +4383,12 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/classification/test_confidence_gate_node.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/classification/nodes/confidence_gate.py src/classiflow/classification/nodes/__init__.py tests/classification/test_confidence_gate_node.py
