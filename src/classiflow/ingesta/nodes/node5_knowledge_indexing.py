@@ -8,7 +8,7 @@ from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import KnowledgeIndexingResult
 from classiflow.ingesta.nodes.base import BaseNode
 from classiflow.knowledge.exceptions import KnowledgeError
-from classiflow.knowledge.indexer import IndexerService, IndexResult
+from classiflow.knowledge.indexing.indexer import IndexerService, IndexResult
 from classiflow.services.audit.service import AuditService
 
 

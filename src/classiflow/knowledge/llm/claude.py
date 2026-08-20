@@ -2,13 +2,14 @@ from collections.abc import AsyncIterator
 
 import anthropic
 
-from classiflow.knowledge.exceptions import ChatLlmError, ChatRefusalError
+from classiflow.knowledge.llm.chat_llm import ChatLlm
+from classiflow.knowledge.llm.exceptions import ChatLlmError, ChatRefusalError
 from classiflow.settings import Settings
 
 _PROVIDER = "claude"
 
 
-class ClaudeChatLlm:
+class ClaudeChatLlm(ChatLlm):
     """Anthropic-backed chat completion.
 
     No `temperature` / `top_p` / `top_k`: those are rejected on current Claude models.

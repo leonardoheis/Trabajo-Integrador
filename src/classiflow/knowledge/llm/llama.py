@@ -6,7 +6,8 @@ from llama_cpp import Llama
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
 from classiflow.ingesta.llm_provider import n_gpu_layers
-from classiflow.knowledge.exceptions import ChatLlmError
+from classiflow.knowledge.llm.chat_llm import ChatLlm
+from classiflow.knowledge.llm.exceptions import ChatLlmError
 from classiflow.settings import Settings
 
 _PROVIDER = "llama"
@@ -32,7 +33,7 @@ def get_chat_llm(model_path: str, n_ctx: int) -> Llama:
         raise ModelLoadError(path=model_path, cause=str(exc)) from exc
 
 
-class LlamaCppChatLlm:
+class LlamaCppChatLlm(ChatLlm):
     """Local GGUF chat completion, for running the assistant fully offline."""
 
     def __init__(self, model_path: str = "", n_ctx: int = 0, max_tokens: int = 0) -> None:

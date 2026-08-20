@@ -1,5 +1,4 @@
-from classiflow.knowledge.chunker import ChunkerService
-from classiflow.knowledge.indexer import IndexerService, IndexResult
-from classiflow.knowledge.rag import RagService
-
-__all__ = ["ChunkerService", "IndexResult", "IndexerService", "RagService"]
+# Intentionally empty. Importing any submodule executes this package first, so a
+# re-export barrel here would load chromadb, sentence_transformers, anthropic and
+# llama_cpp on every `knowledge.*` import -- including in tests that need none of them.
+# Import from the capability module instead -- see knowledge/README.md.

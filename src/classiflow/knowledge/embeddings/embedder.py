@@ -2,8 +2,8 @@ from functools import lru_cache
 
 from sentence_transformers import SentenceTransformer
 
-from classiflow.knowledge.exceptions import EmbeddingError
-from classiflow.knowledge.repositories.embedder import Embedding
+from classiflow.knowledge.domain.chunk import Embedding
+from classiflow.knowledge.embeddings.exceptions import EmbeddingError
 from classiflow.settings import Settings
 
 

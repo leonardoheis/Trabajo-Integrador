@@ -2,7 +2,8 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from classiflow.knowledge.exceptions import ChatRefusalError, KnowledgeError
+from classiflow.knowledge.exceptions import KnowledgeError
+from classiflow.knowledge.llm.exceptions import ChatRefusalError
 
 _SERVICE_UNAVAILABLE = 503
 _UNPROCESSABLE = 422

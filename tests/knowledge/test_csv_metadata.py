@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from classiflow.knowledge.infrastructure.csv_metadata import CsvDocumentMetadataRepository
+from classiflow.knowledge.indexing.csv_metadata import CsvDocumentMetadataRepository
 
 _NORM_HEADER = (
     '"TIPO","NUMERO","ANIO","ASUNTO","FEC_SANCION","NRO_BOLETIN","ANIO_BOLETIN",'

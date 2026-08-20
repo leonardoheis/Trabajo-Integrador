@@ -26,13 +26,14 @@ from classiflow.ingesta.nodes.node3_content_validation import ContentValidationN
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode
 from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
 from classiflow.injections.production import Container
-from classiflow.knowledge.chunker import ChunkerService
-from classiflow.knowledge.indexer import IndexerService
-from classiflow.knowledge.rag import RagService
-from classiflow.knowledge.repositories.chat_llm import IChatLlm
-from classiflow.knowledge.repositories.document_metadata import IDocumentMetadataRepository
-from classiflow.knowledge.repositories.embedder import IEmbedder
-from classiflow.knowledge.repositories.vector_store import IVectorStore
+from classiflow.knowledge.chat.service import ChatService
+from classiflow.knowledge.chunking.chunker import ChunkerService
+from classiflow.knowledge.embeddings.embedder import SentenceTransformerEmbedder
+from classiflow.knowledge.indexing.csv_metadata import CsvDocumentMetadataRepository
+from classiflow.knowledge.indexing.indexer import IndexerService
+from classiflow.knowledge.llm.chat_llm import ChatLlm
+from classiflow.knowledge.retrieval.retriever import RetrieverService
+from classiflow.knowledge.vectordb.vector_store import VectorStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
@@ -83,10 +84,10 @@ def get_audit_service(session: DbSession) -> AuditService:
 @inject
 def get_indexer(
     chunker: Annotated[ChunkerService, Depends(Provide[Container.chunker])],
-    embedder: Annotated[IEmbedder, Depends(Provide[Container.embedder])],
-    vector_store: Annotated[IVectorStore, Depends(Provide[Container.vector_store])],
+    embedder: Annotated[SentenceTransformerEmbedder, Depends(Provide[Container.embedder])],
+    vector_store: Annotated[VectorStore, Depends(Provide[Container.vector_store])],
     metadata_repo: Annotated[
-        IDocumentMetadataRepository, Depends(Provide[Container.document_metadata_repo])
+        CsvDocumentMetadataRepository, Depends(Provide[Container.document_metadata_repo])
     ],
 ) -> IndexerService:
     return IndexerService(
@@ -98,12 +99,19 @@ def get_indexer(
 
 
 @inject
-def get_rag_service(
-    embedder: Annotated[IEmbedder, Depends(Provide[Container.embedder])],
-    vector_store: Annotated[IVectorStore, Depends(Provide[Container.vector_store])],
-    chat_llm: Annotated[IChatLlm, Depends(Provide[Container.chat_llm])],
-) -> RagService:
-    return RagService(embedder=embedder, vector_store=vector_store, chat_llm=chat_llm)
+def get_retriever(
+    embedder: Annotated[SentenceTransformerEmbedder, Depends(Provide[Container.embedder])],
+    vector_store: Annotated[VectorStore, Depends(Provide[Container.vector_store])],
+) -> RetrieverService:
+    return RetrieverService(embedder=embedder, vector_store=vector_store)
+
+
+@inject
+def get_chat_service(
+    retriever: Annotated[RetrieverService, Depends(get_retriever)],
+    chat_llm: Annotated[ChatLlm, Depends(Provide[Container.chat_llm])],
+) -> ChatService:
+    return ChatService(retriever=retriever, chat_llm=chat_llm)
 
 
 # Each kwarg is an independently-injected collaborator; bundling them into a params

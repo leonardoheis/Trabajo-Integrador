@@ -8,12 +8,12 @@ from classiflow.domain.job import JobStatus
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
-from classiflow.knowledge.chunker import ChunkerService
+from classiflow.knowledge.chunking.chunker import ChunkerService
+from classiflow.knowledge.domain.chunk import Embedding
 from classiflow.knowledge.domain.document import DocumentMetadata
-from classiflow.knowledge.exceptions import VectorStoreError
-from classiflow.knowledge.indexer import IndexerService
-from classiflow.knowledge.infrastructure.chroma_store import InMemoryVectorStore
-from classiflow.knowledge.repositories.embedder import Embedding
+from classiflow.knowledge.indexing.indexer import IndexerService
+from classiflow.knowledge.vectordb.exceptions import VectorStoreError
+from classiflow.knowledge.vectordb.in_memory_store import InMemoryVectorStore
 from classiflow.services.audit.service import AuditService
 
 _JOB_ID = "test-job-005"

@@ -21,7 +21,8 @@ from classiflow.api.error_handlers.pipeline import (
     handle_job_not_in_review_error,
 )
 from classiflow.ingesta.exceptions import LlmProviderError, ModelLoadError, ModelNotFoundError
-from classiflow.knowledge.exceptions import ChatRefusalError, KnowledgeError
+from classiflow.knowledge.exceptions import KnowledgeError
+from classiflow.knowledge.llm.exceptions import ChatRefusalError
 from classiflow.services.auth.exceptions import AuthError, NotAllowedError, OAuthError
 from classiflow.services.pipeline.exceptions import JobNotFoundError, JobNotInReviewError
 

@@ -5,10 +5,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from classiflow.api.dependencies import get_current_user, get_rag_service
+from classiflow.api.dependencies import get_chat_service, get_current_user
 from classiflow.api.routes.chat.schemas import ChatRequest, ChatResponse, SourceSchema
+from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.domain.chat import ChatQuery, SourceRef
-from classiflow.knowledge.rag import RagService
 
 router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(get_current_user)])
 
@@ -28,20 +28,20 @@ def _sources_payload(sources: list[SourceRef]) -> list[dict[str, object]]:
 @router.post("")
 async def chat(
     body: ChatRequest,
-    rag: Annotated[RagService, Depends(get_rag_service)],
+    chat_service: Annotated[ChatService, Depends(get_chat_service)],
 ) -> ChatResponse:
-    answer = await rag.answer(_to_query(body))
+    answer = await chat_service.answer(_to_query(body))
     return ChatResponse.from_domain(answer)
 
 
 @router.post("/stream")
 async def chat_stream(
     body: ChatRequest,
-    rag: Annotated[RagService, Depends(get_rag_service)],
+    chat_service: Annotated[ChatService, Depends(get_chat_service)],
 ) -> StreamingResponse:
     async def _stream() -> AsyncGenerator[str, None]:
         sources: list[SourceRef] = []
-        async for token, current_sources in rag.astream(_to_query(body)):
+        async for token, current_sources in chat_service.astream(_to_query(body)):
             sources = current_sources
             yield _sse("token", {"text": token})
         # Sources are emitted once at the end rather than per token: they are identical

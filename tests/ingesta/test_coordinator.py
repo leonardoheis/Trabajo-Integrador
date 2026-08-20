@@ -16,10 +16,10 @@ from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNod
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
 from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
-from classiflow.knowledge.chunker import ChunkerService
+from classiflow.knowledge.chunking.chunker import ChunkerService
 from classiflow.knowledge.domain.document import DocumentMetadata
-from classiflow.knowledge.indexer import IndexerService
-from classiflow.knowledge.infrastructure.chroma_store import InMemoryVectorStore
+from classiflow.knowledge.indexing.indexer import IndexerService
+from classiflow.knowledge.vectordb.in_memory_store import InMemoryVectorStore
 from classiflow.services.audit.service import AuditService
 
 if TYPE_CHECKING:

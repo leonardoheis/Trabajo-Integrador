@@ -1,4 +1,4 @@
-from classiflow.knowledge.chunker import ChunkerService
+from classiflow.knowledge.chunking.chunker import ChunkerService
 from classiflow.knowledge.domain.document import DocumentMetadata
 
 _META = DocumentMetadata(

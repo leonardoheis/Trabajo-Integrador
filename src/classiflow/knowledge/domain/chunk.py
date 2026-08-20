@@ -5,6 +5,10 @@ from classiflow.knowledge.domain.document import DocumentMetadata
 # filters can match on.
 StoreMetadata = dict[str, str | int | float | bool]
 
+# Lives here rather than in `embeddings/` so that `vectordb/` and `utils/vectors.py`
+# can name the type without importing sentence_transformers.
+Embedding = list[float]
+
 
 class Chunk(BaseEntity):
     chunk_id: str

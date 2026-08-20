@@ -1,11 +1,11 @@
 import asyncio
 
-from classiflow.knowledge.chunker import ChunkerService
+from classiflow.knowledge.chunking.chunker import ChunkerService
 from classiflow.knowledge.domain.chunk import Chunk
 from classiflow.knowledge.domain.document import DocumentMetadata
-from classiflow.knowledge.repositories.document_metadata import IDocumentMetadataRepository
-from classiflow.knowledge.repositories.embedder import IEmbedder
-from classiflow.knowledge.repositories.vector_store import IVectorStore
+from classiflow.knowledge.embeddings.embedder import SentenceTransformerEmbedder
+from classiflow.knowledge.indexing.csv_metadata import CsvDocumentMetadataRepository
+from classiflow.knowledge.vectordb.vector_store import VectorStore
 
 
 class IndexResult:
@@ -24,9 +24,9 @@ class IndexerService:
     def __init__(
         self,
         chunker: ChunkerService,
-        embedder: IEmbedder,
-        vector_store: IVectorStore,
-        metadata_repo: IDocumentMetadataRepository,
+        embedder: SentenceTransformerEmbedder,
+        vector_store: VectorStore,
+        metadata_repo: CsvDocumentMetadataRepository,
     ) -> None:
         self._chunker = chunker
         self._embedder = embedder

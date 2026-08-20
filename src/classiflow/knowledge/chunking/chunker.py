@@ -1,15 +1,7 @@
-import re
-
 from classiflow.knowledge.domain.chunk import Chunk
 from classiflow.knowledge.domain.document import DocumentMetadata
+from classiflow.knowledge.utils.text import split_paragraphs
 from classiflow.settings import Settings
-
-_PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
-_WHITESPACE = re.compile(r"[ \t]+")
-
-
-def _normalize(text: str) -> str:
-    return _WHITESPACE.sub(" ", text).strip()
 
 
 class ChunkerService:
@@ -50,8 +42,7 @@ class ChunkerService:
         return citation
 
     def _windows(self, text: str) -> list[str]:
-        paragraphs = [_normalize(p) for p in _PARAGRAPH_BREAK.split(text)]
-        paragraphs = [p for p in paragraphs if p]
+        paragraphs = split_paragraphs(text)
         if not paragraphs:
             return []
 

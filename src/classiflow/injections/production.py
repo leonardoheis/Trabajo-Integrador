@@ -8,13 +8,14 @@ from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.extract import TextExtractor
 from classiflow.ingesta.extractors import MarkItDownExtractor, OCRExtractor
-from classiflow.knowledge.chunker import ChunkerService
-from classiflow.knowledge.infrastructure.chroma_store import ChromaVectorStore
-from classiflow.knowledge.infrastructure.claude_chat_llm import ClaudeChatLlm
-from classiflow.knowledge.infrastructure.csv_metadata import CsvDocumentMetadataRepository
-from classiflow.knowledge.infrastructure.embedder import SentenceTransformerEmbedder
-from classiflow.knowledge.infrastructure.llama_chat_llm import LlamaCppChatLlm
-from classiflow.knowledge.rag import RagService
+from classiflow.knowledge.chat.service import ChatService
+from classiflow.knowledge.chunking.chunker import ChunkerService
+from classiflow.knowledge.embeddings.embedder import SentenceTransformerEmbedder
+from classiflow.knowledge.indexing.csv_metadata import CsvDocumentMetadataRepository
+from classiflow.knowledge.llm.claude import ClaudeChatLlm
+from classiflow.knowledge.llm.llama import LlamaCppChatLlm
+from classiflow.knowledge.retrieval.retriever import RetrieverService
+from classiflow.knowledge.vectordb.chroma_store import ChromaVectorStore
 from classiflow.services.auth.service import AuthService
 from classiflow.settings import Settings
 
@@ -62,10 +63,14 @@ class Container(containers.DeclarativeContainer):
         llama=llama_chat_llm,
     )
 
-    rag_service = providers.Factory(
-        RagService,
+    retriever = providers.Factory(
+        RetrieverService,
         embedder=embedder,
         vector_store=vector_store,
+    )
+    chat_service = providers.Factory(
+        ChatService,
+        retriever=retriever,
         chat_llm=chat_llm,
     )
 

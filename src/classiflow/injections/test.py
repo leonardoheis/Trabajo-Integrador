@@ -18,11 +18,12 @@ from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNod
 from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
 from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
 from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
-from classiflow.knowledge.chunker import ChunkerService
+from classiflow.knowledge.chat.service import ChatService
+from classiflow.knowledge.chunking.chunker import ChunkerService
 from classiflow.knowledge.domain.document import DocumentMetadata
-from classiflow.knowledge.indexer import IndexerService
-from classiflow.knowledge.infrastructure.chroma_store import InMemoryVectorStore
-from classiflow.knowledge.rag import RagService
+from classiflow.knowledge.indexing.indexer import IndexerService
+from classiflow.knowledge.retrieval.retriever import RetrieverService
+from classiflow.knowledge.vectordb.in_memory_store import InMemoryVectorStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.pipeline.service import PipelineService
@@ -61,7 +62,11 @@ class _StubEmbedder:
 
 
 class _StubChatLlm:
-    """Echoes a fixed Spanish answer, mirroring MockLlm's role for the SLM nodes."""
+    """Echoes a fixed Spanish answer, mirroring MockLlm's role for the SLM nodes.
+
+    Duck-typed like the sibling stubs: subclassing ChatLlm would force the unused
+    parameters to keep the base's names and trip ARG002.
+    """
 
     def __init__(self, response: str = "Según los pasajes provistos, no hay datos.") -> None:
         self._response = response
@@ -125,10 +130,14 @@ class TestContainer(containers.DeclarativeContainer):
         vector_store=vector_store,
         metadata_repo=document_metadata_repo,
     )
-    rag_service = providers.Factory(
-        RagService,
+    retriever = providers.Factory(
+        RetrieverService,
         embedder=embedder,
         vector_store=vector_store,
+    )
+    chat_service = providers.Factory(
+        ChatService,
+        retriever=retriever,
         chat_llm=chat_llm,
     )
     node5 = providers.Factory(
