@@ -168,6 +168,9 @@ async def test_extractor_used_is_queryable_from_document_step() -> None:
         coordinator=cast("CompiledStateGraph", None),  # unused: only _persist_steps runs
         enrichment_coordinator=cast("CompiledStateGraph", None),  # unused: only _persist_steps runs
         document_storage=cast("IDocumentStorage", None),  # unused: only _persist_steps runs
+        classification_coordinator=cast(  # unused: only _persist_steps runs
+            "CompiledStateGraph", None
+        ),
     )
     job_id = "persisted-job"
     final_state: JobState = {

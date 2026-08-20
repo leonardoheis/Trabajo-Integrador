@@ -25,6 +25,7 @@ from classiflow.ingesta.llm_provider import unload_slm
 from classiflow.storage.document_storage import IDocumentStorage
 
 if TYPE_CHECKING:
+    from classiflow.classification.domain.state import ClassificationState
     from classiflow.enrichment.domain.state import EnrichmentState
 
 _PIPELINE_NODE = "pipeline"
@@ -54,6 +55,7 @@ class PipelineService:
         coordinator: CompiledStateGraph,  # type: ignore[type-arg]
         enrichment_coordinator: CompiledStateGraph,  # type: ignore[type-arg]
         document_storage: IDocumentStorage,
+        classification_coordinator: CompiledStateGraph,  # type: ignore[type-arg]
     ) -> None:
         self._job_repo = job_repo
         self._document_steps_repo = document_steps_repo
@@ -62,6 +64,7 @@ class PipelineService:
         self._coordinator = coordinator
         self._enrichment_coordinator = enrichment_coordinator
         self._document_storage = document_storage
+        self._classification_coordinator = classification_coordinator
 
     async def start(
         self, background_tasks: BackgroundTasks, filename: str, file_bytes: bytes
@@ -91,7 +94,9 @@ class PipelineService:
             await self._document_storage.save_staged(job_id, filename, file_bytes)
 
         if final_state.get("final_status") == "accepted":
-            await self._run_enrichment(job_id, filename, final_state)
+            enriched_record = await self._run_enrichment(job_id, filename, final_state)
+            if enriched_record is not None:
+                await self._run_classification(job_id, filename, enriched_record)
 
         unload_slm()
 
@@ -184,3 +189,19 @@ class PipelineService:
             failed_at_node="enrichment",
         )
         return None
+
+    async def _run_classification(
+        self, job_id: str, filename: str, enriched_record: EnrichedRecord
+    ) -> None:
+        # No retry-then-review fallback here, unlike _run_enrichment -- neither this
+        # spec nor the BERT spec describes one for classification failures. A raised
+        # ClassificationError simply propagates out of this background task uncaught;
+        # revisit if that turns out to need the same bounded-retry treatment Stage 3
+        # got.
+        initial: ClassificationState = {
+            "job_id": job_id,
+            "filename": filename,
+            "cleaned_text": enriched_record.cleaned_text,
+            "enriched_id": enriched_record.id,
+        }
+        await self._classification_coordinator.ainvoke(initial)

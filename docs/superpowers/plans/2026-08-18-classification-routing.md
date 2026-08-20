@@ -5407,7 +5407,7 @@ Spec Decision 10: chains straight from a successful `_run_enrichment()` into `_r
 - Consumes: `classiflow.classification.coordinator.build_classification_coordinator` (Task 15), `classiflow.classification.domain.state.ClassificationState` (Task 4), all seven classification nodes (Tasks 5, 9–14), `classiflow.domain.repositories.classification_record.IClassificationRecordRepository` (Task 3).
 - Produces: `PipelineService.__init__(..., classification_coordinator: CompiledStateGraph)` (new 8th param). `PipelineService._run_classification(job_id, filename, enriched_record) -> None`, called from `_run()` only when `_run_enrichment`'s return value is not `None`. `Container.classification_chain`, `Container.judge_chain` (production.py). `get_classification_record_repo`, `get_primary_classifier`, `get_second_opinion`, `get_foreign_municipality`, `get_smells_risk`, `get_confidence_gate`, `get_llm_judge`, `get_routing`, `get_classification_coordinator` (`api/dependencies.py`).
 
-- [ ] **Step 1: Fix `InMemoryEnrichedRecordRepository` to assign `id` on save**
+- [x] **Step 1: Fix `InMemoryEnrichedRecordRepository` to assign `id` on save**
 
 In `src/classiflow/database/repositories/enriched_record.py`, update `InMemoryEnrichedRecordRepository`:
 
@@ -5431,7 +5431,7 @@ class InMemoryEnrichedRecordRepository:
         return self._records.get(job_id)
 ```
 
-- [ ] **Step 2: Write the failing integration test**
+- [x] **Step 2: Write the failing integration test**
 
 ```python
 # tests/shared/test_pipeline_service_classification.py
@@ -5654,12 +5654,12 @@ class TestPipelineServiceClassification:
         assert "classified/ordenanzas" in record.stored_path
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Run: `pytest tests/shared/test_pipeline_service_classification.py -v`
 Expected: FAIL with `TypeError: __init__() got an unexpected keyword argument 'classification_coordinator'`
 
-- [ ] **Step 4: Bump `max-args` from 7 to 8**
+- [x] **Step 4: Bump `max-args` from 7 to 8**
 
 `PipelineService.__init__` and `get_pipeline_service` both grow to 8 params with `classification_coordinator` added. In `pyproject.toml`, update:
 
@@ -5689,7 +5689,7 @@ max-returns = 6
 max-statements = 50
 ```
 
-- [ ] **Step 5: Update `PipelineService`**
+- [x] **Step 5: Update `PipelineService`**
 
 In `src/classiflow/services/pipeline/service.py`, add `ClassificationState` to the existing `TYPE_CHECKING` block (mirrors `EnrichmentState`'s own precedent — a type used only in annotations, not at runtime):
 
@@ -5769,7 +5769,7 @@ Add the new method, after `_run_enrichment`:
         await self._classification_coordinator.ainvoke(initial)
 ```
 
-- [ ] **Step 6: Wire `Container` (production.py)**
+- [x] **Step 6: Wire `Container` (production.py)**
 
 Add imports:
 
@@ -5788,7 +5788,7 @@ Add inside `Container`, after `entity_extraction_chain`:
     judge_chain = providers.Callable(build_judge_chain, judge_llm)
 ```
 
-- [ ] **Step 7: Wire `api/dependencies.py`**
+- [x] **Step 7: Wire `api/dependencies.py`**
 
 Add imports:
 
@@ -5954,7 +5954,7 @@ def get_pipeline_service(
     )
 ```
 
-- [ ] **Step 8: Wire `TestContainer` (injections/test.py)**
+- [x] **Step 8: Wire `TestContainer` (injections/test.py)**
 
 Add imports:
 
@@ -6079,17 +6079,17 @@ Update `pipeline_service`:
     )
 ```
 
-- [ ] **Step 9: Run test to verify it passes**
+- [x] **Step 9: Run test to verify it passes**
 
 Run: `pytest tests/shared/test_pipeline_service_classification.py -v`
 Expected: PASS
 
-- [ ] **Step 10: Run the full existing test suite (regression check)**
+- [x] **Step 10: Run the full existing test suite (regression check)**
 
 Run: `pytest tests -v`
 Expected: PASS across the board, including `tests/api` (the new DI wiring resolves correctly through `get_pipeline_service`).
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add pyproject.toml src/classiflow/database/repositories/enriched_record.py src/classiflow/services/pipeline/service.py src/classiflow/injections/production.py src/classiflow/injections/test.py src/classiflow/api/dependencies.py tests/shared/test_pipeline_service_classification.py

@@ -4,6 +4,8 @@ from functools import cache
 import easyocr
 from dependency_injector import containers, providers
 
+from classiflow.classification.prompts.llm_judge import build_judge_chain
+from classiflow.classification.prompts.primary_classification import build_classification_chain
 from classiflow.database.base import get_session
 from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.enrichment.prompts.entity_extraction import build_entity_extraction_chain
@@ -94,6 +96,12 @@ class Container(containers.DeclarativeContainer):
     # slot, so unload_slm()'s cache_clear() still releases this model's VRAM too.
     enrichment_llm = providers.Callable(get_llm_langchain, Settings.enrichment_model_path)
     entity_extraction_chain = providers.Callable(build_entity_extraction_chain, enrichment_llm)
+
+    # Same Callable-wrapping-a-cache reasoning as the other *_llm providers above.
+    classification_llm = providers.Callable(get_llm_langchain, Settings.classification_model_path)
+    classification_chain = providers.Callable(build_classification_chain, classification_llm)
+    judge_llm = providers.Callable(get_llm_langchain, Settings.judge_model_path)
+    judge_chain = providers.Callable(build_judge_chain, judge_llm)
 
 
 @cache
