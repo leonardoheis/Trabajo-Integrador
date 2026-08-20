@@ -3519,11 +3519,11 @@ Wraps Task 8's `BertClassifier` as a `BaseNode`, following `entity_extractor.py`
 - Consumes: `classiflow.classification.bert.classifier.BertClassifier` (Task 8), `classiflow.classification.domain.results.SecondOpinionResult` (Task 8), `classiflow.classification.config_classification.{ClassificationConfig, get_classification_config}` (Task 4), `classiflow.pipeline.base.BaseNode`, `classiflow.pipeline.context.JobContext`.
 - Produces: `Settings.PROJECT_ROOT` (module-level export in `settings.py`, alongside `Settings`). `SecondOpinionNode(BaseNode)` — `__init__(audit, broadcaster, *, classifier=None, config=None)`, `async run(ctx, cleaned_text) -> SecondOpinionResult | None` (returns `None` when `config.second_opinion_enabled` is `False`).
 
-- [ ] **Step 1: Confirm the model artifacts are still absent and locate the source**
+- [x] **Step 1: Confirm the model artifacts are still absent and locate the source**
 
 Run: `Get-ChildItem models\bert_tunning_beto_v2 -ErrorAction SilentlyContinue` from the repo root — expect no output (confirmed absent as of this plan's writing). Source directory (verified on disk): `c:\Users\leona\source\repos\bert_tunning\models\bert_tunning_model_beto_v2\final\` — contains `config.json`, `model.safetensors` (~419MB), `ood_stats.npz` (~1.9MB), `smell_thresholds.json`, `svm_classifiers.joblib` (~2.5MB), `tokenizer.json`, `tokenizer_config.json`, and `training_args.bin` (HF `Trainer` hyperparameters, unused at inference — not copied).
 
-- [ ] **Step 2: Copy the model artifacts**
+- [x] **Step 2: Copy the model artifacts**
 
 Hand to the user (large binary copy, not a build/verification command, but still not something to run silently in the background):
 
@@ -3540,7 +3540,7 @@ Copy-Item "c:\Users\leona\source\repos\bert_tunning\models\bert_tunning_model_be
 
 No new `.gitignore` entry needed — `models/**` (minus `!models/**/.gitkeep`) already ignores everything under `models/`, the same pattern every other Classiflow model directory already relies on.
 
-- [ ] **Step 3: Write the failing test**
+- [x] **Step 3: Write the failing test**
 
 ```python
 # tests/classification/test_second_opinion_node.py
@@ -3603,12 +3603,12 @@ class TestSecondOpinionNodeRun:
         assert records[0].event == "passed"
 ```
 
-- [ ] **Step 4: Run test to verify it fails**
+- [x] **Step 4: Run test to verify it fails**
 
 Run: `pytest tests/classification/test_second_opinion_node.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.nodes.second_opinion'`
 
-- [ ] **Step 5: Add `PROJECT_ROOT` to `settings.py`**
+- [x] **Step 5: Add `PROJECT_ROOT` to `settings.py`**
 
 In `src/classiflow/settings.py`, add after `Settings = _Settings()`:
 
@@ -3620,7 +3620,7 @@ In `src/classiflow/settings.py`, add after `Settings = _Settings()`:
 PROJECT_ROOT = _PROJECT_ROOT
 ```
 
-- [ ] **Step 6: Implement `SecondOpinionNode`**
+- [x] **Step 6: Implement `SecondOpinionNode`**
 
 ```python
 # src/classiflow/classification/nodes/second_opinion.py
@@ -3713,12 +3713,12 @@ from classiflow.classification.nodes.second_opinion import SecondOpinionNode
 __all__ = ["PrimaryClassifierNode", "SecondOpinionNode"]
 ```
 
-- [ ] **Step 7: Run test to verify it passes**
+- [x] **Step 7: Run test to verify it passes**
 
 Run: `pytest tests/classification/test_second_opinion_node.py -v`
 Expected: PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/classiflow/settings.py src/classiflow/classification/nodes/second_opinion.py src/classiflow/classification/nodes/__init__.py tests/classification/test_second_opinion_node.py

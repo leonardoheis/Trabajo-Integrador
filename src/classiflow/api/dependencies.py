@@ -51,9 +51,9 @@ from classiflow.services.pipeline.service import PipelineService
 from classiflow.storage.document_storage import IDocumentStorage
 
 if TYPE_CHECKING:
-    from classiflow.enrichment.nodes.entity_extractor import _EntityChain
-    from classiflow.ingesta.nodes.node2_format_validation import _FormatChain
-    from classiflow.ingesta.nodes.node3_content_validation import _ContentChain
+    from classiflow.enrichment.nodes.entity_extractor import EntityChain
+    from classiflow.ingesta.nodes.node2_format_validation import FormatChain
+    from classiflow.ingesta.nodes.node3_content_validation import ContentChain
 
 _bearer = HTTPBearer()
 
@@ -114,7 +114,7 @@ def get_node2(
     return FormatValidationNode(
         audit=audit_service,
         broadcaster=broadcaster,
-        format_chain=cast("_FormatChain", format_chain),
+        format_chain=cast("FormatChain", format_chain),
     )
 
 
@@ -132,7 +132,7 @@ def get_node3(
         audit=audit_service,
         broadcaster=broadcaster,
         language_detector=language_detector,
-        content_chain=cast("_ContentChain", content_chain),
+        content_chain=cast("ContentChain", content_chain),
     )
 
 
@@ -175,7 +175,7 @@ def get_entity_extractor(
     return EntityExtractorNode(
         audit=audit_service,
         broadcaster=broadcaster,
-        entity_chain=cast("_EntityChain", entity_chain),
+        entity_chain=cast("EntityChain", entity_chain),
     )
 
 

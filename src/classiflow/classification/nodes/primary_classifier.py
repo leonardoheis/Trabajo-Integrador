@@ -38,7 +38,7 @@ class PrimaryClassifierNode(BaseNode):
         audit: AuditService,
         broadcaster: EventBroadcaster,
         *,
-        classification_chain: "_ClassificationChain | None" = None,
+        classification_chain: _ClassificationChain | None = None,
         config: ClassificationConfig | None = None,
     ) -> None:
         super().__init__(audit, broadcaster)

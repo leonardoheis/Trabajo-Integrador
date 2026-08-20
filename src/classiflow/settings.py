@@ -122,3 +122,9 @@ class _Settings(BaseSettings):
 
 
 Settings = _Settings()
+
+# Exposed for callers that need to resolve a project-root-relative path themselves
+# (e.g. ClassificationConfig.bert_model_path, which the BERT spec's classification.yaml
+# deliberately stores relative to the project root rather than baking an absolute path
+# into a config file every clone would need to edit).
+PROJECT_ROOT = _PROJECT_ROOT

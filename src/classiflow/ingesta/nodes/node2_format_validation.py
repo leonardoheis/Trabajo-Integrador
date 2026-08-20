@@ -19,7 +19,7 @@ from classiflow.settings import Settings
 
 
 @runtime_checkable
-class _FormatChain(Protocol):
+class FormatChain(Protocol):
     def invoke(self, inp: FormatChainInput, **kwargs: object) -> FormatDecisionOutput: ...
 
 
@@ -34,11 +34,11 @@ class FormatValidationNode(BaseNode):
         broadcaster: EventBroadcaster,
         *,
         config: AllowedFormatsConfig | None = None,
-        format_chain: "_FormatChain | None" = None,
+        format_chain: FormatChain | None = None,
     ) -> None:
         super().__init__(audit, broadcaster)
         self.config: AllowedFormatsConfig = config if config is not None else get_allowed_formats()
-        self.format_chain: _FormatChain | None = format_chain
+        self.format_chain: FormatChain | None = format_chain
 
     async def run(self, ctx: JobContext, reception: FileReceptionResult) -> FormatValidationResult:
         start = await self._emit_started(ctx)
@@ -105,10 +105,10 @@ class FormatValidationNode(BaseNode):
 
     def _slm_check(self, filename: str, reception: FileReceptionResult) -> FormatValidationResult:
         if self.format_chain is not None:
-            chain: _FormatChain = self.format_chain
+            chain: FormatChain = self.format_chain
         else:
             chain = cast(
-                "_FormatChain",
+                "FormatChain",
                 build_format_chain(get_llm_langchain(Settings.node2_model_path)),
             )
         expected_extensions = self.config.mime_to_extensions.get(reception.detected_mime, [])

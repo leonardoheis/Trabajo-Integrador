@@ -37,7 +37,7 @@ class _LanguageDetector(Protocol):
 
 
 @runtime_checkable
-class _ContentChain(Protocol):
+class ContentChain(Protocol):
     def invoke(self, inp: ContentChainInput, **kwargs: object) -> LegitimacyDecisionOutput: ...
 
 
@@ -66,7 +66,7 @@ class ContentValidationNode(BaseNode):
         *,
         config: ContentValidationConfig | None = None,
         language_detector: "_LanguageDetector | None" = None,
-        content_chain: "_ContentChain | None" = None,
+        content_chain: ContentChain | None = None,
     ) -> None:
         super().__init__(audit, broadcaster)
         self.config: ContentValidationConfig = (
@@ -75,7 +75,7 @@ class ContentValidationNode(BaseNode):
         self.language_detector: _LanguageDetector = (
             language_detector if language_detector is not None else get_language_detector()
         )
-        self.content_chain: _ContentChain | None = content_chain
+        self.content_chain: ContentChain | None = content_chain
 
     async def run(
         self,
@@ -149,10 +149,10 @@ class ContentValidationNode(BaseNode):
         self, text: str, detected_language: str, char_count: int
     ) -> ContentValidationResult:
         if self.content_chain is not None:
-            chain: _ContentChain = self.content_chain
+            chain: ContentChain = self.content_chain
         else:
             chain = cast(
-                "_ContentChain",
+                "ContentChain",
                 build_content_chain(get_llm_langchain(Settings.node3_model_path)),
             )
         try:

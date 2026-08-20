@@ -20,7 +20,7 @@ from classiflow.settings import Settings
 
 
 @runtime_checkable
-class _EntityChain(Protocol):
+class EntityChain(Protocol):
     def invoke(self, inp: EntityExtractionInput, **kwargs: object) -> EntityExtractionOutput: ...
 
 
@@ -34,11 +34,11 @@ class EntityExtractorNode(BaseNode):
         audit: AuditService,
         broadcaster: EventBroadcaster,
         *,
-        entity_chain: "_EntityChain | None" = None,
+        entity_chain: EntityChain | None = None,
         config: EnrichmentConfig | None = None,
     ) -> None:
         super().__init__(audit, broadcaster)
-        self.entity_chain: _EntityChain | None = entity_chain
+        self.entity_chain: EntityChain | None = entity_chain
         self.config: EnrichmentConfig = config if config is not None else get_enrichment_config()
 
     async def run(self, ctx: JobContext, cleaned_text: str) -> EntityExtractionResult:
@@ -69,10 +69,10 @@ class EntityExtractorNode(BaseNode):
         excerpt = cleaned_text[: self.config.entity_excerpt_len]
         try:
             if self.entity_chain is not None:
-                chain: _EntityChain = self.entity_chain
+                chain: EntityChain = self.entity_chain
             else:
                 chain = cast(
-                    "_EntityChain",
+                    "EntityChain",
                     build_entity_extraction_chain(
                         get_llm_langchain(Settings.enrichment_model_path)
                     ),
