@@ -27,3 +27,9 @@ class SecondOpinionResult(BaseEntity):
     svm_predicted_label: str = ""
     svm_agrees_with_prediction: bool = True
     ood_metrics: OodMetrics | None = None
+
+
+class SmellsRiskResult(BaseEntity):
+    smells: list[str] = Field(default_factory=list)
+    risk_score: int = 0
+    smell_review_suggested: bool = False

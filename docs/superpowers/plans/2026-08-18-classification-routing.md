@@ -3899,7 +3899,7 @@ Pure logic, no LLM. Weights table and formula per `tasks/plan_stage4.md` (spec D
 - Consumes: `classiflow.classification.config_classification.{ClassificationConfig, get_classification_config}` (Task 4).
 - Produces: `SmellsRiskResult(BaseEntity)` (`smells: list[str]`, `risk_score: int`, `smell_review_suggested: bool`) in `domain/results.py`. `SmellsRiskNode(BaseNode)` — `__init__(audit, broadcaster, *, config=None)`, `async run(ctx, *, cleaned_text, confidence, classifier_disagreement, foreign_municipality, svm_agrees_with_prediction) -> SmellsRiskResult`, `compute(...)` (sync, same keyword args, directly testable).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/classification/test_smells_risk_node.py
@@ -4050,12 +4050,12 @@ class TestSmellsRiskRun:
         assert records[0].event == "passed"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/classification/test_smells_risk_node.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.nodes.smells_risk'`
 
-- [ ] **Step 3: Add `SmellsRiskResult` to `domain/results.py`**
+- [x] **Step 3: Add `SmellsRiskResult` to `domain/results.py`**
 
 Append to `src/classiflow/classification/domain/results.py`:
 
@@ -4066,7 +4066,7 @@ class SmellsRiskResult(BaseEntity):
     smell_review_suggested: bool = False
 ```
 
-- [ ] **Step 4: Implement the node**
+- [x] **Step 4: Implement the node**
 
 ```python
 # src/classiflow/classification/nodes/smells_risk.py
@@ -4190,12 +4190,12 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `pytest tests/classification/test_smells_risk_node.py -v`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/classiflow/classification/domain/results.py src/classiflow/classification/nodes/smells_risk.py src/classiflow/classification/nodes/__init__.py tests/classification/test_smells_risk_node.py
