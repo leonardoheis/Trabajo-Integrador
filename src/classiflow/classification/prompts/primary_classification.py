@@ -52,8 +52,8 @@ _CATEGORY_DEFS: dict[DocumentCategory, str] = {
     DocumentCategory.DECLARACIONES_CONCEJO_MUNICIPAL: (
         "Declaración del Concejo Municipal: the Concejo (legislative body) "
         "expressing an opinion, adhesion, recognition, or repudiation -- NOT "
-        'binding, creates no legal obligation. Opens with "EL CONCEJO MUNICIPAL '
-        "DECLARA\" (not 'sanciona' or 'decreta')."
+        'binding, creates no legal obligation. Opens with "...HA SANCIONADO LA '
+        'SIGUIENTE: DECLARACION" -- issuing body is Concejo Municipal.'
     ),
     DocumentCategory.DECRETO_ORDENANZAS: (
         "Decreto-Ordenanza: an EXCEPTIONAL act -- the Departamento Ejecutivo "
@@ -72,17 +72,18 @@ _CATEGORY_DEFS: dict[DocumentCategory, str] = {
         "recess/extraordinary-faculty anchor is present."
     ),
     DocumentCategory.DECRETOS_CONCEJO_MUNICIPAL: (
-        "Decreto del Concejo Municipal: an act of the Concejo (legislative body) "
-        "with the verb DECRETA, on internal/administrative matters of the Concejo "
-        "itself (e.g. council-member leave, internal appointments) -- narrower in "
-        "scope than an ordenanza. Anchor: issuing body is 'Concejo Municipal' / "
-        "'Honorable Concejo Municipal', verb is DECRETA."
+        "Decreto del Concejo Municipal: an act of the Concejo (legislative body), "
+        "on internal/administrative matters of the Concejo itself (e.g. "
+        "council-member leave, internal appointments) -- narrower in scope than an "
+        'ordenanza. Anchor: opens with "...HA SANCIONADO EL SIGUIENTE: DECRETO", '
+        "issuing body is 'Concejo Municipal' / 'Honorable Concejo Municipal' (not "
+        "the DECRETA verb -- that belongs to the executive decretos category)."
     ),
     DocumentCategory.ORDENANZAS: (
         "Ordenanza: a general, binding rule sanctioned by the Concejo Municipal "
         "(the municipal equivalent of a law), applying to citizens broadly, subject "
-        'to executive promulgation. Opens with "EL CONCEJO MUNICIPAL SANCIONA CON '
-        'FUERZA DE ORDENANZA".'
+        'to executive promulgation. Opens with "LA MUNICIPALIDAD DE ROSARIO HA '
+        'SANCIONADO LA SIGUIENTE: ORDENANZA".'
     ),
     DocumentCategory.RESOLUCIONES: (
         "Resolución: a narrower administrative act, typically from a "
@@ -92,13 +93,13 @@ _CATEGORY_DEFS: dict[DocumentCategory, str] = {
         "executive office, not the Concejo."
     ),
     DocumentCategory.RESOLUCIONES_CONCEJO_MUNICIPAL: (
-        "Resolución del Concejo Municipal: like decretos_concejo_municipal but with "
-        "the verb RESUELVE instead of DECRETA -- typically parliamentary/procedural "
-        "matters (commissions, internal Concejo business). Anchor: issuing body is "
-        "'Concejo Municipal', verb is RESUELVE. This is the hardest pair to separate "
-        "from decretos_concejo_municipal -- when both the Concejo-issuer anchor and "
-        "internal-matter anchor are present, the deciding signal is specifically "
-        "which verb (DECRETA vs. RESUELVE) introduces the operative part of the act."
+        "Resolución del Concejo Municipal: like decretos_concejo_municipal but "
+        "typically parliamentary/procedural matters (commissions, internal Concejo "
+        'business). Anchor: opens with "...HA SANCIONADO LA SIGUIENTE: RESOLUCION", '
+        "issuing body is 'Concejo Municipal'. This is the hardest pair to separate "
+        "from decretos_concejo_municipal -- both share the same 'HA SANCIONADO...' "
+        "opening and Concejo issuer; the deciding signal is specifically which noun "
+        "(DECRETO vs. RESOLUCION) follows 'HA SANCIONADO EL/LA SIGUIENTE'."
     ),
 }
 _CATEGORIES_BLOCK = "\n".join(f"- {label.value}: {desc}" for label, desc in _CATEGORY_DEFS.items())

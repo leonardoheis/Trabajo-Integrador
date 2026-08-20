@@ -50,3 +50,14 @@ class ClassificationArtifactError(ClassificationError):
 
     def __str__(self) -> str:
         return f"Classification artifact error: {self.reason}"
+
+
+@dataclass
+class LlmJudgeFailedError(ClassificationError):
+    reason: str
+
+    def __post_init__(self) -> None:
+        super().__init__(str(self))
+
+    def __str__(self) -> str:
+        return f"LLM judge failed: {self.reason}"

@@ -4414,7 +4414,7 @@ Spec Decision 6: single structured LLM call, no tool-use, over the **full** (unt
 - Consumes: `classiflow.classification.domain.results.JudgeOutput` (Task 4), `classiflow.ingesta.llm_provider.{get_llm_langchain, MockLlm}`, `classiflow.ingesta.exceptions.LlmProviderError`, `Settings.judge_model_path` (Task 4).
 - Produces: `classiflow.classification.exceptions.LlmJudgeFailedError(reason: str)`. `JudgeInput(BaseEntity)` (`cleaned_text: str`, `primary_label: str`, `primary_confidence: float`, `second_opinion_label: str | None = None`, `smells: list[str] = []`, `risk_score: int = 0`, `foreign_municipality: str | None = None`), `build_judge_chain(llm: BaseLLM) -> Runnable[JudgeInput, JudgeOutput]`. `LlmJudgeNode(BaseNode)` — `__init__(audit, broadcaster, *, judge_chain=None)`, `async run(ctx, judge_input) -> JudgeOutput` (raises `LlmJudgeFailedError` on chain failure), `judge(judge_input) -> JudgeOutput` (sync, directly testable).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/classification/test_llm_judge_chain.py
@@ -4522,12 +4522,12 @@ class TestLlmJudgeRun:
         assert records[0].event == "failed"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `pytest tests/classification/test_llm_judge_chain.py tests/classification/test_llm_judge_node.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.prompts.llm_judge'`
 
-- [ ] **Step 3: Add `LlmJudgeFailedError` to `exceptions.py`**
+- [x] **Step 3: Add `LlmJudgeFailedError` to `exceptions.py`**
 
 Append to `src/classiflow/classification/exceptions.py`:
 
@@ -4543,7 +4543,7 @@ class LlmJudgeFailedError(ClassificationError):
         return f"LLM judge failed: {self.reason}"
 ```
 
-- [ ] **Step 4: Implement the chain**
+- [x] **Step 4: Implement the chain**
 
 ```python
 # src/classiflow/classification/prompts/llm_judge.py
@@ -4635,7 +4635,7 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 5: Implement the node**
+- [x] **Step 5: Implement the node**
 
 ```python
 # src/classiflow/classification/nodes/llm_judge.py
@@ -4732,12 +4732,12 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `pytest tests/classification/test_llm_judge_chain.py tests/classification/test_llm_judge_node.py -v`
 Expected: PASS — both files are `MockLlm`-based, so this passes with no real model file present.
 
-- [ ] **Step 7: Download the Judge model (manual, one-time — needed only to exercise the real node)**
+- [x] **Step 7: Download the Judge model (manual, one-time — needed only to exercise the real node)**
 
 `Settings.JUDGE_MODEL_PATH` defaults to `models/gemma-4-E4B-it-Q4_K_M.gguf` (set when
 `JUDGE_MODEL_PATH` was introduced in Task 4), distinct from `_DEFAULT_MODEL`
@@ -4756,7 +4756,7 @@ GGUF/quantization format, then save it as `models/gemma-4-E4B-it-Q4_K_M.gguf` (g
 per the existing `models/**` + `.gitkeep` pattern — no commit needed for the model file
 itself).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/classiflow/classification/exceptions.py src/classiflow/classification/prompts/ src/classiflow/classification/nodes/llm_judge.py src/classiflow/classification/nodes/__init__.py tests/classification/test_llm_judge_chain.py tests/classification/test_llm_judge_node.py
