@@ -6,7 +6,13 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from classiflow.database.base import Base
-from classiflow.database.models import AllowedUser, DocumentStep, HumanDecision, Job
+from classiflow.database.models import (
+    AllowedUser,
+    DocumentStep,
+    EnrichedRecord,
+    HumanDecision,
+    Job,
+)
 from classiflow.database.repositories.audit import (
     InMemoryAuditRepository,
     SqlAuditRepository,
@@ -15,6 +21,10 @@ from classiflow.database.repositories.audit import (
 from classiflow.database.repositories.document_steps import (
     InMemoryDocumentStepsRepository,
     SqlDocumentStepsRepository,
+)
+from classiflow.database.repositories.enriched_record import (
+    InMemoryEnrichedRecordRepository,
+    SqlEnrichedRecordRepository,
 )
 from classiflow.database.repositories.hash import InMemoryHashRepository, SqlHashRepository
 from classiflow.database.repositories.human_decision import (
@@ -378,3 +388,45 @@ class TestInMemoryJobRepository:
         await repo.create(_job("a"))
         await repo.create(_job("b"))
         assert len(await repo.list_all()) == _ROWS_2
+
+
+# ---------------------------------------------------------------------------
+# IEnrichedRecordRepository
+# ---------------------------------------------------------------------------
+
+
+def _enriched_record(job_id: str = _JOB) -> EnrichedRecord:
+    return EnrichedRecord(
+        job_id=job_id,
+        cleaned_text="Artículo 1º...",
+        entities={"doc_type_hint": "ordenanza"},
+        metadata_={"source": "manual_upload"},
+    )
+
+
+class TestSqlEnrichedRecordRepository:
+    async def test_save_and_find(self, session: AsyncSession) -> None:
+        repo = SqlEnrichedRecordRepository(session)
+        await repo.save(_enriched_record())
+        record = await repo.find_by_job_id(_JOB)
+        assert record is not None
+        assert record.cleaned_text == "Artículo 1º..."
+        assert record.entities == {"doc_type_hint": "ordenanza"}
+        assert record.metadata_ == {"source": "manual_upload"}
+
+    async def test_find_missing_returns_none(self, session: AsyncSession) -> None:
+        repo = SqlEnrichedRecordRepository(session)
+        assert await repo.find_by_job_id("no-such-job") is None
+
+
+class TestInMemoryEnrichedRecordRepository:
+    async def test_save_and_find(self) -> None:
+        repo = InMemoryEnrichedRecordRepository()
+        await repo.save(_enriched_record())
+        record = await repo.find_by_job_id(_JOB)
+        assert record is not None
+        assert record.cleaned_text == "Artículo 1º..."
+
+    async def test_find_missing_returns_none(self) -> None:
+        repo = InMemoryEnrichedRecordRepository()
+        assert await repo.find_by_job_id("no-such-job") is None

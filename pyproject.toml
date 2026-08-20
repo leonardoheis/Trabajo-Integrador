@@ -4,13 +4,6 @@ version = "0.1.0"
 description = "classiflow allows to classify documents using agent-based approaches."
 requires-python = ">=3.10"
 dependencies = [
-    # Existing scraper deps
-    "aiohttp>=3.9",
-    "aiofiles>=23.0",
-    "tqdm>=4.66",
-    "beautifulsoup4>=4.12",
-    "lxml>=5.0",
-    "weasyprint>=61.0",
     # API
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -55,8 +48,6 @@ dev = [
     "ruff",
     "pytest",
     "pytest-cov",
-    "nbmake",
-    "nbqa",
     "mypy",
     "pre-commit",
     "httpx>=0.28.1",
@@ -64,6 +55,7 @@ dev = [
     "poethepoet==0.37.0",
     "joblib-stubs==1.5.0.1.20250510",
     "types-PyYAML>=6.0",
+    "ipykernel>=7.3.0",
 ]
 lint = [
     "pre-commit==4.3.0",
@@ -124,6 +116,13 @@ ignore = [
     "EM101",    # field name strings in @dataclass exceptions are not message literals
 ]
 
+[tool.ruff.lint.pylint]
+# Mirrors [tool.pylint.design] max-args below -- FastAPI's Depends()-per-dependency
+# style means DI-composing functions (get_pipeline_service et al.) legitimately grow
+# one param per wired collaborator; 7 already matched pylint's own limit, ruff's
+# PLR0913/PLR0917 (default 5) just wasn't set to match it yet.
+max-args = 7
+
 [tool.ruff.format]
 # Set Ruff to imitate Black
 quote-style = "double"
@@ -132,7 +131,6 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.ruff.lint.per-file-ignores]
-"notebooks/*.ipynb" = ["F401"]
 "src/classiflow/playground/*.ipynb" = ["T201", "F401"]  # playground: print() is intentional output
 "src/classiflow/playground/**/*.ipynb" = ["T201", "F401"]
 "tests/**/*.py" = ["PLR6301"]  # pytest class methods don't need to use self
@@ -170,7 +168,7 @@ ignore_missing_imports = true
 #########################
 
 [tool.codespell]
-skip = "scrapper,src/classiflow/playground"
+skip = "src/classiflow/playground"
 
 #########################
 # Bandit
@@ -300,16 +298,6 @@ disable = [
     "missing-class-docstring",
     "missing-function-docstring",
     "missing-module-docstring",
-    "subprocess-run-check",
-    "redefined-outer-name",                   # Incompatible with PyTest fixtures
-    "consider-using-assignment-expr",         # Too new syntax
-    "unused-import",                          # Check and fix by Ruff
-    "unused-variable",                        # Too many false positives
-    "invalid-name",                           # Too many false positives
-    "not-an-iterable",                        # Too many false positives
-    "assignment-from-no-return",              # Too many false positives
-    "magic-value-comparison",
-    "consider-using-namedtuple-or-dataclass",
 ]
 
 enable = [
@@ -320,6 +308,16 @@ enable = [
     "use-symbolic-message-instead",
     "deprecated-pragma",
     "file-ignored",
+    "subprocess-run-check",
+    "redefined-outer-name",
+    "consider-using-assignment-expr",         # Too new syntax
+    "unused-import",                          # Check and fix by Ruff
+    "unused-variable",                        # Too many false positives
+    "invalid-name",                           # Too many false positives
+    "not-an-iterable",                        # Too many false positives
+    "assignment-from-no-return",              # Too many false positives
+    "magic-value-comparison",
+    "consider-using-namedtuple-or-dataclass",
 ]
 
 #########################
@@ -360,17 +358,14 @@ testpaths = ["tests"]
 pythonpath = ["."]
 anyio_mode = "auto"
 
-[tool.coverage.run]
-omit = ["notebooks/conftest.py", "scrapper/*"]
-
 [tool.poe.tasks]
 lint = { shell = "ruff check . && ruff format --check ." }
 fmt = "ruff format ."
-typecheck = { shell = "mypy src && nbqa mypy notebooks" }
-nbtest = { cmd = "pytest --nbmake notebooks --ignore=notebooks/colab_downloader.ipynb", env = { USE_MOCK_LLM = "true" } }
+typecheck = "mypy src"
 test = "pytest tests"
 coverage = { shell = "pytest tests -v --override-ini=addopts= --log-level=CRITICAL --cov=. --cov-branch --cov-report=xml --cov-report=html --cov-report=term-missing:skip-covered --junitxml=tests/reports/pytest-report.xml" }
-check = ["lint", "typecheck", "nbtest", "coverage"]
+check = ["lint", "typecheck", "coverage", "precommit-reloaded"]
 serve = "uvicorn classiflow.api.app:app --reload --port 8000"
 precommit = "uv run pre-commit run --all-files --verbose"
+precommit-reloaded = "uv run --all-groups pre-commit run --all-files"
 precommit-update = "uv run pre-commit run --hook-stage manual pre-commit-update"

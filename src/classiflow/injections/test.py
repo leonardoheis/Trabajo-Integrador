@@ -1,23 +1,39 @@
+import asyncio
 from collections.abc import AsyncIterator
 
 import numpy as np
 import numpy.typing as npt
 from dependency_injector import containers, providers
+from langchain_core.runnables import Runnable
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.document import InMemoryDocumentRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
+from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.database.repositories.human_decision import InMemoryHumanDecisionRepository
 from classiflow.database.repositories.job import InMemoryJobRepository
 from classiflow.database.repositories.user import InMemoryUserRepository
+from classiflow.enrichment.coordinator import build_enrichment_coordinator
+from classiflow.enrichment.nodes import EntityExtractorNode, MetadataEnricherNode, TextCleanerNode
+from classiflow.enrichment.prompts.entity_extraction import (
+    EntityExtractionInput,
+    EntityExtractionOutput,
+    build_entity_extraction_chain,
+)
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
-from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
-from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
-from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
-from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
-from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
+from classiflow.ingesta.domain import ExtractionResult
+from classiflow.ingesta.llm_provider import MockLlm
+from classiflow.ingesta.nodes import (
+    ContentValidationNode,
+    DuplicateControlNode,
+    ExtractionStep,
+    FileReceptionNode,
+    FormatValidationNode,
+    KnowledgeIndexingNode,
+)
+from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.chunking.chunker import ChunkerService
 from classiflow.knowledge.domain.document import DocumentMetadata
@@ -87,6 +103,16 @@ class _StubMetadataRepository:
         )
 
 
+_TEST_ENTITY_RESPONSE = (
+    '{"doc_type_hint": "ordenanza", "number": "1", "year": 2024, '
+    '"issuing_body": "Concejo Municipal", "signatories": [], "article_count": 1}'
+)
+
+
+def _test_entity_chain() -> Runnable[EntityExtractionInput, EntityExtractionOutput]:
+    return build_entity_extraction_chain(MockLlm(response=_TEST_ENTITY_RESPONSE))
+
+
 class TestContainer(containers.DeclarativeContainer):
     hash_repo = providers.Factory(InMemoryHashRepository)
     audit_repo = providers.Factory(InMemoryAuditRepository)
@@ -96,12 +122,27 @@ class TestContainer(containers.DeclarativeContainer):
     document_steps_repo = providers.Singleton(InMemoryDocumentStepsRepository)
     human_decision_repo = providers.Singleton(InMemoryHumanDecisionRepository)
     job_repo = providers.Singleton(InMemoryJobRepository)
+    enriched_record_repo = providers.Singleton(InMemoryEnrichedRecordRepository)
+    entity_extraction_chain = providers.Singleton(_test_entity_chain)
 
     audit_service = providers.Factory(AuditService, repo=audit_repo)
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
 
-    text_extractor = providers.Object(lambda _b, _f: _TEST_TEXT)
+    text_extractor = providers.Object(
+        lambda _b, _f: ExtractionResult(
+            text=_TEST_TEXT, extractor_used="test", char_count=len(_TEST_TEXT)
+        )
+    )
+    # Generous cap -- shouldn't gate tests, just needs to satisfy the now-required param.
+    extraction_semaphore = providers.Singleton(asyncio.Semaphore, 100)
+    extraction_step = providers.Factory(
+        ExtractionStep,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        text_extractor=text_extractor,
+        semaphore=extraction_semaphore,
+    )
     node1 = providers.Factory(
         FileReceptionNode,
         audit=audit_service,
@@ -147,6 +188,25 @@ class TestContainer(containers.DeclarativeContainer):
         indexer=indexer,
         document_repo=document_repo,
     )
+
+    enrichment_text_cleaner = providers.Factory(
+        TextCleanerNode, audit=audit_service, broadcaster=broadcaster
+    )
+    enrichment_entity_extractor = providers.Factory(
+        EntityExtractorNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        entity_chain=entity_extraction_chain,
+    )
+    enrichment_metadata_enricher = providers.Factory(
+        MetadataEnricherNode, audit=audit_service, broadcaster=broadcaster
+    )
+    enrichment_coordinator = providers.Factory(
+        build_enrichment_coordinator,
+        text_cleaner=enrichment_text_cleaner,
+        entity_extractor=enrichment_entity_extractor,
+        metadata_enricher=enrichment_metadata_enricher,
+    )
     coordinator = providers.Factory(
         build_coordinator,
         node1=node1,
@@ -154,12 +214,14 @@ class TestContainer(containers.DeclarativeContainer):
         node3=node3,
         node4=node4,
         node5=node5,
-        text_extractor=text_extractor,
+        extraction_step=extraction_step,
     )
     pipeline_service = providers.Factory(
         PipelineService,
         job_repo=job_repo,
         document_steps_repo=document_steps_repo,
+        enriched_record_repo=enriched_record_repo,
         broadcaster=broadcaster,
         coordinator=coordinator,
+        enrichment_coordinator=enrichment_coordinator,
     )

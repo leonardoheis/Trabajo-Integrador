@@ -4,11 +4,11 @@ from classiflow.database.models import Document
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.domain.repositories.document import IDocumentRepository
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.domain.results import KnowledgeIndexingResult
-from classiflow.ingesta.nodes.base import BaseNode
 from classiflow.knowledge.exceptions import KnowledgeError
 from classiflow.knowledge.indexing.indexer import IndexerService, IndexResult
+from classiflow.pipeline.base import BaseNode
+from classiflow.pipeline.context import JobContext
 from classiflow.services.audit.service import AuditService
 
 

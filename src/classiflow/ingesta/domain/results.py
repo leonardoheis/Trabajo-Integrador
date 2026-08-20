@@ -7,6 +7,23 @@ class FormatDecision(str, Enum):
     ACCEPT = "accept"
     REJECT = "reject"
     MANUAL_REVIEW = "manual_review"
+    # Internal-only: rule_based_check()'s signal to defer to the SLM -- never a value
+    # the SLM itself returns (see prompts/format_validation.py's prompt, which only
+    # asks it to choose accept/reject/manual_review), so it never reaches a final
+    # FormatValidationResult.decision.
+    SLM_ESCALATE = "slm_escalate"
+
+
+class ExtractionResult(BaseEntity):
+    # passed/rejection_reason default to the "always succeeds" values -- extraction
+    # never rejects a document (that judgment stays in node3's validate()), these
+    # fields exist only so ExtractionStep fits the same _StepResult shape node1-4 use
+    # for PipelineService._persist_steps.
+    passed: bool = True
+    text: str = ""
+    extractor_used: str = ""
+    char_count: int = 0
+    rejection_reason: str = ""
 
 
 class FileReceptionResult(BaseEntity):

@@ -1,29 +1,37 @@
 from datetime import datetime, timezone
-from typing import cast
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
 from fastapi import BackgroundTasks
 from langgraph.graph.state import CompiledStateGraph
 
-from classiflow.database.models import DocumentStep, Job
+from classiflow.database.models import DocumentStep, EnrichedRecord, Job
 from classiflow.domain.job import JobStatus, NodeEvent
 from classiflow.domain.repositories import UNSET, IJobRepository, UnsetType
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
+from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
+from classiflow.enrichment.config_enrichment import get_enrichment_config
+from classiflow.enrichment.exceptions import EnrichmentError
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.domain.results import (
+from classiflow.ingesta.domain import (
     ContentValidationResult,
     DuplicateControlResult,
+    ExtractionResult,
     FileReceptionResult,
     FormatValidationResult,
+    JobState,
     KnowledgeIndexingResult,
 )
-from classiflow.ingesta.domain.state import JobState
 from classiflow.ingesta.llm_provider import unload_slm
+
+if TYPE_CHECKING:
+    from classiflow.enrichment.domain.state import EnrichmentState
 
 _PIPELINE_NODE = "pipeline"
 _NODE_NAMES = {
     "reception": "node1_file_reception",
     "format_validation": "node2_format_validation",
+    "extraction": "extraction",
     "content_validation": "node3_content_validation",
     "duplicate_control": "node4_duplicate_control",
     "knowledge_indexing": "node5_knowledge_indexing",
@@ -31,6 +39,7 @@ _NODE_NAMES = {
 _StepResult = (
     FileReceptionResult
     | FormatValidationResult
+    | ExtractionResult
     | ContentValidationResult
     | DuplicateControlResult
     | KnowledgeIndexingResult
@@ -42,13 +51,17 @@ class PipelineService:
         self,
         job_repo: IJobRepository,
         document_steps_repo: IDocumentStepsRepository,
+        enriched_record_repo: IEnrichedRecordRepository,
         broadcaster: EventBroadcaster,
         coordinator: CompiledStateGraph,  # type: ignore[type-arg]
+        enrichment_coordinator: CompiledStateGraph,  # type: ignore[type-arg]
     ) -> None:
         self._job_repo = job_repo
         self._document_steps_repo = document_steps_repo
+        self._enriched_record_repo = enriched_record_repo
         self._broadcaster = broadcaster
         self._coordinator = coordinator
+        self._enrichment_coordinator = enrichment_coordinator
 
     async def start(
         self, background_tasks: BackgroundTasks, filename: str, file_bytes: bytes
@@ -71,6 +84,10 @@ class PipelineService:
 
         failed_at_node = await self._persist_steps(job_id, final_state)
         await self._finalize_job(job_id, final_state, failed_at_node)
+
+        if final_state.get("final_status") == "accepted":
+            await self._run_enrichment(job_id, filename, final_state)
+
         unload_slm()
 
         await self._broadcaster.emit(
@@ -120,4 +137,43 @@ class PipelineService:
             failed_at_node=failed_at_node,
             review_action_needed="pending" if final_status == "review" else None,
             extracted_text=extracted_text,
+        )
+
+    async def _run_enrichment(self, job_id: str, filename: str, final_state: JobState) -> None:
+        reception = final_state["reception"]
+        content_validation = final_state["content_validation"]
+        extraction = final_state["extraction"]
+        initial: EnrichmentState = {
+            "job_id": job_id,
+            "filename": filename,
+            "text": final_state["text"],
+            "language": content_validation.detected_language,
+            "sha256": reception.sha256,
+            "stage2_extractor_used": extraction.extractor_used,
+        }
+        max_retries = get_enrichment_config().max_enrichment_retries
+        last_error: EnrichmentError | None = None
+        for _attempt in range(max_retries + 1):
+            try:
+                result = cast(
+                    "EnrichmentState", await self._enrichment_coordinator.ainvoke(initial)
+                )
+                await self._enriched_record_repo.save(
+                    EnrichedRecord(
+                        job_id=job_id,
+                        cleaned_text=result["cleaned_text"],
+                        entities=result["entities"].model_dump(),
+                        metadata_=result["metadata"].model_dump(),
+                    )
+                )
+            except EnrichmentError as exc:
+                last_error = exc
+                continue
+            return
+        await self._job_repo.update_status(
+            job_id,
+            "review",
+            rejection_reason=f"Enrichment failed after retries: {last_error}",
+            review_action_needed="enrichment_failed",
+            failed_at_node="enrichment",
         )

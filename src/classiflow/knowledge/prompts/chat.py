@@ -4,7 +4,7 @@ from classiflow.knowledge.domain.chat import RetrievedChunk
 from classiflow.knowledge.domain.document import format_citation
 
 SYSTEM_PROMPT = (
-    "Sos un asistente que responde preguntas sobre documentación normativa de la "
+    "Sos un asistente para responder preguntas sobre documentación normativa de la "
     "Municipalidad de Rosario.\n"
     "Reglas:\n"
     "- Respondé siempre en español, de forma clara y concisa.\n"

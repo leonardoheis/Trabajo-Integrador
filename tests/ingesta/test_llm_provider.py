@@ -2,8 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
-from classiflow.ingesta.llm_provider import MockLlm, get_llm, get_llm_langchain
+from classiflow.ingesta.llm_provider import MockLlm, get_llm_langchain
 
 
 class TestMockLlm:
@@ -25,45 +24,6 @@ class TestMockLlm:
 
 
 _LRU_MAXSIZE = 4
-
-
-class TestGetLlm:
-    def test_raises_model_load_error_when_model_path_is_invalid(self) -> None:
-        get_llm.cache_clear()
-        try:
-            with pytest.raises(ModelLoadError):
-                get_llm("")  # empty path → Llama raises → caught → ModelLoadError
-        finally:
-            get_llm.cache_clear()
-
-    def test_raises_model_not_found_when_path_missing(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        mock_llama = MagicMock(side_effect=FileNotFoundError)
-        monkeypatch.setattr("classiflow.ingesta.llm_provider.Llama", mock_llama)
-        get_llm.cache_clear()
-        try:
-            with pytest.raises(ModelNotFoundError):
-                get_llm("/no/such/model.gguf")
-        finally:
-            get_llm.cache_clear()
-
-    def test_is_lru_cached_with_maxsize_four(self) -> None:
-        assert hasattr(get_llm, "cache_info")
-        assert get_llm.cache_info().maxsize == _LRU_MAXSIZE
-
-    def test_returns_same_instance_on_repeated_calls(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        sentinel = object()
-        mock_llama = MagicMock(return_value=sentinel)
-        monkeypatch.setattr("classiflow.ingesta.llm_provider.Llama", mock_llama)
-        get_llm.cache_clear()
-        try:
-            first = get_llm("fake/model.gguf")
-            second = get_llm("fake/model.gguf")
-            assert first is second
-            assert mock_llama.call_count == 1
-        finally:
-            get_llm.cache_clear()
 
 
 class TestGetLlmLangchain:

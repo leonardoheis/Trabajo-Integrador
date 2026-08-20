@@ -14,10 +14,10 @@ _PROVIDER = "llama"
 
 
 @lru_cache(maxsize=2)
-# Chat-sized GGUF handle, deliberately separate from ingesta.llm_provider.get_llm:
-# that one is cached at n_ctx=2048 for the validation nodes and cleared by
-# unload_slm() after every job. Retrieval passages plus a question do not fit in
-# 2048, and the chat model should not be evicted by pipeline runs.
+# Chat-sized GGUF handle, deliberately separate from ingesta.llm_provider's
+# get_llm_langchain: that one is cached at n_ctx=2048 for the validation nodes and
+# cleared by unload_slm() after every job. Retrieval passages plus a question do not
+# fit in 2048, and the chat model should not be evicted by pipeline runs.
 def get_chat_llm(model_path: str, n_ctx: int) -> Llama:
     try:
         return Llama(

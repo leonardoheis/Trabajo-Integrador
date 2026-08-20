@@ -12,10 +12,10 @@ from classiflow.database.repositories.audit import AuditDetail
 from classiflow.database.repositories.hash import IHashRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_duplicate import DuplicateControlConfig, get_duplicate_control_config
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import DuplicateControlResult
-from classiflow.ingesta.nodes.base import BaseNode
+from classiflow.ingesta.domain import DuplicateControlResult, JobContext
+from classiflow.pipeline.base import BaseNode
 from classiflow.services.audit.service import AuditService
+from classiflow.settings import Settings
 
 _EMBED_DIM = 384
 _MODEL_NAME = "all-MiniLM-L6-v2"
@@ -35,13 +35,28 @@ class _VectorIndex(Protocol):
 
 
 @lru_cache(maxsize=1)
-def _get_sentence_model() -> SentenceTransformer:
-    return SentenceTransformer(_MODEL_NAME)  # type: ignore[no-any-return]
+def get_sentence_model() -> SentenceTransformer:
+    # Kept cached even though Container.sentence_model (injections/production.py)
+    # already gives production a single shared instance via constructor injection --
+    # this function is also called by _default_embed() below, EmbeddingStore's own
+    # zero-config fallback, on every find_similarity()/add() call (once per document),
+    # not just once at construction. Without the cache, that path would rebuild the
+    # whole SentenceTransformer model every call.
+    return SentenceTransformer(  # type: ignore[no-any-return]
+        _MODEL_NAME, cache_folder=Settings.embedding_model_path
+    )
+
+
+def make_embed_fn(model: SentenceTransformer) -> EmbedFn:
+    def _embed(text: str) -> npt.NDArray[np.float32]:
+        vec = model.encode(text, normalize_embeddings=True)
+        return np.array(vec, dtype=np.float32)
+
+    return _embed
 
 
 def _default_embed(text: str) -> npt.NDArray[np.float32]:
-    vec = _get_sentence_model().encode(text, normalize_embeddings=True)
-    return np.array(vec, dtype=np.float32)
+    return make_embed_fn(get_sentence_model())(text)
 
 
 def _normalize(vec: npt.NDArray[np.float32]) -> npt.NDArray[np.float32]:

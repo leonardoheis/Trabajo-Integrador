@@ -6,7 +6,6 @@ from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.document import InMemoryDocumentRepository
 from classiflow.domain.job import JobStatus
 from classiflow.events.broadcaster import EventBroadcaster
-from classiflow.ingesta.domain.context import JobContext
 from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
 from classiflow.knowledge.chunking.chunker import ChunkerService
 from classiflow.knowledge.domain.chunk import Embedding
@@ -14,6 +13,7 @@ from classiflow.knowledge.domain.document import DocumentMetadata
 from classiflow.knowledge.indexing.indexer import IndexerService
 from classiflow.knowledge.vectordb.exceptions import VectorStoreError
 from classiflow.knowledge.vectordb.in_memory_store import InMemoryVectorStore
+from classiflow.pipeline.context import JobContext
 from classiflow.services.audit.service import AuditService
 
 _JOB_ID = "test-job-005"

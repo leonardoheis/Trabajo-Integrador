@@ -7,11 +7,10 @@ from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.domain.job import JobStatus
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_content import ContentValidationConfig
-from classiflow.ingesta.domain.context import JobContext
-from classiflow.ingesta.domain.results import FileReceptionResult
+from classiflow.ingesta.domain import FileReceptionResult, JobContext
 from classiflow.ingesta.llm_provider import MockLlm
-from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
-from classiflow.ingesta.prompts.content_validation import build_content_chain
+from classiflow.ingesta.nodes import ContentValidationNode
+from classiflow.ingesta.prompts import build_content_chain
 from classiflow.services.audit.service import AuditService
 
 _JOB_ID = "test-job-003"
@@ -43,7 +42,6 @@ _SLM_LEGITIMATE_LOW_CONFIDENCE = (
 
 _CONFIG = ContentValidationConfig(
     min_chars=20,
-    max_chars=500000,
     ocr_char_threshold=10,
     allowed_languages=["es"],
     slm_confidence_threshold=0.75,

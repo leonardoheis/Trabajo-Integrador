@@ -83,7 +83,9 @@ concurrency + observability, not re-extraction) already carrying their extracted
        │
        ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│   TEXT EXTRACTION   (Coordinator step — not a named node)        │
+│   EXTRACTION   (ExtractionStep node — Stage 2, bounded by a      │
+│                 Container-injected asyncio.Semaphore, SSE +      │
+│                 DocumentStep observability like node1-4)         │
 │                                                                  │
 │   Attempt 1 — MarkItDown  (tables, columns, bad encodings)       │
 │       ├─ chars ≥ min_chars (50) ─────────────────────────────► ✓ │
@@ -144,62 +146,45 @@ not re-extract anything.
 /
 ├── .claude/                        Claude Code project settings
 ├── documents/                      Reference documents and architecture diagrams
-├── notebooks/                      Jupyter notebooks
-│   └── colab_downloader.ipynb      Bulk download via Google Colab
-├── scrapper/                       Phase 1 — ingestion scripts and CSV metadata
-│   ├── downloader.py               Async bulk downloader
-│   └── *.csv                       One CSV per document category (10 types)
+├── docs/superpowers/specs/         Architecture design specs (superpowers:brainstorming)
+├── config/                         YAML config, one file per ingesta stage
+│   ├── allowed_formats.yaml · content_validation.yaml
+│   └── duplicate_control.yaml · extraction.yaml
+├── models/                         SLM + embedding model weights (gitignored — see "Models" below)
 ├── src/
 │   └── classiflow/                 Main Python package
-│       ├── settings.py             pydantic-settings config (DATABASE_URL, JWT_*, etc.)
-│       ├── shared/
-│       │   ├── auth/
-│       │   │   └── jwt.py          encode_token() / decode_token() / AuthError (PyJWT)
-│       │   ├── audit/
-│       │   │   └── service.py      AuditService — wraps IAuditRepository + loguru
-│       │   ├── domain/
-│       │   │   ├── job.py          NodeEvent, JobStatus
-│       │   │   └── user.py         User, AuthToken
-│       │   ├── events/
-│       │   │   └── broadcaster.py  EventBroadcaster — asyncio.Queue per job_id
-│       │   └── database/
-│       │       ├── base.py         Async engine + session factory
-│       │       ├── models.py       ORM models (6 tables)
-│       │       └── repositories/   Protocol interfaces + SQL and InMemory impls
-│       ├── ingesta/
-│       │   ├── config.py               AllowedFormatsConfig — loads allowed_formats.yaml
-│       │   ├── config_content.py       ContentValidationConfig — loads content_validation.yaml
-│       │   ├── config_duplicate.py     DuplicateControlConfig — loads duplicate_control.yaml
-│       │   ├── mime.py                 MimeDetector callable — filetype-based MIME detection
-│       │   ├── llm_provider.py         get_llm() / get_llm_langchain() singletons + MockLlm
-│       │   ├── exceptions.py           LlmProviderError · ModelNotFoundError · ModelLoadError
-│       │   ├── nodes/
-│       │   │   ├── base.py                       BaseNode abstract class
-│       │   │   ├── node1_file_reception.py        Size · SHA-256 · MIME detection
-│       │   │   ├── node2_format_validation.py     Rule-based ACCEPT/REJECT/MANUAL_REVIEW + SLM
-│       │   │   ├── node3_content_validation.py    Length · language · SLM legitimacy check
-│       │   │   └── node4_duplicate_control.py     SHA-256 exact match + FAISS cosine similarity
-│       │   └── domain/
-│       │       ├── results.py      FileReceptionResult, FormatValidationResult, etc.
-│       │       └── state.py        JobState TypedDict (LangGraph coordinator state)
-│       ├── playground/
-│       │   └── stage1/
-│       │       ├── node1_file_reception.ipynb     End-to-end demo — Node 1
-│       │       ├── node2_format_validation.ipynb  End-to-end demo — Node 2
-│       │       ├── node3_content_validation.ipynb End-to-end demo — Node 3
-│       │       ├── node4_duplicate_control.ipynb  End-to-end demo — Node 4
-│       │       └── coordinator.ipynb              Full 4-node pipeline via LangGraph
-│       └── api/                    FastAPI application (in progress)
-│           └── error_handlers/
-│               ├── types.py        ExceptionHandler type + EXCEPTION_HANDLERS registry
-│               └── llm.py          LlmErrorBody (Pydantic) + handlers for LLM errors
-├── alembic/                        Database migrations
-│   └── versions/
-│       ├── 0001_initial_schema.py  Initial schema — all 6 tables
-│       └── 0002_rename_agent_to_node.py  Rename agent columns to node
-├── tasks/
-│   ├── plan.md                     Full implementation plan
-│   └── todo.md                     Task tracker
+│       ├── settings.py             pydantic-settings config (DATABASE_URL, JWT_*, model paths, etc.)
+│       ├── domain/                 job.py (NodeEvent, JobStatus) · user.py (User, AuthToken) ·
+│       │                           base.py (BaseEntity) · repositories/ (Protocol interfaces)
+│       ├── database/                base.py (async engine/session) · models.py (ORM, 6 tables) ·
+│       │                           repositories/ (Sql*/InMemory* implementations)
+│       ├── events/
+│       │   └── broadcaster.py      EventBroadcaster — asyncio.Queue per job_id, SSE source
+│       ├── services/
+│       │   ├── auth/               jwt.py · oauth.py · service.py (Google OAuth + whitelist)
+│       │   ├── audit/               service.py (AuditService) + repository.py
+│       │   └── pipeline/            service.py (PipelineService — orchestrates the coordinator)
+│       ├── ingesta/                 Stage 1+2 — ingestion, validation, extraction
+│       │   ├── coordinator.py       build_coordinator() — LangGraph state machine
+│       │   ├── extract.py           TextExtractor — MarkItDown → EasyOCR fallback chain
+│       │   ├── config*.py           AllowedFormatsConfig · ContentValidationConfig ·
+│       │   │                       DuplicateControlConfig · ExtractionConfig (+ config_loader.py)
+│       │   ├── llm_provider.py      get_llm_langchain() (@lru_cache) + MockLlm
+│       │   ├── exceptions.py       LlmProviderError · ModelNotFoundError · ModelLoadError
+│       │   ├── extractors/          MarkItDownExtractor · OCRExtractor · exceptions
+│       │   ├── nodes/               base.py (BaseNode) · node1-4 · extraction_step.py
+│       │   ├── domain/              context.py (JobContext) · results.py · state.py (JobState, NodeUpdate)
+│       │   └── prompts/            format_validation.py · content_validation.py — SLM chain builders
+│       ├── api/                    FastAPI application
+│       │   ├── app.py · runner.py · dependencies.py (DI-wired Depends() aliases)
+│       │   ├── routes/             auth/ · health/ · pipeline/ (ingest, SSE events, review queue)
+│       │   └── error_handlers/     typed exception → JSONResponse handlers
+│       ├── injections/             production.py (Container) · test.py (TestContainer)
+│       └── playground/             stage1/ (7 demo notebooks) · stage2/ (concurrency demo) ·
+│                                   samples/ (sample PDFs the notebooks depend on)
+├── alembic/versions/                0001 initial schema · 0002 rename agent→node ·
+│                                   0003 add Job.extracted_text
+├── tasks/                          plan_stageN.md + todo_stageN.md per stage (1–5)
 ├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
 └── uv.lock                         Locked dependency graph
 ```
@@ -236,6 +221,24 @@ pipeline functionality — moved to Stage 4, see [`tasks/todo_stage4.md`](tasks/
 Full task details and dependency graph: [tasks/todo.md](tasks/todo.md) ·
 [Stage 2 plan](tasks/plan_stage2.md) · [Stage 2 tasks](tasks/todo_stage2.md)
 
+**Stage 2 implemented** — bounded concurrency and full SSE/DB observability around Stage
+1's existing text-extraction step (MarkItDown → EasyOCR fallback); no re-extraction. Also
+fixed several hidden-dependency singletons (`get_language_detector`,
+`get_sentence_model`/`embedding_store`, node2/node3 SLM chains) by wiring them through the
+DI `Container`, matching the existing `broadcaster`/`text_extractor` pattern. All 7 tasks
+committed to `feat/extraction-hardening`; open for merge to `main` via
+[PR #20](https://github.com/leonardoheis/Trabajo-Integrador/pull/20).
+
+| Task | Description | Status |
+|------|-------------|--------|
+| S2-T01 | `ExtractionConfig` | ✅ done |
+| S2-T02 | `ExtractionResult` domain entity | ✅ done |
+| S2-T03 | Bounded concurrency (`asyncio.Semaphore`, Container-injected) | ✅ done |
+| S2-T04 | `ExtractionStep` + `DocumentStep` observability | ✅ done |
+| S2-T05 | Integration test — concurrency + observability | ✅ done |
+| S2-T06 | Relocate models to project root + document download sources | ✅ done |
+| S2-T07 | Track `playground/samples/` in git | ✅ done |
+
 ## Key Technical Decisions
 
 - **SQLAlchemy 2.0 async** (`Mapped[]` annotations, `async_sessionmaker`, `aiosqlite` for local dev)
@@ -250,20 +253,22 @@ Full task details and dependency graph: [tasks/todo.md](tasks/todo.md) ·
 
 The dataset covers 10 categories of municipal documents from Rosario's open-data portal:
 
-| Category | Description |
-|----------|-------------|
-| `boletines` | Municipal bulletins |
-| `compendios_de_boletines` | Bulletin compendiums |
-| `convenios` | Agreements |
-| `declaraciones_concejo_municipal` | Municipal council declarations |
-| `decreto_ordenanzas` | Decree-ordinances |
-| `decretos` | Decrees |
-| `decretos_concejo_municipal` | Municipal council decrees |
-| `ordenanzas` | Ordinances |
-| `resoluciones` | Resolutions |
-| `resoluciones_concejo_municipal` | Municipal council resolutions |
+| Category | Description | Documents |
+|----------|-------------|-----------|
+| `boletines` | Municipal bulletins | 2,035 |
+| `compendios_de_boletines` | Bulletin compendiums | 27 |
+| `convenios` | Agreements | 8 |
+| `declaraciones_concejo_municipal` | Municipal council declarations | 37 |
+| `decreto_ordenanzas` | Decree-ordinances | 344 |
+| `decretos` | Decrees | 5,483 |
+| `decretos_concejo_municipal` | Municipal council decrees | 6,738 |
+| `ordenanzas` | Ordinances | 5,306 |
+| `resoluciones` | Resolutions | 173 |
+| `resoluciones_concejo_municipal` | Municipal council resolutions | 167 |
+| **Total** | | **~20,318** |
 
-The ingested documents (Phase 1 output) are available on [Google Drive](https://drive.google.com/drive/folders/1_IPfa4m1mmz6wFPOLtEf3T4xYknJap7B?usp=drive_link).
+Assuming ~200 KB average per PDF, that's **~4 GB** total storage. The ingested documents
+(Phase 1 output) are available on [Google Drive](https://drive.google.com/drive/folders/1_IPfa4m1mmz6wFPOLtEf3T4xYknJap7B?usp=drive_link).
 
 ## Setup
 
@@ -273,26 +278,36 @@ uv sync --dev
 
 Always use `uv sync` — do not use `pip install`.
 
-## Running the Downloader (Phase 1)
+## Models
+
+The pipeline uses two models, neither of which is committed to git (see `.gitignore` —
+everything under `models/` is ignored except a `.gitkeep` placeholder). A fresh clone
+needs to fetch both before `node2`/`node3`/`node4` will work.
+
+| Model | Purpose | Source | Target path |
+|---|---|---|---|
+| Phi-4-mini-instruct (Q4_K_M GGUF) | SLM used by node2 (format gray-zone) and node3 (content legitimacy) | [unsloth/Phi-4-mini-instruct-GGUF](https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF) | `models/Phi-4-mini-instruct-Q4_K_M.gguf` |
+| all-MiniLM-L6-v2 | Embedding model used by node4 for semantic duplicate detection | [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | `models/embeddings/` (auto-downloaded on first use) |
+
+**SLM — manual download required:**
 
 ```bash
-uv run python scrapper/downloader.py --output ./downloads --concurrency 5 --delay 0.5
+uv run huggingface-cli download unsloth/Phi-4-mini-instruct-GGUF \
+    Phi-4-mini-instruct-Q4_K_M.gguf --local-dir models
 ```
 
-| Argument | Default | Description |
-|----------|---------|-------------|
-| `--output` | `./downloads` | Destination folder for PDFs |
-| `--concurrency` | `5` | Parallel downloads — keep ≤ 5 to avoid rate-limiting |
-| `--delay` | `0.5` | Seconds between requests |
+**Embedding model — no action needed.** `node4_duplicate_control.py`'s
+`SentenceTransformer("all-MiniLM-L6-v2", cache_folder=Settings.embedding_model_path)`
+downloads it automatically into `models/embeddings/` the first time node4 runs.
 
-A `checkpoint.json` file tracks progress; re-running skips already-downloaded files.
-
-Alternatively, open `notebooks/colab_downloader.ipynb` in Google Colab to run the downloader using cloud resources without any local setup.
+Both paths are configurable via `Settings` (`NODE2_MODEL_PATH`/`NODE3_MODEL_PATH` share
+one path by default; `EMBEDDING_MODEL_PATH`) if you want to point at a different
+location or a different quantization of the SLM.
 
 ## Development
 
 ```bash
-uv run poe check   # lint + type check + notebook tests + coverage (run after every change)
+uv run poe check   # lint + type check + coverage (run after every change)
 uv run poe fmt     # auto-format
 uv run poe test    # unit tests only
 ```

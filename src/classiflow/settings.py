@@ -4,9 +4,8 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).parents[2]
-_DEFAULT_MODEL = str(
-    _PROJECT_ROOT / "src" / "classiflow" / "ingesta" / "models" / "Phi-4-mini-instruct-Q4_K_M.gguf"
-)
+_MODELS_DIR = _PROJECT_ROOT / "models"
+_DEFAULT_MODEL = str(_MODELS_DIR / "Phi-4-mini-instruct-Q4_K_M.gguf")
 
 
 # One read-only accessor per setting is this module's established pattern; the
@@ -26,8 +25,12 @@ class _Settings(BaseSettings):  # noqa: PLR0904
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     NODE2_MODEL_PATH: str = _DEFAULT_MODEL
     NODE3_MODEL_PATH: str = _DEFAULT_MODEL
+    EMBEDDING_MODEL_PATH: str = str(_MODELS_DIR / "embeddings")
     OCR_LANG: str = os.getenv("OCR_LANG", "es")
     OCR_RENDER_DPI: int = int(os.getenv("OCR_RENDER_DPI", "200"))
+    EXTRACTION_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "extraction.yaml")
+    ENRICHMENT_MODEL_PATH: str = _DEFAULT_MODEL
+    ENRICHMENT_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "enrichment.yaml")
     SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.8"))
     SLM_TOP_P: float = float(os.getenv("SLM_TOP_P", "0.95"))
     SLM_SEED: int = int(os.getenv("SLM_SEED", "42"))
@@ -80,12 +83,28 @@ class _Settings(BaseSettings):  # noqa: PLR0904
         return self.NODE3_MODEL_PATH
 
     @property
+    def embedding_model_path(self) -> str:
+        return self.EMBEDDING_MODEL_PATH
+
+    @property
     def ocr_lang(self) -> str:
         return self.OCR_LANG
 
     @property
     def ocr_render_dpi(self) -> int:
         return self.OCR_RENDER_DPI
+
+    @property
+    def extraction_config_path(self) -> str:
+        return self.EXTRACTION_CONFIG_PATH
+
+    @property
+    def enrichment_model_path(self) -> str:
+        return self.ENRICHMENT_MODEL_PATH
+
+    @property
+    def enrichment_config_path(self) -> str:
+        return self.ENRICHMENT_CONFIG_PATH
 
     @property
     def slm_temperature(self) -> float:

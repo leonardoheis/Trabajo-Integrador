@@ -17,7 +17,7 @@ class SqlJobRepository:
         result = await self._session.execute(select(Job).where(Job.job_id == job_id))
         return result.scalar_one_or_none()
 
-    async def update_status(  # noqa: PLR0913 -- see IJobRepository.update_status
+    async def update_status(
         self,
         job_id: str,
         status: str,
@@ -55,7 +55,7 @@ class InMemoryJobRepository:
     async def find_by_job_id(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
 
-    async def update_status(  # noqa: PLR0913 -- see IJobRepository.update_status
+    async def update_status(
         self,
         job_id: str,
         status: str,

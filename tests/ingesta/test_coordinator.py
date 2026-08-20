@@ -1,29 +1,34 @@
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
-import pytest
+from langchain_core.runnables import Runnable
+from langgraph.graph.state import CompiledStateGraph
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
-from classiflow.database.repositories.document import InMemoryDocumentRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
+from classiflow.ingesta.domain import ExtractionResult
+from classiflow.ingesta.extract import TextExtractFn
 from classiflow.ingesta.llm_provider import MockLlm
-from classiflow.ingesta.nodes.node1_file_reception import FileReceptionNode
-from classiflow.ingesta.nodes.node2_format_validation import FormatValidationNode
-from classiflow.ingesta.nodes.node3_content_validation import ContentValidationNode
-from classiflow.ingesta.nodes.node4_duplicate_control import DuplicateControlNode, EmbeddingStore
-from classiflow.ingesta.nodes.node5_knowledge_indexing import KnowledgeIndexingNode
-from classiflow.knowledge.chunking.chunker import ChunkerService
-from classiflow.knowledge.domain.document import DocumentMetadata
-from classiflow.knowledge.indexing.indexer import IndexerService
-from classiflow.knowledge.vectordb.in_memory_store import InMemoryVectorStore
+from classiflow.ingesta.nodes import (
+    ContentValidationNode,
+    DuplicateControlNode,
+    ExtractionStep,
+    FileReceptionNode,
+    FormatValidationNode,
+    KnowledgeIndexingNode,
+)
+from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
+from classiflow.ingesta.prompts import LegitimacyDecisionOutput, build_content_chain
 from classiflow.services.audit.service import AuditService
+from tests.fakes import make_indexing_node
 
 if TYPE_CHECKING:
-    from classiflow.ingesta.domain.state import JobState
+    from classiflow.ingesta.domain import JobState
 
 _MINIMAL_PDF = (
     b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
@@ -37,6 +42,11 @@ _SPANISH_TEXT = (
 _SLM_LEGITIMATE = '{"is_legitimate": true, "confidence": 0.92, "reasoning": "official doc"}'
 _SLM_NOT_LEGITIMATE = '{"is_legitimate": false, "confidence": 0.88, "reasoning": "spam"}'
 
+_SPANISH_EXTRACTION = ExtractionResult(
+    text=_SPANISH_TEXT, extractor_used="test", char_count=len(_SPANISH_TEXT)
+)
+_EMPTY_EXTRACTION = ExtractionResult(text="", extractor_used="", char_count=0)
+
 _DIM = 4
 
 
@@ -44,26 +54,20 @@ def _stub_embed(_text: str) -> npt.NDArray[np.float32]:
     return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
 
 
-class _StubKnowledgeEmbedder:
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return [[1.0, 0.0] for _ in texts]
-
-    def embed_query(self, _text: str) -> list[float]:
-        return [1.0, 0.0]
-
-
-class _StubKnowledgeMetadata:
-    def resolve(self, filename: str) -> DocumentMetadata:
-        return DocumentMetadata(filename=filename)
-
-
-def _make_nodes() -> tuple[
+_CoordinatorNodes = tuple[
     FileReceptionNode,
     FormatValidationNode,
+    ExtractionStep,
     ContentValidationNode,
     DuplicateControlNode,
     KnowledgeIndexingNode,
-]:
+]
+
+
+def _make_nodes(
+    text_extractor: TextExtractFn,
+    content_chain: Runnable[dict[str, str], LegitimacyDecisionOutput] | None = None,
+) -> _CoordinatorNodes:
     audit = AuditService(InMemoryAuditRepository())
     broadcaster = EventBroadcaster()
     n1 = FileReceptionNode(
@@ -72,8 +76,17 @@ def _make_nodes() -> tuple[
         mime_detector=lambda _b: "application/pdf",
     )
     n2 = FormatValidationNode(audit=audit, broadcaster=broadcaster)
+    extraction_step = ExtractionStep(
+        audit=audit,
+        broadcaster=broadcaster,
+        text_extractor=text_extractor,
+        semaphore=asyncio.Semaphore(10),
+    )
     n3 = ContentValidationNode(
-        audit=audit, broadcaster=broadcaster, language_detector=_MockDetector("es")
+        audit=audit,
+        broadcaster=broadcaster,
+        language_detector=_MockDetector("es"),
+        content_chain=content_chain,
     )
     n4 = DuplicateControlNode(
         hash_repo=InMemoryHashRepository(),
@@ -81,28 +94,24 @@ def _make_nodes() -> tuple[
         broadcaster=broadcaster,
         embedding_store=EmbeddingStore(dim=_DIM, embed_fn=_stub_embed),
     )
-    n5 = KnowledgeIndexingNode(
-        audit=audit,
-        broadcaster=broadcaster,
-        indexer=IndexerService(
-            chunker=ChunkerService(),
-            embedder=_StubKnowledgeEmbedder(),
-            vector_store=InMemoryVectorStore(),
-            metadata_repo=_StubKnowledgeMetadata(),
-        ),
-        document_repo=InMemoryDocumentRepository(),
-    )
-    return n1, n2, n3, n4, n5
+    n5 = make_indexing_node(audit, broadcaster)
+    return n1, n2, extraction_step, n3, n4, n5
+
+
+def _build_graph(
+    text_extractor: TextExtractFn,
+    content_chain: Runnable[dict[str, str], LegitimacyDecisionOutput] | None = None,
+) -> CompiledStateGraph:
+    n1, n2, extraction_step, n3, n4, n5 = _make_nodes(text_extractor, content_chain)
+    return build_coordinator(n1, n2, n3, n4, n5, extraction_step=extraction_step)
 
 
 class TestCoordinatorHappyPath:
-    async def test_valid_pdf_reaches_accepted(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
-            lambda _path: MockLlm(response=_SLM_LEGITIMATE),
+    async def test_valid_pdf_reaches_accepted(self) -> None:
+        graph = _build_graph(
+            lambda *_: _SPANISH_EXTRACTION,
+            content_chain=build_content_chain(MockLlm(response=_SLM_LEGITIMATE)),
         )
-
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: _SPANISH_TEXT)
         initial: JobState = {
             "job_id": "coord-001",
             "filename": "doc.pdf",
@@ -116,16 +125,11 @@ class TestCoordinatorHappyPath:
         assert result["content_validation"].passed
         assert result["duplicate_control"].passed
 
-    async def test_second_identical_pdf_is_rejected_as_duplicate(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
-            lambda _path: MockLlm(response=_SLM_LEGITIMATE),
+    async def test_second_identical_pdf_is_rejected_as_duplicate(self) -> None:
+        graph = _build_graph(
+            lambda *_: _SPANISH_EXTRACTION,
+            content_chain=build_content_chain(MockLlm(response=_SLM_LEGITIMATE)),
         )
-
-        nodes = _make_nodes()
-        graph = build_coordinator(*nodes, text_extractor=lambda *_: _SPANISH_TEXT)
 
         initial: JobState = {
             "job_id": "coord-002a",
@@ -147,7 +151,7 @@ class TestCoordinatorHappyPath:
 
 class TestCoordinatorRejectionPaths:
     async def test_empty_file_rejected_at_node1(self) -> None:
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: "")
+        graph = _build_graph(lambda *_: _EMPTY_EXTRACTION)
         initial: JobState = {
             "job_id": "coord-003",
             "filename": "empty.pdf",
@@ -160,7 +164,7 @@ class TestCoordinatorRejectionPaths:
         assert result.get("format_validation") is None
 
     async def test_missing_file_rejected_at_node1(self) -> None:
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: "")
+        graph = _build_graph(lambda *_: _EMPTY_EXTRACTION)
         initial: JobState = {
             "job_id": "coord-004",
             "filename": "none.pdf",
@@ -175,7 +179,7 @@ class TestCoordinatorRejectionPaths:
         # Extraction (MarkItDown + OCR) already ran inside text_extractor before node3
         # sees the text — an empty result here can't be told apart from an extraction
         # infra failure, so it goes to review for a human, not an automatic reject.
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: "")
+        graph = _build_graph(lambda *_: _EMPTY_EXTRACTION)
         initial: JobState = {
             "job_id": "coord-005",
             "filename": "scan.pdf",
@@ -186,14 +190,11 @@ class TestCoordinatorRejectionPaths:
         assert result["final_status"] == "review"
         assert result["content_validation"].requires_ocr
 
-    async def test_non_legitimate_content_goes_to_review(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain",
-            lambda _path: MockLlm(response=_SLM_NOT_LEGITIMATE),
+    async def test_non_legitimate_content_goes_to_review(self) -> None:
+        graph = _build_graph(
+            lambda *_: _SPANISH_EXTRACTION,
+            content_chain=build_content_chain(MockLlm(response=_SLM_NOT_LEGITIMATE)),
         )
-        graph = build_coordinator(*_make_nodes(), text_extractor=lambda *_: _SPANISH_TEXT)
         initial: JobState = {
             "job_id": "coord-006",
             "filename": "spam.pdf",
