@@ -5059,7 +5059,7 @@ Wires Tasks 5 and 9–14 into one graph: `primary_classifier → second_opinion 
 - Consumes: all seven nodes from Tasks 5, 9–14; `ClassificationState`, `ClassificationUpdate` (Task 4); `JudgeInput` (Task 13); `RoutingInput` (Task 14); `classiflow.classification.bert.label_mapping.classifier_disagreement` (Task 8); `classiflow.pipeline.context.JobContext`.
 - Produces: `build_classification_coordinator(primary_classifier, second_opinion, foreign_municipality, smells_risk, confidence_gate, llm_judge, routing) -> CompiledStateGraph`. Compiled graph's `.ainvoke(ClassificationState) -> ClassificationState` with `label`, `confidence`, `all_scores`, `review_route`, `judged_by_llm`, `stored_path` (plus whichever optional fields fired) all populated on success.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/classification/test_coordinator.py
@@ -5201,12 +5201,12 @@ class TestClassificationCoordinatorHumanReviewPath:
         assert record.review_route == "human_review"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/classification/test_coordinator.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.coordinator'`
 
-- [ ] **Step 3: Implement the coordinator**
+- [x] **Step 3: Implement the coordinator**
 
 ```python
 # src/classiflow/classification/coordinator.py
@@ -5376,12 +5376,12 @@ def build_classification_coordinator(
     return graph.compile()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/classification/test_coordinator.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/classification/coordinator.py tests/classification/test_coordinator.py
