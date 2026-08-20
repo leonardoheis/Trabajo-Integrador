@@ -4779,7 +4779,7 @@ Spec Decision 8: deterministic `BaseNode`, not LLM/tool-using. Bundles the run's
 - Consumes: `classiflow.storage.document_storage.IDocumentStorage` (Task 1), `classiflow.domain.repositories.classification_record.IClassificationRecordRepository` (Task 3), `classiflow.database.models.ClassificationRecord` (Task 3).
 - Produces: `RoutingInput(BaseEntity)` (`job_id: str`, `filename: str`, `enriched_id: int`, `label: str`, `confidence: float`, `all_scores: dict[str, float] = {}`, `second_opinion_label: str | None = None`, `second_opinion_confidence: float = 0.0`, `classifier_disagreement: bool = False`, `ood_metrics: dict[str, object] | None = None`, `svm_scores: dict[str, float] = {}`, `svm_agrees_with_prediction: bool = True`, `review_route: str`, `smells: list[str] = []`, `risk_score: int = 0`, `smell_review_suggested: bool = False`, `foreign_municipality: str | None = None`, `judged_by_llm: bool = False`, `human_overridden: bool = False`) in `domain/results.py`. `RoutingNode(BaseNode)` — `__init__(audit, broadcaster, storage, classification_repo)`, `async run(ctx, routing_input: RoutingInput) -> RoutingResult`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/classification/test_routing_node.py
@@ -4884,12 +4884,12 @@ class TestRoutingNodeRun:
         assert record.human_overridden is True
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/classification/test_routing_node.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'classiflow.classification.nodes.routing'`
 
-- [ ] **Step 3: Add `RoutingInput` to `domain/results.py`**
+- [x] **Step 3: Add `RoutingInput` to `domain/results.py`**
 
 Append to `src/classiflow/classification/domain/results.py`:
 
@@ -4916,7 +4916,7 @@ class RoutingInput(BaseEntity):
     human_overridden: bool = False
 ```
 
-- [ ] **Step 4: Implement the node**
+- [x] **Step 4: Implement the node**
 
 ```python
 # src/classiflow/classification/nodes/routing.py
@@ -5033,12 +5033,12 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `pytest tests/classification/test_routing_node.py -v`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/classiflow/classification/domain/results.py src/classiflow/classification/nodes/routing.py src/classiflow/classification/nodes/__init__.py tests/classification/test_routing_node.py

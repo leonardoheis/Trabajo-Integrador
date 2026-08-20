@@ -15,6 +15,28 @@ class JudgeOutput(BaseEntity):
     reasoning: str = ""
 
 
+class RoutingInput(BaseEntity):
+    job_id: str
+    filename: str
+    enriched_id: int
+    label: str
+    confidence: float
+    all_scores: dict[str, float] = Field(default_factory=dict)
+    second_opinion_label: str | None = None
+    second_opinion_confidence: float = 0.0
+    classifier_disagreement: bool = False
+    ood_metrics: OodMetrics | None = None
+    svm_scores: dict[str, float] = Field(default_factory=dict)
+    svm_agrees_with_prediction: bool = True
+    review_route: str
+    smells: list[str] = Field(default_factory=list)
+    risk_score: int = 0
+    smell_review_suggested: bool = False
+    foreign_municipality: str | None = None
+    judged_by_llm: bool = False
+    human_overridden: bool = False
+
+
 class RoutingResult(BaseEntity):
     stored_path: str
 
