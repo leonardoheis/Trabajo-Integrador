@@ -54,6 +54,7 @@ from classiflow.ingesta.nodes import (
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
+from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
 from classiflow.storage.document_storage import LocalDiskStorage
 
@@ -128,6 +129,12 @@ class TestContainer(containers.DeclarativeContainer):
 
     audit_service = providers.Factory(AuditService, repo=audit_repo)
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
+    job_service = providers.Factory(
+        JobService,
+        job_repo=job_repo,
+        document_steps_repo=document_steps_repo,
+        human_decision_repo=human_decision_repo,
+    )
     broadcaster = providers.Singleton(EventBroadcaster)
 
     text_extractor = providers.Object(

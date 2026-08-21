@@ -18,7 +18,7 @@ from classiflow.api.error_handlers.pipeline import (
 )
 from classiflow.ingesta.exceptions import LlmProviderError, ModelLoadError, ModelNotFoundError
 from classiflow.services.auth.exceptions import AuthError, NotAllowedError, OAuthError
-from classiflow.services.pipeline.exceptions import JobNotFoundError, JobNotInReviewError
+from classiflow.services.job.exceptions import JobNotFoundError, JobNotInReviewError
 
 ExceptionHandler = Callable[[Request, Exception], Response]
 

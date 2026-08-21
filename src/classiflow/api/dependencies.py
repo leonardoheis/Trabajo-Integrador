@@ -64,6 +64,7 @@ from classiflow.ingesta.prompts import (
 from classiflow.injections.production import Container
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
+from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
 from classiflow.storage.document_storage import IDocumentStorage
 
@@ -104,6 +105,14 @@ def get_document_steps_repo(session: DbSession) -> IDocumentStepsRepository:
 
 def get_human_decision_repo(session: DbSession) -> IHumanDecisionRepository:
     return SqlHumanDecisionRepository(session)
+
+
+def get_job_service(
+    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
+    document_steps_repo: Annotated[IDocumentStepsRepository, Depends(get_document_steps_repo)],
+    human_decision_repo: Annotated[IHumanDecisionRepository, Depends(get_human_decision_repo)],
+) -> JobService:
+    return JobService(job_repo, document_steps_repo, human_decision_repo)
 
 
 def get_hash_repo(session: DbSession) -> IHashRepository:

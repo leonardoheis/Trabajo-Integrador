@@ -228,9 +228,7 @@ class JobService:
 
     async def list_review_queue(self) -> list[tuple[Job, list[DocumentStep]]]:
         jobs = [j for j in await self._job_repo.list_all() if j.status == "review"]
-        return [
-            (job, await self._document_steps_repo.steps_for_job(job.job_id)) for job in jobs
-        ]
+        return [(job, await self._document_steps_repo.steps_for_job(job.job_id)) for job in jobs]
 
     async def submit_decision(
         self, job_id: str, *, decided_by: str, decision: str, notes: str | None

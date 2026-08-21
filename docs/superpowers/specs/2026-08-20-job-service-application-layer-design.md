@@ -163,7 +163,9 @@ of doing its own repo calls.
 
 ```python
 job_service = providers.Factory(
-    JobService, job_repo=job_repo, document_steps_repo=document_steps_repo,
+    JobService,
+    job_repo=job_repo,
+    document_steps_repo=document_steps_repo,
     human_decision_repo=human_decision_repo,
 )
 ```

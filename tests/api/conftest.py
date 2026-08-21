@@ -6,6 +6,7 @@ from classiflow.api.dependencies import (
     get_document_steps_repo,
     get_human_decision_repo,
     get_job_repo,
+    get_job_service,
     get_pipeline_service,
 )
 from classiflow.database.models import AllowedUser
@@ -17,6 +18,7 @@ from classiflow.domain.repositories import (
 from classiflow.injections.production import Container
 from classiflow.injections.test import TestContainer
 from classiflow.services.auth import encode_token
+from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
 
 _TEST_EMAIL = "test@classiflow.dev"
@@ -63,11 +65,15 @@ def client() -> TestClient:
     def _pipeline_service_override() -> PipelineService:
         return test_container.pipeline_service()
 
+    def _job_service_override() -> JobService:
+        return test_container.job_service()
+
     app = create_app()
     app.dependency_overrides[get_job_repo] = _job_repo_override
     app.dependency_overrides[get_document_steps_repo] = _document_steps_repo_override
     app.dependency_overrides[get_human_decision_repo] = _human_decision_repo_override
     app.dependency_overrides[get_pipeline_service] = _pipeline_service_override
+    app.dependency_overrides[get_job_service] = _job_service_override
 
     return TestClient(app)
 
