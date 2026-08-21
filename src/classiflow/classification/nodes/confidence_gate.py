@@ -1,11 +1,12 @@
 """Pure-logic review-route decision -- spec Decision 5, adapted from
-tasks/plan_stage4.md's decide_review_route. "llm_judge" is a legitimate transient
-value here; only Routing (Task 14) enforces the two-terminal-state rule."""
+tasks/plan_stage4.md's decide_review_route. ReviewRoute.LLM_JUDGE is a legitimate
+transient value here; only Routing (Task 14) enforces the two-terminal-state rule."""
 
 from classiflow.classification.config_classification import (
     ClassificationConfig,
     get_classification_config,
 )
+from classiflow.classification.domain.review_route import ReviewRoute
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.pipeline.base import BaseNode
@@ -37,7 +38,7 @@ class ConfidenceGateNode(BaseNode):
         confidence: float,
         foreign_municipality: str | None,
         classifier_disagreement: bool,
-    ) -> str:
+    ) -> ReviewRoute:
         start = await self._emit_started(ctx)
         route = self.decide(
             confidence=confidence,
@@ -48,7 +49,10 @@ class ConfidenceGateNode(BaseNode):
             ctx,
             start,
             passed=True,
-            detail=AuditDetail.model_validate({"filename": ctx.filename, "review_route": route}),
+            detail=AuditDetail.model_validate({
+                "filename": ctx.filename,
+                "review_route": route.value,
+            }),
         )
         return route
 
@@ -58,9 +62,9 @@ class ConfidenceGateNode(BaseNode):
         confidence: float,
         foreign_municipality: str | None,
         classifier_disagreement: bool,
-    ) -> str:
+    ) -> ReviewRoute:
         if foreign_municipality is not None or classifier_disagreement:
-            return "human_review"
+            return ReviewRoute.HUMAN_REVIEW
         if confidence >= self.config.confidence_threshold:
-            return "accept"
-        return "llm_judge"
+            return ReviewRoute.ACCEPT
+        return ReviewRoute.LLM_JUDGE

@@ -6116,7 +6116,7 @@ Spec Decision 9. `GET /classification/review-queue` lists `ClassificationRecord`
 - Consumes: `classiflow.classification.exceptions.{ClassificationRecordNotFoundError, ClassificationNotInReviewError}` (Task 4), `classiflow.classification.domain.results.RoutingInput` (Task 14), `classiflow.classification.nodes.routing.RoutingNode` (Task 14), `classiflow.api.dependencies.{get_classification_record_repo, get_routing, get_job_repo, get_audit_service, get_current_user, CurrentUser}` (Task 16 and existing).
 - Produces: `ReviewQueueItem(BaseSchema)`, `ClassificationDecisionRequest(BaseSchema)` (`schemas.py`). `GET /classification/review-queue -> list[ReviewQueueItem]`. `POST /classification/{job_id}/decision` (body `ClassificationDecisionRequest`) `-> None`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Extract `TestContainer()` construction into its own fixture in `tests/api/conftest.py` so this task's tests can seed data directly into the same in-memory repos the `client` fixture wires up (existing `client` fixture body is otherwise unchanged — only the `test_container = TestContainer()` line moves out):
 
@@ -6284,12 +6284,12 @@ class TestClassificationDecisionEndpoint:
         assert "decide-me-001" not in [item["jobId"] for item in queue]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/api/routes/test_classification.py -v`
 Expected: FAIL with a 404 for `/classification/review-queue` (router doesn't exist yet) once `_jwt_secret`/auth passes.
 
-- [ ] **Step 3: Implement `schemas.py`**
+- [x] **Step 3: Implement `schemas.py`**
 
 ```python
 # src/classiflow/api/routes/classification/schemas.py
@@ -6330,7 +6330,7 @@ class ClassificationDecisionRequest(BaseSchema):
     notes: str | None = None
 ```
 
-- [ ] **Step 4: Implement `endpoints.py`**
+- [x] **Step 4: Implement `endpoints.py`**
 
 ```python
 # src/classiflow/api/routes/classification/endpoints.py
@@ -6449,7 +6449,7 @@ from classiflow.api.routes.classification.endpoints import router
 __all__ = ["router"]
 ```
 
-- [ ] **Step 5: Register the error handlers**
+- [x] **Step 5: Register the error handlers**
 
 ```python
 # src/classiflow/api/error_handlers/classification.py
@@ -6500,7 +6500,7 @@ EXCEPTION_HANDLERS: dict[type[Exception], ExceptionHandler] = {
 
 (Both new imports added alongside the existing ones at the top of the file -- the rest of `types.py` is unchanged.)
 
-- [ ] **Step 6: Register the router**
+- [x] **Step 6: Register the router**
 
 Update `src/classiflow/api/routes/registry.py`:
 
@@ -6515,17 +6515,17 @@ from classiflow.api.routes.pipeline import router as pipeline_router
 ROUTERS: list[APIRouter] = [health_router, auth_router, pipeline_router, classification_router]
 ```
 
-- [ ] **Step 7: Run test to verify it passes**
+- [x] **Step 7: Run test to verify it passes**
 
 Run: `pytest tests/api/routes/test_classification.py -v`
 Expected: PASS
 
-- [ ] **Step 8: Run the full existing test suite (regression check on the conftest.py refactor)**
+- [x] **Step 8: Run the full existing test suite (regression check on the conftest.py refactor)**
 
 Run: `pytest tests -v`
 Expected: PASS across the board — `tests/api/routes/test_pipeline.py` and `tests/api/test_auth.py` are unaffected by the `client`/`test_container` fixture split (same runtime behavior, just constructed one layer apart).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/classiflow/api/routes/classification/ src/classiflow/api/error_handlers/classification.py src/classiflow/api/error_handlers/types.py src/classiflow/api/routes/registry.py tests/api/conftest.py tests/api/routes/test_classification.py

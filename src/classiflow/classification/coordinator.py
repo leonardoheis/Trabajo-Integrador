@@ -4,6 +4,7 @@ from langgraph.graph.state import CompiledStateGraph
 from classiflow.classification.bert.label_mapping import classifier_disagreement
 from classiflow.classification.bert.ood_scorer import OodMetrics
 from classiflow.classification.domain.results import RoutingInput
+from classiflow.classification.domain.review_route import ReviewRoute
 from classiflow.classification.domain.state import ClassificationState, ClassificationUpdate
 from classiflow.classification.nodes.confidence_gate import ConfidenceGateNode
 from classiflow.classification.nodes.foreign_municipality import ForeignMunicipalityNode
@@ -17,7 +18,11 @@ from classiflow.pipeline.context import JobContext
 
 ClassificationUpdateValue = str | float | int | bool | dict[str, float] | OodMetrics | list[str]
 
-_LLM_JUDGE_ROUTE = "llm_judge"
+# LangGraph node identifiers (add_node/add_conditional_edges targets) -- distinct
+# concept from ReviewRoute despite the "llm_judge" name collision; these two graph
+# node names never change and stay bare strings.
+_LLM_JUDGE_NODE = "llm_judge"
+_ROUTING_NODE = "routing"
 
 
 def _dump(update: ClassificationUpdate) -> dict[str, ClassificationUpdateValue]:
@@ -107,7 +112,7 @@ def build_classification_coordinator(
             foreign_municipality=state.get("foreign_municipality"),
         )
         result = await llm_judge.run(ctx, judge_input)
-        review_route = "accept" if result.accept else "human_review"
+        review_route = ReviewRoute.ACCEPT if result.accept else ReviewRoute.HUMAN_REVIEW
         return _dump(ClassificationUpdate(review_route=review_route, judged_by_llm=True))
 
     async def _routing(state: ClassificationState) -> dict[str, ClassificationUpdateValue]:
@@ -136,7 +141,9 @@ def build_classification_coordinator(
         return _dump(ClassificationUpdate(stored_path=result.stored_path))
 
     def _route_after_gate(state: ClassificationState) -> str:
-        return _LLM_JUDGE_ROUTE if state.get("review_route") == _LLM_JUDGE_ROUTE else "routing"
+        return (
+            _LLM_JUDGE_NODE if state.get("review_route") == ReviewRoute.LLM_JUDGE else _ROUTING_NODE
+        )
 
     graph: StateGraph = StateGraph(ClassificationState)  # type: ignore[type-arg]
     graph.add_node("primary_classifier", _primary_classifier)
@@ -153,7 +160,9 @@ def build_classification_coordinator(
     graph.add_edge("foreign_municipality", "smells_risk")
     graph.add_edge("smells_risk", "confidence_gate")
     graph.add_conditional_edges(
-        "confidence_gate", _route_after_gate, {"llm_judge": "llm_judge", "routing": "routing"}
+        "confidence_gate",
+        _route_after_gate,
+        {_LLM_JUDGE_NODE: _LLM_JUDGE_NODE, _ROUTING_NODE: _ROUTING_NODE},
     )
     graph.add_edge("llm_judge", "routing")
     graph.add_edge("routing", END)

@@ -1,4 +1,5 @@
 from classiflow.classification.domain.results import RoutingInput, RoutingResult
+from classiflow.classification.domain.review_route import ReviewRoute
 from classiflow.database.models import ClassificationRecord
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
@@ -8,7 +9,6 @@ from classiflow.pipeline.context import JobContext
 from classiflow.services.audit.service import AuditService
 from classiflow.storage.document_storage import IDocumentStorage
 
-_ACCEPT_ROUTE = "accept"
 _HUMAN_REVIEW_SUBDIRECTORY = "review/human_review"
 
 
@@ -32,7 +32,7 @@ class RoutingNode(BaseNode):
         start = await self._emit_started(ctx)
         subdirectory = (
             f"classified/{routing_input.label}"
-            if routing_input.review_route == _ACCEPT_ROUTE
+            if routing_input.review_route == ReviewRoute.ACCEPT
             else _HUMAN_REVIEW_SUBDIRECTORY
         )
         stored_path = await self.storage.move_to_final(
