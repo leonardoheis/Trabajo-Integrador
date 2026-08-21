@@ -144,6 +144,7 @@ class TestContainer(containers.DeclarativeContainer):
     )
     # Generous cap -- shouldn't gate tests, just needs to satisfy the now-required param.
     extraction_semaphore = providers.Singleton(asyncio.Semaphore, 100)
+    job_semaphore = providers.Singleton(asyncio.Semaphore, 100)
     extraction_step = providers.Factory(
         ExtractionStep,
         audit=audit_service,
@@ -253,4 +254,5 @@ class TestContainer(containers.DeclarativeContainer):
         enrichment_coordinator=enrichment_coordinator,
         document_storage=document_storage,
         classification_coordinator=classification_coordinator,
+        job_semaphore=job_semaphore,
     )

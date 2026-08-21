@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
@@ -56,6 +57,7 @@ class PipelineService:
         enrichment_coordinator: CompiledStateGraph,  # type: ignore[type-arg]
         document_storage: IDocumentStorage,
         classification_coordinator: CompiledStateGraph,  # type: ignore[type-arg]
+        job_semaphore: asyncio.Semaphore,
     ) -> None:
         self._job_repo = job_repo
         self._document_steps_repo = document_steps_repo
@@ -65,6 +67,7 @@ class PipelineService:
         self._enrichment_coordinator = enrichment_coordinator
         self._document_storage = document_storage
         self._classification_coordinator = classification_coordinator
+        self._job_semaphore = job_semaphore
 
     async def start(
         self, background_tasks: BackgroundTasks, filename: str, file_bytes: bytes
@@ -82,27 +85,29 @@ class PipelineService:
         return job_id
 
     async def _run(self, job_id: str, filename: str, file_bytes: bytes) -> None:
-        initial: JobState = {"job_id": job_id, "filename": filename, "file_bytes": file_bytes}
-        final_state = cast("JobState", await self._coordinator.ainvoke(initial))
+        async with self._job_semaphore:
+            initial: JobState = {"job_id": job_id, "filename": filename, "file_bytes": file_bytes}
+            final_state = cast("JobState", await self._coordinator.ainvoke(initial))
 
-        failed_at_node = await self._persist_steps(job_id, final_state)
-        await self._finalize_job(job_id, final_state, failed_at_node)
+            failed_at_node = await self._persist_steps(job_id, final_state)
+            await self._finalize_job(job_id, final_state, failed_at_node)
 
-        # Gated on extraction (not final_status): jobs that later land in review still
-        # need their bytes staged so Stage 4's Routing can move the real file later.
-        if final_state.get("extraction") is not None:
-            await self._document_storage.save_staged(job_id, filename, file_bytes)
+            # Gated on extraction (not final_status): jobs that later land in review
+            # still need their bytes staged so Stage 4's Routing can move the real file
+            # later.
+            if final_state.get("extraction") is not None:
+                await self._document_storage.save_staged(job_id, filename, file_bytes)
 
-        if final_state.get("final_status") == "accepted":
-            enriched_record = await self._run_enrichment(job_id, filename, final_state)
-            if enriched_record is not None:
-                await self._run_classification(job_id, filename, enriched_record)
+            if final_state.get("final_status") == "accepted":
+                enriched_record = await self._run_enrichment(job_id, filename, final_state)
+                if enriched_record is not None:
+                    await self._run_classification(job_id, filename, enriched_record)
 
-        unload_slm()
+            unload_slm()
 
-        await self._broadcaster.emit(
-            NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.DONE)
-        )
+            await self._broadcaster.emit(
+                NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.DONE)
+            )
 
     async def _persist_steps(self, job_id: str, final_state: JobState) -> str | None:
         # Saves one DocumentStep per node the coordinator actually ran, and returns the

@@ -171,6 +171,7 @@ async def test_extractor_used_is_queryable_from_document_step() -> None:
         classification_coordinator=cast(  # unused: only _persist_steps runs
             "CompiledStateGraph", None
         ),
+        job_semaphore=asyncio.Semaphore(1),  # unused: only _persist_steps runs
     )
     job_id = "persisted-job"
     final_state: JobState = {

@@ -12,6 +12,7 @@ from classiflow.api.dependencies import (
     get_pipeline_service,
 )
 from classiflow.api.routes.pipeline.schemas import (
+    BulkIngestResponse,
     DecisionRequest,
     DocumentStepSchema,
     IngestResponse,
@@ -36,6 +37,20 @@ async def ingest(
     file_bytes = await file.read()
     job_id = await pipeline.start(background_tasks, filename, file_bytes)
     return IngestResponse(job_id=job_id)
+
+
+@router.post("/ingest-bulk", status_code=202)
+async def ingest_bulk(
+    files: list[UploadFile],
+    background_tasks: BackgroundTasks,
+    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+) -> BulkIngestResponse:
+    job_ids = []
+    for file in files:
+        filename = file.filename or "unknown"
+        file_bytes = await file.read()
+        job_ids.append(await pipeline.start(background_tasks, filename, file_bytes))
+    return BulkIngestResponse(job_ids=job_ids)
 
 
 @router.get("/review-queue")

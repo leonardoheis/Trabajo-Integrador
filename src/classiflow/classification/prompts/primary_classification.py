@@ -127,8 +127,28 @@ signals than the general topic of the text.
 pick them when their specific anchor (recess/extraordinary-faculty language; \
 a range of boletín numbers) is actually present, not just because the text \
 resembles a decreto or a boletín.
+- An anchor phrase only counts as a signal when it introduces THIS \
+document's own operative content -- typically the very first substantive \
+line, immediately followed by that category's own structural markers (a \
+decreto's own number is followed by "VISTO"/"CONSIDERANDO"/"DECRETA"; a \
+convenio's own text follows with "Entre la Municipalidad..." and numbered \
+clauses PRIMERA, SEGUNDA...). A citation to a DIFFERENT act's number \
+appearing before or alongside the document's real content is administrative \
+boilerplate, not the document's own category -- for example, real convenios \
+are filed under a standing registry decree and routinely open with a \
+"REGISTRO DE CONVENIOS" / "Decreto N° ..." stamp before their actual text \
+begins; that stamp names the registry's founding decree, not this \
+document's own type, and must not be read as a decreto anchor.
 - If genuinely torn between two categories, pick the more likely one but \
 reflect the uncertainty with a lower confidence rather than a high one.
+
+Example: an excerpt starting "Decreto No 1437/2013\\nConvenio N° ...\\nRegistro \
+de Convenios ... CONVENIO DE PRESTAMO DE USO GRATUITO ... Entre la \
+MUNICIPALIDAD DE ROSARIO ... y ... acuerdan celebrar el presente convenio \
+... PRIMERA: ..." must be labeled "convenios" (not "decretos") -- the \
+leading "Decreto No 1437/2013" is only the registry stamp that files this \
+convenio, not this document's own act; the real content (bilateral \
+agreement between two parties, numbered clauses) is what anchors convenios.
 
 Text: {cleaned_text}
 

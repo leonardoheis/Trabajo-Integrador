@@ -38,9 +38,31 @@ class _Settings(BaseSettings):
     CLASSIFICATION_MODEL_PATH: str = _DEFAULT_MODEL
     CLASSIFICATION_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "classification.yaml")
     JUDGE_MODEL_PATH: str = _JUDGE_MODEL
-    SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.8"))
+    # Conservative starting point, not a measured capacity number -- each job runs
+    # local GGUF LLM inference (node2/node3/enrichment/classification/judge), OCR, and
+    # embedding, all genuinely expensive per-job work rather than lightweight I/O.
+    # Override via the env var once real load/hardware data justifies a higher value.
+    MAX_CONCURRENT_JOBS: int = int(os.getenv("MAX_CONCURRENT_JOBS", "2"))
+    SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.2"))
     SLM_TOP_P: float = float(os.getenv("SLM_TOP_P", "0.95"))
     SLM_SEED: int = int(os.getenv("SLM_SEED", "42"))
+    # LangChain's LlamaCpp wrapper defaults max_tokens to 256 when unset -- too small
+    # for a structured JSON response with a "reasoning" field (e.g. the primary
+    # classifier's 10-way label + confidence + reasoning), which silently truncates
+    # mid-object and fails JSON parsing. Every get_llm_langchain() caller shares this
+    # one setting; MockLlm-based tests never exercise the real default, which is why
+    # this went unnoticed until a real model run.
+    SLM_MAX_TOKENS: int = int(os.getenv("SLM_MAX_TOKENS", "512"))
+    # Every quantized GGUF model here (Phi-4-mini, Gemma 4, ...) is trained for a far
+    # larger context than this (n_ctx_train reported as 131072 for Phi-4-mini) -- 2048
+    # was an arbitrary small cap this codebase set, not a model limit. Too small a
+    # value here means llama.cpp silently clamps the completion budget once the
+    # prompt (e.g. the primary classifier's ~1300-token category-definitions block +
+    # document excerpt) fills the window, and the model can start hallucinating
+    # off-prompt content once genuinely context-starved rather than erroring loudly.
+    # 4096 gives real headroom while staying well inside an 8GB-VRAM budget's
+    # KV-cache cost (roughly linear in n_ctx).
+    SLM_N_CTX: int = int(os.getenv("SLM_N_CTX", "4096"))
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
@@ -109,6 +131,10 @@ class _Settings(BaseSettings):
         return self.JUDGE_MODEL_PATH
 
     @property
+    def max_concurrent_jobs(self) -> int:
+        return self.MAX_CONCURRENT_JOBS
+
+    @property
     def slm_temperature(self) -> float:
         return self.SLM_TEMPERATURE
 
@@ -119,6 +145,14 @@ class _Settings(BaseSettings):
     @property
     def slm_seed(self) -> int:
         return self.SLM_SEED
+
+    @property
+    def slm_max_tokens(self) -> int:
+        return self.SLM_MAX_TOKENS
+
+    @property
+    def slm_n_ctx(self) -> int:
+        return self.SLM_N_CTX
 
 
 Settings = _Settings()

@@ -30,6 +30,10 @@ def _extraction_concurrency_limit() -> int:
     return get_extraction_config().max_concurrent_extractions
 
 
+def _job_concurrency_limit() -> int:
+    return Settings.max_concurrent_jobs
+
+
 class Container(containers.DeclarativeContainer):
     # Session-scoped repos/services (job_repo, document_steps_repo, human_decision_repo,
     # hash_repo, audit_repo, pipeline_service, coordinator, node1-4) are NOT declared
@@ -60,6 +64,9 @@ class Container(containers.DeclarativeContainer):
     text_extractor = providers.Factory(TextExtractor, chain=extraction_chain)
     extraction_semaphore = providers.Singleton(
         asyncio.Semaphore, providers.Callable(_extraction_concurrency_limit)
+    )
+    job_semaphore = providers.Singleton(
+        asyncio.Semaphore, providers.Callable(_job_concurrency_limit)
     )
 
     language_detector = providers.Callable(get_language_detector)

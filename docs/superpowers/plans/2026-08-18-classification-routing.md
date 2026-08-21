@@ -6554,7 +6554,7 @@ Re-scoped into Stage 4 per spec Decision 3 (`tasks/todo.md` T22, previously `[ ]
 - Consumes: nothing new from earlier tasks in this plan — this task only touches Stage 1's own `PipelineService`/pipeline endpoints, reusing Task 2's staging call already in `_run()`.
 - Produces: `Settings.max_concurrent_jobs`. `PipelineService.__init__(..., job_semaphore: asyncio.Semaphore)` (9th param). `BulkIngestResponse(BaseSchema)` (`job_ids: list[str]`). `POST /pipeline/ingest-bulk -> BulkIngestResponse`.
 
-- [ ] **Step 1: Write the failing concurrency-cap test**
+- [x] **Step 1: Write the failing concurrency-cap test**
 
 ```python
 # tests/shared/test_pipeline_service_concurrency.py
@@ -6613,12 +6613,12 @@ class TestPipelineServiceConcurrencyCap:
         assert coordinator.max_in_flight <= 2
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pytest tests/shared/test_pipeline_service_concurrency.py -v`
 Expected: FAIL with `TypeError: __init__() got an unexpected keyword argument 'job_semaphore'`
 
-- [ ] **Step 3: Add `Settings.MAX_CONCURRENT_JOBS`**
+- [x] **Step 3: Add `Settings.MAX_CONCURRENT_JOBS`**
 
 In `src/classiflow/settings.py`, add after `JUDGE_MODEL_PATH`:
 
@@ -6634,7 +6634,7 @@ and add after the `judge_model_path` property:
         return self.MAX_CONCURRENT_JOBS
 ```
 
-- [ ] **Step 4: Bump `max-args` from 8 to 9**
+- [x] **Step 4: Bump `max-args` from 8 to 9**
 
 `PipelineService.__init__` and `get_pipeline_service` both grow to 9 params with `job_semaphore` added. In `pyproject.toml`, bump both occurrences from Task 16's Step 4 to `9`, updating the comment's collaborator list to add `job_semaphore`:
 
@@ -6654,7 +6654,7 @@ max-args = 9
 max-args = 9
 ```
 
-- [ ] **Step 5: Update `PipelineService`**
+- [x] **Step 5: Update `PipelineService`**
 
 In `src/classiflow/services/pipeline/service.py`, update imports:
 
@@ -6713,12 +6713,12 @@ class PipelineService:
 
 (`start()` is unchanged — it still just creates the `Job` row and schedules `_run` as a background task; the semaphore throttles how many `_run()` bodies actually execute concurrently once FastAPI's background-task runner starts them, not how many get scheduled.)
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `pytest tests/shared/test_pipeline_service_concurrency.py -v`
 Expected: PASS
 
-- [ ] **Step 7: Wire `job_semaphore` into `Container` (production.py)**
+- [x] **Step 7: Wire `job_semaphore` into `Container` (production.py)**
 
 Add a module-level function directly after the existing `_extraction_concurrency_limit`, matching its exact shape:
 
@@ -6733,7 +6733,7 @@ Add inside `Container`, after `extraction_semaphore`:
     job_semaphore = providers.Singleton(asyncio.Semaphore, providers.Callable(_job_concurrency_limit))
 ```
 
-- [ ] **Step 8: Wire `job_semaphore` into `TestContainer` (injections/test.py)**
+- [x] **Step 8: Wire `job_semaphore` into `TestContainer` (injections/test.py)**
 
 Add inside `TestContainer`, after `extraction_semaphore`:
 
@@ -6759,7 +6759,7 @@ Update `pipeline_service`:
     )
 ```
 
-- [ ] **Step 9: Wire `job_semaphore` into `api/dependencies.py`'s `get_pipeline_service`**
+- [x] **Step 9: Wire `job_semaphore` into `api/dependencies.py`'s `get_pipeline_service`**
 
 ```python
 @inject
@@ -6791,7 +6791,7 @@ def get_pipeline_service(
     )
 ```
 
-- [ ] **Step 10: Write the failing endpoint test**
+- [x] **Step 10: Write the failing endpoint test**
 
 Add to `tests/api/routes/test_pipeline.py`:
 
@@ -6819,12 +6819,12 @@ class TestBulkIngestEndpoint:
         assert len(set(job_ids)) == len(files)  # no duplicate job_ids
 ```
 
-- [ ] **Step 11: Run test to verify it fails**
+- [x] **Step 11: Run test to verify it fails**
 
 Run: `pytest tests/api/routes/test_pipeline.py -k BulkIngest -v`
 Expected: FAIL with a 404 (`/pipeline/ingest-bulk` doesn't exist yet)
 
-- [ ] **Step 12: Implement the endpoint**
+- [x] **Step 12: Implement the endpoint**
 
 Add to `src/classiflow/api/routes/pipeline/schemas.py`:
 
@@ -6850,17 +6850,17 @@ async def ingest_bulk(
     return BulkIngestResponse(job_ids=job_ids)
 ```
 
-- [ ] **Step 13: Run test to verify it passes**
+- [x] **Step 13: Run test to verify it passes**
 
 Run: `pytest tests/api/routes/test_pipeline.py -k BulkIngest -v`
 Expected: PASS
 
-- [ ] **Step 14: Run the full existing test suite (final regression check)**
+- [x] **Step 14: Run the full existing test suite (final regression check)**
 
 Run: `pytest tests -v`
 Expected: PASS across the board.
 
-- [ ] **Step 15: Commit**
+- [x] **Step 15: Commit**
 
 ```bash
 git add src/classiflow/settings.py pyproject.toml src/classiflow/services/pipeline/service.py src/classiflow/injections/production.py src/classiflow/injections/test.py src/classiflow/api/dependencies.py src/classiflow/api/routes/pipeline/endpoints.py src/classiflow/api/routes/pipeline/schemas.py tests/shared/test_pipeline_service_concurrency.py tests/api/routes/test_pipeline.py

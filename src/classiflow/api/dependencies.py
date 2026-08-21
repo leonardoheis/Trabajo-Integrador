@@ -244,6 +244,7 @@ def get_primary_classifier(
     )
 
 
+@inject
 def get_second_opinion(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
@@ -251,6 +252,7 @@ def get_second_opinion(
     return SecondOpinionNode(audit=audit_service, broadcaster=broadcaster)
 
 
+@inject
 def get_foreign_municipality(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
@@ -258,6 +260,7 @@ def get_foreign_municipality(
     return ForeignMunicipalityNode(audit=audit_service, broadcaster=broadcaster)
 
 
+@inject
 def get_smells_risk(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
@@ -265,6 +268,7 @@ def get_smells_risk(
     return SmellsRiskNode(audit=audit_service, broadcaster=broadcaster)
 
 
+@inject
 def get_confidence_gate(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
@@ -364,6 +368,7 @@ def get_pipeline_service(
     classification_coordinator: Annotated[  # type: ignore[type-arg]
         CompiledStateGraph, Depends(get_classification_coordinator)
     ],
+    job_semaphore: Annotated[asyncio.Semaphore, Depends(Provide[Container.job_semaphore])],
 ) -> PipelineService:
     return PipelineService(
         job_repo=job_repo,
@@ -374,4 +379,5 @@ def get_pipeline_service(
         enrichment_coordinator=enrichment_coordinator,
         document_storage=document_storage,
         classification_coordinator=classification_coordinator,
+        job_semaphore=job_semaphore,
     )

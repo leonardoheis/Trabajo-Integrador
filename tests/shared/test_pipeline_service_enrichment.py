@@ -185,6 +185,7 @@ def _build_service(
         enrichment_coordinator=enrichment_coordinator,
         document_storage=LocalDiskStorage(root=str(tmp_path)),
         classification_coordinator=classification_coordinator,
+        job_semaphore=asyncio.Semaphore(10),
     )
     return _ServiceUnderTest(
         service=service, job_repo=job_repo, enriched_record_repo=enriched_record_repo
