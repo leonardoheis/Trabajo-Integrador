@@ -3,8 +3,9 @@ repos:
     rev: v6.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: README
+        exclude: ^(README|models/)
       - id: end-of-file-fixer
+        exclude: ^models/
       - id: check-yaml
       - id: debug-statements
 
@@ -46,4 +47,4 @@ repos:
     hooks:
       - id: codespell
         stages: [pre-commit]
-        exclude: ^(src/classiflow/playground/|documents/|\.claude/)
+        exclude: ^(src/classiflow/playground/|documents/|\.claude/|models/)

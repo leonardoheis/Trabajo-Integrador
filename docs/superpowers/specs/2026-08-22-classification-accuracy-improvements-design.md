@@ -194,9 +194,11 @@ class JudgeInput(BaseEntity):
     primary_label: str
     primary_confidence: float
     second_opinion_label: str | None = None
-    second_opinion_confidence: float | None = None  # NEW -- BETO's own confidence, not just its label
-    ood_metrics: OodMetrics | None = None            # NEW -- the full object, not a flattened summary
-    svm_agrees_with_prediction: bool = True          # NEW
+    second_opinion_confidence: float | None = (
+        None  # NEW -- BETO's own confidence, not just its label
+    )
+    ood_metrics: OodMetrics | None = None  # NEW -- the full object, not a flattened summary
+    svm_agrees_with_prediction: bool = True  # NEW
     smells: list[str] = Field(default_factory=list)
     risk_score: int = 0
     foreign_municipality: str | None = None

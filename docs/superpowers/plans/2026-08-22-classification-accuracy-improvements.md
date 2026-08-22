@@ -54,7 +54,7 @@ pytest, Jupyter (`playground/stage4/full_pipeline_end_to_end.ipynb`).
   `__JUDGE_MODEL_NAME__`, substituted the same way every other token in that cell
   already is.
 
-- [ ] **Step 1: Replace the hardcoded model names in the template**
+- [x] **Step 1: Replace the hardcoded model names in the template**
 
 In `report_template.html`, line 400 currently reads:
 ```html
@@ -67,7 +67,7 @@ Change it to:
 (BETO v2 stays literal — it is not read from `Settings`, there is no settings path
 for it; only the two GGUF model names are dynamic.)
 
-- [ ] **Step 2: Compute the two model names in the notebook's report cell**
+- [x] **Step 2: Compute the two model names in the notebook's report cell**
 
 In the report-generation cell (the one building `_substitutions`), add before the
 `_substitutions = {...}` line:
@@ -87,7 +87,7 @@ this notebook's earlier cells — check with a preceding cell read; `classiflow.
 is almost certainly already imported earlier in the notebook (it drives model paths
 elsewhere), so this step may be a no-op beyond adding the two lines above.
 
-- [ ] **Step 3: Add the two new tokens to `_substitutions`**
+- [x] **Step 3: Add the two new tokens to `_substitutions`**
 
 ```python
 _substitutions = {
@@ -146,19 +146,15 @@ git commit -m "fix: report masthead reflects the real configured model names"
 
 In `tests/classification/test_confidence_gate_node.py`, replace:
 ```python
-    def test_classifier_disagreement_routes_to_human_review_regardless_of_confidence(self) -> None:
-        route = _node().decide(
-            confidence=0.99, foreign_municipality=None, classifier_disagreement=True
-        )
-        assert route == "human_review"
+def test_classifier_disagreement_routes_to_human_review_regardless_of_confidence(self) -> None:
+    route = _node().decide(confidence=0.99, foreign_municipality=None, classifier_disagreement=True)
+    assert route == "human_review"
 ```
 with:
 ```python
-    def test_classifier_disagreement_routes_to_llm_judge_regardless_of_confidence(self) -> None:
-        route = _node().decide(
-            confidence=0.99, foreign_municipality=None, classifier_disagreement=True
-        )
-        assert route == "llm_judge"
+def test_classifier_disagreement_routes_to_llm_judge_regardless_of_confidence(self) -> None:
+    route = _node().decide(confidence=0.99, foreign_municipality=None, classifier_disagreement=True)
+    assert route == "llm_judge"
 ```
 
 - [ ] **Step 2: Add a test asserting `foreign_municipality` still overrides even when disagreement is also set**
@@ -598,7 +594,8 @@ def _format_prompt(chain_input: JudgeInput) -> str:
         primary_confidence=chain_input.primary_confidence,
         second_opinion_label=chain_input.second_opinion_label or "none",
         second_opinion_confidence=(
-            "n/a" if chain_input.second_opinion_confidence is None
+            "n/a"
+            if chain_input.second_opinion_confidence is None
             else chain_input.second_opinion_confidence
         ),
         smells=", ".join(chain_input.smells) or "none",
@@ -696,8 +693,13 @@ def _build_graph_with_disagreement(
         audit=audit, broadcaster=broadcaster, storage=storage, classification_repo=repo
     )
     graph = build_classification_coordinator(
-        primary, second_opinion, foreign_municipality, smells_risk, confidence_gate,
-        llm_judge, routing,
+        primary,
+        second_opinion,
+        foreign_municipality,
+        smells_risk,
+        confidence_gate,
+        llm_judge,
+        routing,
     )
     return graph, repo
 
@@ -713,7 +715,9 @@ class TestClassificationCoordinatorDisagreementPath:
             '{"accept": true, "final_label": "resoluciones_concejo_municipal", '
             '"reasoning": "second opinion is correct"}'
         )
-        graph, repo = _build_graph_with_disagreement(tmp_path, judge_response=judge_accepts_response)
+        graph, repo = _build_graph_with_disagreement(
+            tmp_path, judge_response=judge_accepts_response
+        )
         job_id = "coord-disagreement-001"
         filename = "resolucion_cm.pdf"
         _stage_file(tmp_path, job_id, filename)
@@ -744,7 +748,9 @@ class TestClassificationCoordinatorDisagreementPath:
 
         audit = AuditService(InMemoryAuditRepository())
         broadcaster = EventBroadcaster()
-        config = ClassificationConfig(second_opinion_enabled=True, foreign_municipality_enabled=True)
+        config = ClassificationConfig(
+            second_opinion_enabled=True, foreign_municipality_enabled=True
+        )
         repo = InMemoryClassificationRecordRepository()
         storage = LocalDiskStorage(root=str(tmp_path))
         graph = build_classification_coordinator(
@@ -757,13 +763,18 @@ class TestClassificationCoordinatorDisagreementPath:
                 config=config,
             ),
             SecondOpinionNode(
-                audit=audit, broadcaster=broadcaster, classifier=_DisagreeingClassifier(), config=config
+                audit=audit,
+                broadcaster=broadcaster,
+                classifier=_DisagreeingClassifier(),
+                config=config,
             ),
             ForeignMunicipalityNode(audit=audit, broadcaster=broadcaster, config=config),
             SmellsRiskNode(audit=audit, broadcaster=broadcaster, config=config),
             ConfidenceGateNode(audit=audit, broadcaster=broadcaster, config=config),
             LlmJudgeNode(audit=audit, broadcaster=broadcaster, judge_chain=_CapturingJudgeChain()),
-            RoutingNode(audit=audit, broadcaster=broadcaster, storage=storage, classification_repo=repo),
+            RoutingNode(
+                audit=audit, broadcaster=broadcaster, storage=storage, classification_repo=repo
+            ),
         )
         job_id = "coord-disagreement-002"
         filename = "resolucion_cm.pdf"
@@ -948,9 +959,7 @@ def upgrade() -> None:
     op.add_column(
         "classification_records", sa.Column("judge_final_label", sa.String(100), nullable=True)
     )
-    op.add_column(
-        "classification_records", sa.Column("judge_reasoning", sa.Text, nullable=True)
-    )
+    op.add_column("classification_records", sa.Column("judge_reasoning", sa.Text, nullable=True))
 
 
 def downgrade() -> None:
@@ -1028,12 +1037,34 @@ In `coordinator.py`'s `_llm_judge` closure, extend the final return:
             )
         )
 ```
-And in `_routing`'s `RoutingInput(...)` construction, add:
+In `_routing`'s `RoutingInput(...)` construction, add `judge_final_label` and
+`judge_reasoning` right after the existing `judged_by_llm=...` line:
 ```python
+        routing_input = RoutingInput(
+            job_id=state["job_id"],
+            filename=state["filename"],
+            enriched_id=state["enriched_id"],
+            label=state["label"],
+            confidence=state["confidence"],
+            all_scores=state.get("all_scores", {}),
+            second_opinion_label=state.get("second_opinion_label"),
+            second_opinion_confidence=state.get("second_opinion_confidence", 0.0),
+            classifier_disagreement=state.get("classifier_disagreement", False),
+            ood_metrics=state.get("ood_metrics"),
+            svm_scores=state.get("svm_scores", {}),
+            svm_agrees_with_prediction=state.get("svm_agrees_with_prediction", True),
+            review_route=state["review_route"],
+            smells=state.get("smells", []),
+            risk_score=state.get("risk_score", 0),
+            smell_review_suggested=state.get("smell_review_suggested", False),
+            foreign_municipality=state.get("foreign_municipality"),
             judged_by_llm=state.get("judged_by_llm", False),
             judge_final_label=state.get("judge_final_label"),
             judge_reasoning=state.get("judge_reasoning"),
+        )
 ```
+(only the last two lines, `judge_final_label=...` and `judge_reasoning=...`, are new
+— every other line already exists in `_routing` unchanged.)
 
 - [ ] **Step 8: Add `judge_final_label`/`judge_reasoning`/`second_opinion_label` to the review-queue API schema**
 
@@ -1156,23 +1187,29 @@ directory) that does:
 ```python
 import asyncio
 from sqlalchemy import select
-from classiflow.database.session import get_session  # confirm exact import path first via codegraph_explore("get_session AsyncSession database engine")
+from classiflow.database.session import (
+    get_session,
+)  # confirm exact import path first via codegraph_explore("get_session AsyncSession database engine")
 from classiflow.database.models import EnrichedRecord, Job
+
 
 async def main() -> None:
     async with get_session() as session:
         for filename in ("resolucion_cm_16879_2024.pdf", "resolucion_cm_197_2024.pdf"):
-            job = (await session.execute(
-                select(Job).where(Job.filename == filename)
-            )).scalar_one_or_none()
+            job = (
+                await session.execute(select(Job).where(Job.filename == filename))
+            ).scalar_one_or_none()
             if job is None:
                 print(f"{filename}: no Job row found")
                 continue
-            record = (await session.execute(
-                select(EnrichedRecord).where(EnrichedRecord.job_id == job.job_id)
-            )).scalar_one_or_none()
+            record = (
+                await session.execute(
+                    select(EnrichedRecord).where(EnrichedRecord.job_id == job.job_id)
+                )
+            ).scalar_one_or_none()
             print(f"=== {filename} ===")
             print(record.cleaned_text if record else "no EnrichedRecord found")
+
 
 asyncio.run(main())
 ```

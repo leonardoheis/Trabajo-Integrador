@@ -93,7 +93,7 @@ packages = ["src/classiflow"]
 line-length = 100
 target-version = "py310"
 extend-include = ["*.ipynb"]
-exclude = [".claude", "tasks", "alembic"]
+exclude = [".claude", "tasks", "alembic", "models"]
 
 fix = true
 preview = true
