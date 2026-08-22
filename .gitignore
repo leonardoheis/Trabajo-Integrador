@@ -192,8 +192,14 @@ desktop.ini
 # Ignores everything under the root models/ directory regardless of file extension --
 # *.gguf is already covered above, but a HF sentence-transformers model's
 # config.json/tokenizer files/.safetensors aren't caught by any extension-based rule.
+# bert_tunning_beto_v2/ and embeddings/ are tracked exceptions (below) -- everything
+# else under models/ (the GGUF LLMs) stays gitignored.
 models/**
 !models/**/.gitkeep
+!models/bert_tunning_beto_v2/
+!models/bert_tunning_beto_v2/**
+!models/embeddings/
+!models/embeddings/**
 
 # ---- Local document storage root (staged uploads, classified/review-queue files) ----
 storage/documents/**
