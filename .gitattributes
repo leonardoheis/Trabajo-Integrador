@@ -1,1 +1,9 @@
+# Git LFS -- large/binary model artifacts under models/bert_tunning_beto_v2/ (the one
+# directory carved out of the models/** gitignore rule). GGUF LLM files (Phi-4-mini,
+# Llama 3.1 8B, Gemma 4) and models/embeddings/ (a Hugging Face Hub cache directory,
+# regenerated on first use -- not meant to be tracked) stay gitignored entirely.
+
+*.safetensors filter=lfs diff=lfs merge=lfs -text
+*.npz filter=lfs diff=lfs merge=lfs -text
+*.joblib filter=lfs diff=lfs merge=lfs -text
 models/bert_tunning_beto_v2/** filter=lfs diff=lfs merge=lfs -text
