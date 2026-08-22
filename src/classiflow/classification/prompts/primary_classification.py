@@ -39,8 +39,12 @@ _CATEGORY_DEFS: dict[DocumentCategory, str] = {
     ),
     DocumentCategory.COMPENDIOS_DE_BOLETINES: (
         "Compendio de Boletines: a bundled index/volume covering a RANGE of boletín "
-        'issues (e.g. "Compendio de Boletines Nros. X al Y"), not a single issue. Key '
-        "anchor: a number range or 'compendio', not a single issue number."
+        "issues, not a single issue. Extremely rare -- only pick this if the document "
+        "literally contains the word 'Compendio' together with two distinct issue "
+        "numbers joined by 'al' or a dash (e.g. two different numbers like 2050 and "
+        "2075, not one number appearing once). A single number or act citation "
+        "anywhere in the text (a decreto number, a folio number, a registry stamp) "
+        "is NOT a range and does not qualify -- do not infer a range from one number."
     ),
     DocumentCategory.CONVENIOS: (
         "Convenio: a bilateral/multilateral agreement between the Municipalidad and "
@@ -123,6 +127,17 @@ Rules:
 - The issuing body (Departamento Ejecutivo/Intendente vs. Concejo Municipal) \
 and the operative verb (decreta/resuelve/sanciona/declara) are stronger \
 signals than the general topic of the text.
+- The issuing body OVERRIDES the operative word alone: before finalizing a \
+plain "decretos" or "resoluciones" label, check whether the literal phrase \
+"Concejo Municipal" actually appears verbatim, word-for-word, in the Text \
+below. Only if that exact phrase is genuinely present should you pick the \
+matching "_concejo_municipal" variant instead. Do NOT infer, assume, or \
+recall a "Concejo Municipal" mention that is not literally printed in the \
+Text -- most decretos/resoluciones in this corpus are ordinary executive \
+acts (issued by the Intendente/Departamento Ejecutivo/a Secretaría) with \
+no Concejo Municipal involvement at all, and those stay plain \
+"decretos"/"resoluciones". Re-read the Text below before applying this \
+rule; do not apply it from memory of the examples above.
 - decreto_ordenanzas and compendios_de_boletines are rare categories -- only \
 pick them when their specific anchor (recess/extraordinary-faculty language; \
 a range of boletín numbers) is actually present, not just because the text \
@@ -149,6 +164,23 @@ MUNICIPALIDAD DE ROSARIO ... y ... acuerdan celebrar el presente convenio \
 leading "Decreto No 1437/2013" is only the registry stamp that files this \
 convenio, not this document's own act; the real content (bilateral \
 agreement between two parties, numbered clauses) is what anchors convenios.
+
+Example: an excerpt starting "LA MUNICIPALIDAD DE ROSARIO HA SANCIONADO EL \
+SIGUIENTE\\nDECRETO\\n(N'10.554)\\nHONORABLE CONCEJO MUNICIPAL:\\nLa Comisión \
+de Planeamiento y Urbanismo ha considerado el proyecto presentado por los \
+Concejales..." must be labeled "decretos_concejo_municipal" (not \
+"decretos") -- the literal phrase "HONORABLE CONCEJO MUNICIPAL" is right \
+there in the text, a few lines after "DECRETO", so the override applies. \
+The same override applies to resoluciones issued by "Concejo Municipal" \
+instead of by a Secretaría/Departamento Ejecutivo -- those are \
+"resoluciones_concejo_municipal", not "resoluciones".
+
+Contrast example: an excerpt starting "RESOLUCION N° 100\\nRosario, ... 14 \
+de agosto de 2020.\\nVISTO:\\nEl Decreto Nacional de Necesidad y Urgencia \
+N° 520/20 ... CONSIDERANDO: ..." must be labeled "resoluciones" (the plain \
+category, NOT resoluciones_concejo_municipal) -- the phrase "Concejo \
+Municipal" does not appear anywhere in this text, so the override rule \
+above does not apply here; this is an ordinary executive resolución.
 
 Text: {cleaned_text}
 

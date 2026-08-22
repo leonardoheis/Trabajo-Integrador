@@ -76,6 +76,15 @@ class PrimaryClassifierNode(BaseNode):
         try:
             if self.classification_chain is not None:
                 chain: _ClassificationChain = self.classification_chain
+                # Drop this node's own reference to the injected chain (and the GGUF
+                # model it wraps) once used -- this node runs exactly once per job, so
+                # nothing else needs it after this call, but the chain would otherwise
+                # stay reachable through PipelineService's classification_coordinator
+                # closure for the job's full remaining duration, blocking
+                # get_llm_langchain's unload_slm() from ever actually freeing that
+                # model's VRAM before a later stage (e.g. the LLM Judge) tries to load
+                # a different one.
+                self.classification_chain = None
             else:
                 chain = cast(
                     "_ClassificationChain",

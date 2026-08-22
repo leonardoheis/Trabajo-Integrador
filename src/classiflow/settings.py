@@ -5,11 +5,24 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _PROJECT_ROOT = Path(__file__).parents[2]
 _MODELS_DIR = _PROJECT_ROOT / "models"
-_DEFAULT_MODEL = str(_MODELS_DIR / "Phi-4-mini-instruct-Q4_K_M.gguf")
-# LLM Judge tier only runs on the minority of documents the primary classifier (Phi-4-mini,
-# _DEFAULT_MODEL) couldn't confidently resolve -- a bigger model earns its extra cost there.
-# Not yet present under models/ -- must be downloaded before Task 13 (LlmJudgeNode) can be
-# exercised end-to-end; MockLlm-based unit tests don't need the real file.
+# Swapped from Phi-4-mini-instruct (3.8B) to Meta-Llama-3.1-8B-Instruct after real
+# corpus testing found Phi-4-mini fabricating evidence that isn't in the source text
+# at all (e.g. claiming a document "contains the phrase 'Compendio de Boletines'" and
+# cites a number range, when neither appears anywhere in the actual excerpt) --
+# confirmed via direct greedy-decoding (temperature=0) tests that this is a genuine
+# hallucination/grounding failure, not prompt wording or sampling noise, and that
+# Llama 3.1 8B does not reproduce it on the same real documents. Used for every
+# node2/node3/enrichment/classification SLM call (all share this one path, and thus
+# get_llm_langchain's cache), not just the primary classifier -- an earlier attempt to
+# swap the classifier alone while leaving node2/node3/enrichment on Phi-4-mini meant
+# two different GGUF models could be VRAM-resident at once, on top of the LLM Judge's
+# own model, overflowing an 8GB card. A single shared model file avoids that: every
+# stage either shares the exact same cached instance or (via
+# FormatValidationNode/ContentValidationNode/EntityExtractorNode/PrimaryClassifierNode
+# each dropping their own chain reference right after their one use per job) leaves
+# nothing but get_llm_langchain's cache holding it, so LlmJudgeNode's unload_slm()
+# call actually frees that VRAM before Gemma loads.
+_DEFAULT_MODEL = str(_MODELS_DIR / "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf")
 _JUDGE_MODEL = str(_MODELS_DIR / "gemma-4-E4B-it-Q4_K_M.gguf")
 
 
@@ -43,7 +56,7 @@ class _Settings(BaseSettings):
     # embedding, all genuinely expensive per-job work rather than lightweight I/O.
     # Override via the env var once real load/hardware data justifies a higher value.
     MAX_CONCURRENT_JOBS: int = int(os.getenv("MAX_CONCURRENT_JOBS", "2"))
-    SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.2"))
+    SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.1"))
     SLM_TOP_P: float = float(os.getenv("SLM_TOP_P", "0.95"))
     SLM_SEED: int = int(os.getenv("SLM_SEED", "42"))
     # LangChain's LlamaCpp wrapper defaults max_tokens to 256 when unset -- too small

@@ -7,7 +7,7 @@ from classiflow.classification.prompts.llm_judge import JudgeInput, build_judge_
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.exceptions import LlmProviderError
-from classiflow.ingesta.llm_provider import get_llm_langchain
+from classiflow.ingesta.llm_provider import get_llm_langchain, unload_slm
 from classiflow.pipeline.base import BaseNode
 from classiflow.pipeline.context import JobContext
 from classiflow.services.audit.service import AuditService
@@ -63,6 +63,16 @@ class LlmJudgeNode(BaseNode):
             if self.judge_chain is not None:
                 chain: _JudgeChain = self.judge_chain
             else:
+                # By the time a job reaches the judge tier, node2/node3/enrichment's
+                # and the primary classifier's chain-holding nodes have each already
+                # dropped their own reference to their GGUF model after their one use
+                # per job (see the matching comment in each of those nodes) -- so the
+                # only thing still keeping those models resident in VRAM is
+                # get_llm_langchain's own lru_cache. Clearing it here, right before the
+                # judge's own (typically larger) model loads, actually frees that VRAM
+                # instead of stacking multiple GGUF models at once on a small/mid-range
+                # GPU.
+                unload_slm()
                 chain = cast(
                     "_JudgeChain", build_judge_chain(get_llm_langchain(Settings.judge_model_path))
                 )

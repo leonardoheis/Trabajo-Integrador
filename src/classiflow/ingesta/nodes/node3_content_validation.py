@@ -150,6 +150,14 @@ class ContentValidationNode(BaseNode):
     ) -> ContentValidationResult:
         if self.content_chain is not None:
             chain: ContentChain = self.content_chain
+            # Drop this node's own reference to the injected chain (and the GGUF model
+            # it wraps) once used -- node3 runs exactly once per job (build_coordinator
+            # never revisits it), so nothing else needs it after this call, but the
+            # chain would otherwise stay reachable through PipelineService's coordinator
+            # closure for the job's full remaining duration, blocking get_llm_langchain's
+            # unload_slm() from ever actually freeing that model's VRAM before a later
+            # stage (e.g. the LLM Judge) tries to load a different one.
+            self.content_chain = None
         else:
             chain = cast(
                 "ContentChain",
