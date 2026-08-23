@@ -649,12 +649,10 @@ Run: `uv run pytest tests/classification/ -v` → 100 passed. Full suite
 `uv run pytest tests/ -v` → 322 passed. `uv run poe lint`/`uv run poe typecheck` both
 clean.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
-```bash
-git add src/classiflow/classification/prompts/llm_judge.py tests/classification/test_llm_judge_chain.py
-git commit -m "feat: LLM judge prompt interprets OOD/SVM statistical signals, not just smells/risk_score"
-```
+Committed as `522b90a` — "feat: LLM judge prompt interprets OOD/SVM statistical
+signals" — and pushed to `origin/feat/classification-routing`.
 
 ---
 
@@ -675,7 +673,7 @@ git commit -m "feat: LLM judge prompt interprets OOD/SVM statistical signals, no
   `JudgeOutput.accept` — this is the critical, non-negotiable invariant restated in
   Global Constraints above.
 
-- [ ] **Step 1: Write the failing test for the disagreement-to-judge-to-human-review path**
+- [x] **Step 1: Write the failing test for the disagreement-to-judge-to-human-review path**
 
 Add to `tests/classification/test_coordinator.py`, a mock second-opinion classifier
 that disagrees with the primary label, and a new test class:
@@ -825,76 +823,60 @@ Add the needed imports at the top of `tests/classification/test_coordinator.py`:
 `JudgeInput` from `classiflow.classification.prompts.llm_judge`, `JudgeOutput` from
 `classiflow.classification.domain.results`.
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
-Run: `uv run pytest tests/classification/test_coordinator.py -v`
-Expected: `test_disagreement_reaches_judge_and_stays_human_review_even_when_judge_accepts`
-FAILs — today's `_llm_judge` closure derives `review_route` purely from
-`result.accept` (`ReviewRoute.ACCEPT if result.accept else ReviewRoute.HUMAN_REVIEW`),
-so `accept=True` currently yields `ACCEPT`, not `HUMAN_REVIEW`.
-`test_judge_input_receives_ood_and_svm_signals` also FAILs — `JudgeInput` is
-constructed today without `second_opinion_confidence`/`svm_agrees_with_prediction`.
+Confirmed both failures as predicted: `test_disagreement_reaches_judge_and_stays_human_review_even_when_judge_accepts`
+failed with `assert 'accept' == 'human_review'`; `test_judge_input_receives_ood_and_svm_signals`
+failed with `assert None == 0.996` (`second_opinion_confidence` not yet wired).
 
-- [ ] **Step 3: Update the `_llm_judge` closure in `coordinator.py`**
+- [x] **Step 3: Update the `_llm_judge` closure in `coordinator.py`**
 
-Replace:
+**Deviation from the plan's inline if/else**: adding the `if
+state.get("classifier_disagreement", False): ... else: ...` branch directly inside
+`_llm_judge` pushed `build_classification_coordinator`'s cyclomatic complexity to 11
+(ruff's `C901`, threshold 10 — the function's complexity is counted across all its
+inner closures, LangGraph's node-closure pattern). Fixed by extracting the
+routing-decision logic into a small, independently-testable module-level function
+next to the existing `_dump` helper:
 ```python
-    async def _llm_judge(state: ClassificationState) -> dict[str, ClassificationUpdateValue]:
-        ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
-        judge_input = JudgeInput(
-            cleaned_text=state["cleaned_text"],
-            primary_label=state["label"],
-            primary_confidence=state["confidence"],
-            second_opinion_label=state.get("second_opinion_label"),
-            smells=state.get("smells", []),
-            risk_score=state.get("risk_score", 0),
-            foreign_municipality=state.get("foreign_municipality"),
-        )
+def _judge_review_route(*, judge_accepted: bool, disagreement: bool) -> ReviewRoute:
+    # Disagreement is judged strictly higher-risk than low-confidence-alone: the
+    # judge's verdict is captured as advisory data (Task 6 persists
+    # final_label/reasoning), but a disagreement case NEVER auto-accepts, no matter
+    # what the judge concludes. Only the low-confidence-no-disagreement path still
+    # derives the route from JudgeOutput.accept, unchanged from today.
+    if disagreement:
+        return ReviewRoute.HUMAN_REVIEW
+    return ReviewRoute.ACCEPT if judge_accepted else ReviewRoute.HUMAN_REVIEW
+```
+`_llm_judge` then calls it:
+```python
         result = await llm_judge.run(ctx, judge_input)
-        review_route = ReviewRoute.ACCEPT if result.accept else ReviewRoute.HUMAN_REVIEW
+        review_route = _judge_review_route(
+            judge_accepted=result.accept,
+            disagreement=state.get("classifier_disagreement", False),
+        )
         return _dump(ClassificationUpdate(review_route=review_route, judged_by_llm=True))
 ```
-with:
-```python
-    async def _llm_judge(state: ClassificationState) -> dict[str, ClassificationUpdateValue]:
-        ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
-        judge_input = JudgeInput(
-            cleaned_text=state["cleaned_text"],
-            primary_label=state["label"],
-            primary_confidence=state["confidence"],
-            second_opinion_label=state.get("second_opinion_label"),
-            second_opinion_confidence=state.get("second_opinion_confidence"),
-            ood_metrics=state.get("ood_metrics"),
-            svm_agrees_with_prediction=state.get("svm_agrees_with_prediction", True),
-            smells=state.get("smells", []),
-            risk_score=state.get("risk_score", 0),
-            foreign_municipality=state.get("foreign_municipality"),
-        )
-        result = await llm_judge.run(ctx, judge_input)
-        # Disagreement is judged strictly higher-risk than low-confidence-alone: the
-        # judge's verdict is captured as advisory data below (Task 6 persists
-        # final_label/reasoning), but a disagreement case NEVER auto-accepts, no
-        # matter what the judge concludes. Only the low-confidence-no-disagreement
-        # path still derives the route from JudgeOutput.accept, unchanged from today.
-        if state.get("classifier_disagreement", False):
-            review_route = ReviewRoute.HUMAN_REVIEW
-        else:
-            review_route = ReviewRoute.ACCEPT if result.accept else ReviewRoute.HUMAN_REVIEW
-        return _dump(ClassificationUpdate(review_route=review_route, judged_by_llm=True))
-```
+Same behavior as the plan's original inline version, restructured to keep
+`build_classification_coordinator` under the complexity threshold.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
-Run: `uv run pytest tests/classification/test_coordinator.py -v`
-Expected: all PASS, including both new tests and the pre-existing
-`test_low_confidence_routes_through_judge_to_accept` (still passes — that path has
-`classifier_disagreement` absent/`False`, so it still derives the route from
-`result.accept` exactly as before).
+Run: `uv run pytest tests/classification/test_coordinator.py -v` → 5 passed, including
+both new tests and the pre-existing `test_low_confidence_routes_through_judge_to_accept`
+(still passes — that path has `classifier_disagreement` absent/`False`, so it still
+derives the route from `result.accept` exactly as before).
 
-- [ ] **Step 5: Run the full classification test suite**
+- [x] **Step 5: Run the full classification test suite**
 
-Run: `uv run pytest tests/classification/ tests/shared/ -v`
-Expected: all PASS.
+Run: `uv run pytest tests/classification/ tests/shared/ -v` → 172 passed. Full suite
+`uv run pytest tests/ -v` → 324 passed. `uv run poe lint` initially flagged two new
+issues fixed inline: `C901` complexity (see Step 3's `_judge_review_route` extraction)
+and `RUF069`/`PLR2004` (magic-number float comparison in the new coordinator test —
+fixed by naming `_DISAGREEING_SECOND_OPINION_CONFIDENCE = 0.996` once at module level
+in `test_coordinator.py` and reusing it in both the fixture and the assertion).
+`uv run poe lint`/`uv run poe typecheck` both clean after those fixes.
 
 - [ ] **Step 6: Commit**
 

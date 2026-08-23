@@ -29,6 +29,17 @@ def _dump(update: ClassificationUpdate) -> dict[str, ClassificationUpdateValue]:
     return {k: v for k, v in update if v is not None}
 
 
+def _judge_review_route(*, judge_accepted: bool, disagreement: bool) -> ReviewRoute:
+    # Disagreement is judged strictly higher-risk than low-confidence-alone: the
+    # judge's verdict is captured as advisory data (Task 6 persists
+    # final_label/reasoning), but a disagreement case NEVER auto-accepts, no matter
+    # what the judge concludes. Only the low-confidence-no-disagreement path still
+    # derives the route from JudgeOutput.accept, unchanged from today.
+    if disagreement:
+        return ReviewRoute.HUMAN_REVIEW
+    return ReviewRoute.ACCEPT if judge_accepted else ReviewRoute.HUMAN_REVIEW
+
+
 def build_classification_coordinator(
     primary_classifier: PrimaryClassifierNode,
     second_opinion: SecondOpinionNode,
@@ -107,12 +118,18 @@ def build_classification_coordinator(
             primary_label=state["label"],
             primary_confidence=state["confidence"],
             second_opinion_label=state.get("second_opinion_label"),
+            second_opinion_confidence=state.get("second_opinion_confidence"),
+            ood_metrics=state.get("ood_metrics"),
+            svm_agrees_with_prediction=state.get("svm_agrees_with_prediction", True),
             smells=state.get("smells", []),
             risk_score=state.get("risk_score", 0),
             foreign_municipality=state.get("foreign_municipality"),
         )
         result = await llm_judge.run(ctx, judge_input)
-        review_route = ReviewRoute.ACCEPT if result.accept else ReviewRoute.HUMAN_REVIEW
+        review_route = _judge_review_route(
+            judge_accepted=result.accept,
+            disagreement=state.get("classifier_disagreement", False),
+        )
         return _dump(ClassificationUpdate(review_route=review_route, judged_by_llm=True))
 
     async def _routing(state: ClassificationState) -> dict[str, ClassificationUpdateValue]:
