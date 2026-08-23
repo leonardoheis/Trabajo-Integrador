@@ -87,7 +87,7 @@ def _test_entity_chain() -> Runnable[EntityExtractionInput, EntityExtractionOutp
 
 
 _TEST_PRIMARY_RESPONSE = '{"label": "ordenanzas", "confidence": 0.95, "reasoning": "test"}'
-_TEST_JUDGE_RESPONSE = '{"accept": true, "reasoning": "test"}'
+_TEST_JUDGE_RESPONSE = '{"accept": true, "final_label": "ordenanzas", "reasoning": "test"}'
 # ponytail: second_opinion disabled in tests -- avoids loading the real ~425MB BETO
 # model (weights + OOD/SVM artifacts) on every test run. SecondOpinionNode already
 # treats this as a normal, fully-supported config state (returns None).

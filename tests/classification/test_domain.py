@@ -18,7 +18,7 @@ class TestResultDefaults:
         assert result.all_scores == {}
 
     def test_judge_output_defaults(self) -> None:
-        result = JudgeOutput(accept=True)
+        result = JudgeOutput(accept=True, final_label="ordenanzas")
         assert not result.reasoning
 
     def test_routing_result_requires_stored_path(self) -> None:

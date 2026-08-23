@@ -12,6 +12,7 @@ class PrimaryClassificationOutput(BaseEntity):
 
 class JudgeOutput(BaseEntity):
     accept: bool
+    final_label: str
     reasoning: str = ""
 
 

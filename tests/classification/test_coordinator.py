@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 _HIGH_CONFIDENCE_RESPONSE = '{"label": "ordenanzas", "confidence": 0.95, "reasoning": "..."}'
 _LOW_CONFIDENCE_RESPONSE = '{"label": "ordenanzas", "confidence": 0.3, "reasoning": "..."}'
-_JUDGE_ACCEPT_RESPONSE = '{"accept": true, "reasoning": "confirmed"}'
+_JUDGE_ACCEPT_RESPONSE = '{"accept": true, "final_label": "ordenanzas", "reasoning": "confirmed"}'
 
 
 class _NoSecondOpinionClassifier:

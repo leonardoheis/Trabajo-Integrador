@@ -79,8 +79,9 @@ _CATEGORY_ANCHORS_BLOCK = "\n".join(f"- {k}: {v}" for k, v in _CATEGORY_ANCHORS.
 _TEMPLATE = """\
 Task: you are the final quality gate for the Municipalidad de Rosario's automated \
 document classification pipeline. A primary classifier assigned a label but was not \
-confident enough to auto-accept. Decide ACCEPT (the label is correct, safe to \
-finalize) or HUMAN_REVIEW (send to a person).
+confident enough to auto-accept, or a second opinion disagreed with it. Decide ACCEPT \
+(the label is correct, safe to finalize) or HUMAN_REVIEW (send to a person), and state \
+which label the evidence actually supports as final_label.
 
 Category anchors -- what the text for each label should actually contain:
 {category_anchors}
@@ -101,12 +102,22 @@ Otherwise, a high risk_score or a non-empty smells list is a reason for caution 
 mention it in your reasoning -- but not by itself a reason to override a label the \
 text clearly supports.
 
+When the primary and second-opinion labels disagree, decide which one the document \
+text actually supports using the category anchors above, and return that exact label \
+string as final_label -- never a different category, even if you believe neither \
+candidate is fully correct. If the text is genuinely ambiguous between the two, still \
+pick the more likely candidate and reflect the uncertainty in reasoning, not by \
+refusing to choose. If second_opinion_label is "none" or matches the primary label, \
+final_label is simply {primary_label}.
+
 Document text: {cleaned_text}
 
 Answer with a single JSON object and nothing else.
 
 JSON:
 {{"accept": "true or false -- true means the primary label is correct and safe to accept", \
+"final_label": "the label the evidence actually supports -- must be exactly {primary_label} \
+or {second_opinion_label}, never a third category", \
 "reasoning": "one short sentence citing the specific evidence -- textual or signal-based -- \
 behind your decision"}}"""
 

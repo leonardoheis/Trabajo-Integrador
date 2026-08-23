@@ -10,7 +10,10 @@ from classiflow.pipeline.context import JobContext
 from classiflow.services.audit.service import AuditService
 
 _JOB_ID = "test-job-llm-judge-001"
-_VALID_RESPONSE = '{"accept": false, "reasoning": "second opinion strongly disagrees"}'
+_VALID_RESPONSE = (
+    '{"accept": false, "final_label": "resoluciones_concejo_municipal", '
+    '"reasoning": "second opinion strongly disagrees"}'
+)
 _JUDGE_INPUT = JudgeInput(
     cleaned_text="Artículo 1º — texto completo sin truncar ...",
     primary_label="ordenanzas",

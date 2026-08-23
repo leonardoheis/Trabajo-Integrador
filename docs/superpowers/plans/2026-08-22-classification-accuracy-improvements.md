@@ -215,12 +215,10 @@ with:
 Run: `uv run pytest tests/classification/test_confidence_gate_node.py -v`
 Expected: all PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-```bash
-git add src/classiflow/classification/nodes/confidence_gate.py tests/classification/test_confidence_gate_node.py
-git commit -m "feat: route classifier disagreement to the LLM judge instead of straight to human review"
-```
+Committed as `626610e` — "feat: update classification routing logic to prioritize
+LLM_JUDGE for classifier disagreement".
 
 ---
 
@@ -236,7 +234,7 @@ git commit -m "feat: route classifier disagreement to the LLM judge instead of s
 - Produces: `JudgeOutput.final_label: str` — every existing and future caller of
   `build_judge_chain(...).invoke(...)` now gets this field back.
 
-- [ ] **Step 1: Write the failing test for `final_label` echoing `primary_label` when no disagreement**
+- [x] **Step 1: Write the failing test for `final_label` echoing `primary_label` when no disagreement**
 
 Add to `tests/classification/test_llm_judge_chain.py`:
 ```python
@@ -253,7 +251,7 @@ class TestBuildJudgeChainFinalLabel:
         assert output.final_label == "ordenanzas"
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/classification/test_llm_judge_chain.py -v`
 Expected: FAIL — `JudgeOutput` has no `final_label` field, `model_validate` raises
@@ -263,7 +261,7 @@ model has no such field so the JSON key is simply ignored today; the test fails
 because `output.final_label` raises `AttributeError` — confirms the field doesn't
 exist yet).
 
-- [ ] **Step 3: Add `final_label` to `JudgeOutput`**
+- [x] **Step 3: Add `final_label` to `JudgeOutput`**
 
 In `src/classiflow/classification/domain/results.py`, replace:
 ```python
@@ -279,7 +277,7 @@ class JudgeOutput(BaseEntity):
     reasoning: str = ""
 ```
 
-- [ ] **Step 4: Update the two existing `_VALID_RESPONSE` fixtures that now fail validation**
+- [x] **Step 4: Update the two existing `_VALID_RESPONSE` fixtures that now fail validation**
 
 `final_label` is a new required field with no default — every existing test JSON
 fixture that omits it will now fail `model_validate`. Update:
@@ -312,13 +310,21 @@ the same `_JUDGE_ACCEPT_RESPONSE`-shaped literal — grep
 update each the same way, adding a `"final_label": "<any label present in that test's
 own primary_label fixture>"` key).
 
-- [ ] **Step 5: Run the full test suite to confirm no other JSON fixture was missed**
+- [x] **Step 5: Run the full test suite to confirm no other JSON fixture was missed**
 
 Run: `uv run pytest tests/classification/ tests/shared/ -v`
 Expected: any remaining `ValidationError: final_label Field required` failures point
 to a fixture still missing the key — fix each the same way, then re-run until clean.
 
-- [ ] **Step 6: Add the disagreement-arbitration instruction block to the judge prompt**
+Two additional spots the plan's grep didn't name explicitly, caught by this step's
+"any remaining failures" instruction: `tests/classification/test_domain.py`'s
+`test_judge_output_defaults` (constructed `JudgeOutput(accept=True)` directly, no
+JSON fixture involved) and `src/classiflow/injections/test.py`'s
+`_TEST_JUDGE_RESPONSE` (a `MockLlm`-backed chain used by `TestContainer`, not
+exercised by a JSON-parsing test directly but fixed proactively for consistency).
+Both updated the same way — added `final_label`.
+
+- [x] **Step 6: Add the disagreement-arbitration instruction block to the judge prompt**
 
 In `src/classiflow/classification/prompts/llm_judge.py`, update `_TEMPLATE` (adding
 the new instruction paragraph and the `final_label` field to the JSON contract):
@@ -369,15 +375,16 @@ or {second_opinion_label}, never a third category", \
 behind your decision"}}"""
 ```
 
-- [ ] **Step 7: Run tests again to confirm everything passes**
+- [x] **Step 7: Run tests again to confirm everything passes**
 
-Run: `uv run pytest tests/classification/ tests/shared/ -v`
-Expected: all PASS.
+Run: `uv run pytest tests/classification/ tests/shared/ -v` → 168 passed. Full suite
+`uv run pytest tests/ -v` → 320 passed. `uv run poe lint`/`uv run poe typecheck` both
+clean.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/classiflow/classification/domain/results.py src/classiflow/classification/prompts/llm_judge.py tests/classification/test_llm_judge_chain.py tests/classification/test_llm_judge_node.py tests/classification/test_coordinator.py tests/shared/test_pipeline_service_enrichment.py tests/shared/test_pipeline_service_classification.py
+git add src/classiflow/classification/domain/results.py src/classiflow/classification/prompts/llm_judge.py tests/classification/test_llm_judge_chain.py tests/classification/test_llm_judge_node.py tests/classification/test_coordinator.py tests/classification/test_domain.py tests/shared/test_pipeline_service_enrichment.py tests/shared/test_pipeline_service_classification.py src/classiflow/injections/test.py
 git commit -m "feat: LLM judge output includes final_label, arbitrating primary vs second-opinion disagreement"
 ```
 

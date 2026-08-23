@@ -64,7 +64,7 @@ _VALID_ENTITY_RESPONSE = (
 _HIGH_CONFIDENCE_PRIMARY_RESPONSE = (
     '{"label": "ordenanzas", "confidence": 0.95, "reasoning": "clear match"}'
 )
-_JUDGE_ACCEPT_RESPONSE = '{"accept": true, "reasoning": "ok"}'
+_JUDGE_ACCEPT_RESPONSE = '{"accept": true, "final_label": "ordenanzas", "reasoning": "ok"}'
 
 
 def _stub_embed(_text: str) -> npt.NDArray[np.float32]:
