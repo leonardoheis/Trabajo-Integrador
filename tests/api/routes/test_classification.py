@@ -10,7 +10,16 @@ from classiflow.injections.test import TestContainer
 pytestmark = pytest.mark.usefixtures("_jwt_secret")
 
 
-async def _seed_human_review_job(test_container: TestContainer, job_id: str, filename: str) -> None:
+async def _seed_human_review_job(
+    test_container: TestContainer,
+    job_id: str,
+    filename: str,
+    *,
+    second_opinion_label: str | None = None,
+    judged_by_llm: bool = False,
+    judge_final_label: str | None = None,
+    judge_reasoning: str | None = None,
+) -> None:
     await test_container.job_repo().create(Job(job_id=job_id, filename=filename, status="accepted"))
     await test_container.classification_record_repo().save(
         ClassificationRecord(
@@ -19,7 +28,7 @@ async def _seed_human_review_job(test_container: TestContainer, job_id: str, fil
             label="ordenanzas",
             confidence=0.4,
             all_scores={"ordenanzas": 0.4},
-            second_opinion_label=None,
+            second_opinion_label=second_opinion_label,
             second_opinion_confidence=0.0,
             classifier_disagreement=False,
             ood_metrics=None,
@@ -30,7 +39,9 @@ async def _seed_human_review_job(test_container: TestContainer, job_id: str, fil
             risk_score=1,
             smell_review_suggested=False,
             foreign_municipality=None,
-            judged_by_llm=False,
+            judged_by_llm=judged_by_llm,
+            judge_final_label=judge_final_label,
+            judge_reasoning=judge_reasoning,
             stored_path=None,
             human_overridden=False,
         )
@@ -54,6 +65,27 @@ class TestReviewQueueEndpoint:
         assert response.status_code == HTTPStatus.OK
         job_ids = [item["jobId"] for item in response.json()]
         assert "review-job-001" in job_ids
+
+    async def test_lists_judge_verdict_fields(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        await _seed_human_review_job(
+            test_container,
+            "review-job-002",
+            "doc.pdf",
+            second_opinion_label="resoluciones_concejo_municipal",
+            judged_by_llm=True,
+            judge_final_label="resoluciones_concejo_municipal",
+            judge_reasoning="second opinion's evidence is stronger here",
+        )
+
+        response = client.get("/classification/review-queue", headers=auth_headers)
+        assert response.status_code == HTTPStatus.OK
+        item = next(i for i in response.json() if i["jobId"] == "review-job-002")
+        assert item["secondOpinionLabel"] == "resoluciones_concejo_municipal"
+        assert item["judgedByLlm"] is True
+        assert item["judgeFinalLabel"] == "resoluciones_concejo_municipal"
+        assert item["judgeReasoning"] == "second opinion's evidence is stronger here"
 
 
 class TestClassificationDecisionEndpoint:

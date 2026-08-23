@@ -149,6 +149,9 @@ class ClassificationRecord(Base):
     foreign_municipality: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Whether the LLM Judge tier ran and produced the final review_route (spec Decision 6).
     judged_by_llm: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Populated only when judged_by_llm=True (spec Decision 2's judge-as-advisory-opinion).
+    judge_final_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    judge_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Set by RoutingNode once the file has been moved to its final location (Decision 8).
     stored_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Set by the human-decision endpoint (Decision 9).

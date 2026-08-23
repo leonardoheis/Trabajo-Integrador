@@ -91,6 +91,8 @@ class RoutingNode(BaseNode):
         record.smell_review_suggested = routing_input.smell_review_suggested
         record.foreign_municipality = routing_input.foreign_municipality
         record.judged_by_llm = routing_input.judged_by_llm
+        record.judge_final_label = routing_input.judge_final_label
+        record.judge_reasoning = routing_input.judge_reasoning
         record.stored_path = stored_path
         record.human_overridden = routing_input.human_overridden
         await self.classification_repo.save(record)

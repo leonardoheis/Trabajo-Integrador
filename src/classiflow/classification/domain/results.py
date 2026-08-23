@@ -35,6 +35,8 @@ class RoutingInput(BaseEntity):
     smell_review_suggested: bool = False
     foreign_municipality: str | None = None
     judged_by_llm: bool = False
+    judge_final_label: str | None = None
+    judge_reasoning: str | None = None
     human_overridden: bool = False
 
 

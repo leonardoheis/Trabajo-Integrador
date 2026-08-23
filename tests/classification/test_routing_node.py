@@ -97,3 +97,26 @@ class TestRoutingNodeRun:
         assert record is not None
         assert record.review_route == "accept"
         assert record.human_overridden is True
+
+    async def test_persists_judge_verdict_fields(self) -> None:
+        repo = InMemoryClassificationRecordRepository()
+        node = RoutingNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            storage=_FakeStorage(),
+            classification_repo=repo,
+        )
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        await node.run(
+            ctx,
+            _routing_input(
+                review_route="human_review",
+                judged_by_llm=True,
+                judge_final_label="resoluciones_concejo_municipal",
+                judge_reasoning="second opinion's evidence is stronger here",
+            ),
+        )
+        record = await repo.find_by_job_id(_JOB_ID)
+        assert record is not None
+        assert record.judge_final_label == "resoluciones_concejo_municipal"
+        assert record.judge_reasoning == "second opinion's evidence is stronger here"

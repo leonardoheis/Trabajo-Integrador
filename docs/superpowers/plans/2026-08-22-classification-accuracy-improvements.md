@@ -878,12 +878,10 @@ fixed by naming `_DISAGREEING_SECOND_OPINION_CONFIDENCE = 0.996` once at module 
 in `test_coordinator.py` and reusing it in both the fixture and the assertion).
 `uv run poe lint`/`uv run poe typecheck` both clean after those fixes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
-```bash
-git add src/classiflow/classification/coordinator.py tests/classification/test_coordinator.py
-git commit -m "feat: coordinator passes OOD/SVM signals to the judge; disagreement always stays human_review"
-```
+Committed as `3033e60` — "feat: coordinator passes OOD/SVM signals to the judge;
+disagreement always stays human_review" — and pushed to `origin/feat/classification-routing`.
 
 ---
 
@@ -909,7 +907,7 @@ git commit -m "feat: coordinator passes OOD/SVM signals to the judge; disagreeme
   `ReviewQueueItem.judge_final_label`/`judge_reasoning`/`second_opinion_label` (the
   human reviewer's three-opinion view named in the spec).
 
-- [ ] **Step 1: Write the failing test for `RoutingNode` persisting the new fields**
+- [x] **Step 1: Write the failing test for `RoutingNode` persisting the new fields**
 
 Add to `tests/classification/test_routing_node.py`:
 ```python
@@ -937,15 +935,12 @@ Add to `tests/classification/test_routing_node.py`:
         assert record.judge_reasoning == "second opinion's evidence is stronger here"
 ```
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
-Run: `uv run pytest tests/classification/test_routing_node.py -v`
-Expected: FAIL — `RoutingInput` has no `judge_final_label`/`judge_reasoning` fields
-(`model_validate` with unknown-but-ignored extra kwargs means construction succeeds,
-but `record.judge_final_label` raises `AttributeError` since `ClassificationRecord`
-has no such column yet either).
+Confirmed: `AttributeError: 'ClassificationRecord' object has no attribute
+'judge_final_label'` — exactly as predicted.
 
-- [ ] **Step 3: Add the migration**
+- [x] **Step 3: Add the migration**
 
 Create `alembic/versions/0006_add_judge_verdict_fields.py`:
 ```python
@@ -979,7 +974,7 @@ def downgrade() -> None:
     op.drop_column("classification_records", "judge_final_label")
 ```
 
-- [ ] **Step 4: Add the columns to `ClassificationRecord`**
+- [x] **Step 4: Add the columns to `ClassificationRecord`**
 
 In `src/classiflow/database/models.py`, add after the `judged_by_llm` line:
 ```python
@@ -990,7 +985,7 @@ In `src/classiflow/database/models.py`, add after the `judged_by_llm` line:
     judge_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
 ```
 
-- [ ] **Step 5: Add the fields to `RoutingInput`**
+- [x] **Step 5: Add the fields to `RoutingInput`**
 
 In `src/classiflow/classification/domain/results.py`, add to `RoutingInput`:
 ```python
@@ -1002,7 +997,7 @@ In `src/classiflow/classification/domain/results.py`, add to `RoutingInput`:
 (inserting the two new fields right after the existing `judged_by_llm: bool = False`
 line, before `human_overridden`).
 
-- [ ] **Step 6: Update `RoutingNode._save_record` to persist the new fields**
+- [x] **Step 6: Update `RoutingNode._save_record` to persist the new fields**
 
 In `src/classiflow/classification/nodes/routing.py`, add after
 `record.judged_by_llm = routing_input.judged_by_llm`:
@@ -1012,7 +1007,7 @@ In `src/classiflow/classification/nodes/routing.py`, add after
         record.judge_reasoning = routing_input.judge_reasoning
 ```
 
-- [ ] **Step 7: Wire the coordinator's `_routing` closure to pass the new fields through**
+- [x] **Step 7: Wire the coordinator's `_routing` closure to pass the new fields through**
 
 `_llm_judge`'s closure result already returns `judged_by_llm=True` via
 `ClassificationUpdate` — it needs to also carry `judge_final_label`/`judge_reasoning`
@@ -1078,7 +1073,7 @@ In `_routing`'s `RoutingInput(...)` construction, add `judge_final_label` and
 (only the last two lines, `judge_final_label=...` and `judge_reasoning=...`, are new
 — every other line already exists in `_routing` unchanged.)
 
-- [ ] **Step 8: Add `judge_final_label`/`judge_reasoning`/`second_opinion_label` to the review-queue API schema**
+- [x] **Step 8: Add `judge_final_label`/`judge_reasoning`/`second_opinion_label` to the review-queue API schema**
 
 In `src/classiflow/api/routes/classification/schemas.py`, replace:
 ```python
@@ -1143,34 +1138,36 @@ class ReviewQueueItem(BaseSchema):
         )
 ```
 
-- [ ] **Step 9: Run tests to verify Step 1's test now passes**
+- [x] **Step 9: Run tests to verify Step 1's test now passes**
 
 Run: `uv run pytest tests/classification/test_routing_node.py tests/classification/test_coordinator.py -v`
-Expected: all PASS.
+→ 10 passed.
 
-- [ ] **Step 10: Check for an existing `ReviewQueueItem`/`from_model` test and extend or add one**
+- [x] **Step 10: Check for an existing `ReviewQueueItem`/`from_model` test and extend or add one**
 
-Search: `uv run pytest tests/api/routes/test_classification.py -v --collect-only` to
-see if a `from_model`/review-queue serialization test already exists. If one exists,
-extend its assertions to cover the three new fields. If none exists, add a minimal
-one in `tests/api/routes/test_classification.py` following that file's existing
-`ClassificationRecord` construction pattern, asserting `ReviewQueueItem.from_model(record)`
-round-trips `judge_final_label`/`judge_reasoning`/`second_opinion_label` correctly.
+A real test existed: `TestReviewQueueEndpoint::test_lists_records_needing_human_review`
+(`tests/api/routes/test_classification.py`), exercising the endpoint end-to-end via
+`_seed_human_review_job`. Extended `_seed_human_review_job` with new optional keyword
+params (`second_opinion_label`, `judged_by_llm`, `judge_final_label`,
+`judge_reasoning`, all defaulting to the prior hardcoded values so the existing test
+is unaffected) and added a new test,
+`test_lists_judge_verdict_fields`, asserting the three new fields round-trip through
+the real HTTP response's camelCase JSON keys (`secondOpinionLabel`, `judgedByLlm`,
+`judgeFinalLabel`, `judgeReasoning`).
 
-- [ ] **Step 11: Run the full test suite and `uv run poe check`**
+- [x] **Step 11: Run the full test suite and `uv run poe check`**
 
-Hand these two commands to the user (per this project's execution-workflow rule) or
-run them yourself if you have direct execution permission for non-notebook commands:
-```
-uv run pytest tests/ -v
-uv run poe check
-```
-Expected: all PASS.
+Ran directly (had execution permission in this session): `uv run pytest tests/ -v` →
+326 passed. `uv run poe check` → all steps pass, including the full
+`--all-groups pre-commit run --all-files` (trailing-whitespace, end-of-file-fixer,
+check-yaml, debug-statements, uv-lock, gitleaks, ruff-format, ruff-check, mypy,
+codespell) — confirms the new alembic migration file itself doesn't break `uv-lock`
+or any hook.
 
 - [ ] **Step 12: Commit**
 
 ```bash
-git add src/classiflow/database/models.py src/classiflow/classification/domain/results.py src/classiflow/classification/domain/state.py src/classiflow/classification/nodes/routing.py src/classiflow/classification/coordinator.py src/classiflow/api/routes/classification/schemas.py alembic/versions/0006_add_judge_verdict_fields.py tests/classification/test_routing_node.py tests/classification/test_coordinator.py
+git add src/classiflow/database/models.py src/classiflow/classification/domain/results.py src/classiflow/classification/domain/state.py src/classiflow/classification/nodes/routing.py src/classiflow/classification/coordinator.py src/classiflow/api/routes/classification/schemas.py alembic/versions/0006_add_judge_verdict_fields.py tests/classification/test_routing_node.py tests/classification/test_coordinator.py tests/api/routes/test_classification.py
 git commit -m "feat: persist and expose the LLM judge's final_label/reasoning verdict on the review queue"
 ```
 

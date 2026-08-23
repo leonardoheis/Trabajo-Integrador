@@ -130,7 +130,14 @@ def build_classification_coordinator(
             judge_accepted=result.accept,
             disagreement=state.get("classifier_disagreement", False),
         )
-        return _dump(ClassificationUpdate(review_route=review_route, judged_by_llm=True))
+        return _dump(
+            ClassificationUpdate(
+                review_route=review_route,
+                judged_by_llm=True,
+                judge_final_label=result.final_label,
+                judge_reasoning=result.reasoning,
+            )
+        )
 
     async def _routing(state: ClassificationState) -> dict[str, ClassificationUpdateValue]:
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
@@ -153,6 +160,8 @@ def build_classification_coordinator(
             smell_review_suggested=state.get("smell_review_suggested", False),
             foreign_municipality=state.get("foreign_municipality"),
             judged_by_llm=state.get("judged_by_llm", False),
+            judge_final_label=state.get("judge_final_label"),
+            judge_reasoning=state.get("judge_reasoning"),
         )
         result = await routing.run(ctx, routing_input)
         return _dump(ClassificationUpdate(stored_path=result.stored_path))

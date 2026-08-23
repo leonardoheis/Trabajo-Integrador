@@ -40,6 +40,8 @@ class ClassificationState(_ClassificationStateRequired, total=False):
     smell_review_suggested: bool
     review_route: str
     judged_by_llm: bool
+    judge_final_label: str
+    judge_reasoning: str
     stored_path: str
 
 
@@ -73,4 +75,6 @@ class ClassificationUpdate(BaseEntity):
     smell_review_suggested: bool | None = None
     review_route: str | None = None
     judged_by_llm: bool | None = None
+    judge_final_label: str | None = None
+    judge_reasoning: str | None = None
     stored_path: str | None = None
