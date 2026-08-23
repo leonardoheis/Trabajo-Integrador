@@ -7,6 +7,8 @@ description: Use when reviewing or refactoring code and something feels off but 
 
 References: https://refactoring.guru/refactoring/smells · https://luzkan.github.io/smells/ (extended catalog)
 
+Paired skill: [[refactoring-techniques]] — this skill names *what's wrong*; that one names the specific mechanical technique that fixes it, once you're ready to apply the fix rather than just diagnose it.
+
 ## Overview
 
 A code smell is a surface indicator of a deeper design problem — not a bug, the code still runs, but it's harder to understand, test, or change than it should be. Naming the smell turns a vague "this feels off" into a concrete, actionable finding with a known refactoring target.
@@ -93,6 +95,7 @@ Smells beyond the classic refactoring.guru list — same five categories plus fo
 | **Callback Hell** | Nested callbacks several levels deep | Flatten with async/await, promises, or early returns |
 | **Flag Argument** | A boolean parameter selects between two different behaviors inside the function | Split into two functions, or replace with a named enum (see this session's `ConfidenceTier`/`OodEvidence` pattern) |
 | **Special Case** | A pile of `if value == SPECIAL` checks before the real logic runs | Null Object / Special Case pattern — give the special case the same interface as the normal one |
+| **Dubious Abstraction** | A method/class mixes multiple levels of abstraction — a high-level class directly does low-level work (e.g. `Instrument` manipulating raw connection bytes) instead of delegating | Extract the low-level responsibility into its own class/adapter so each component stays at one consistent conceptual level |
 
 ### More Couplers / Data Dealers
 
@@ -104,6 +107,7 @@ Smells beyond the classic refactoring.guru list — same five categories plus fo
 | **Insider Trading** | Alias for **Inappropriate Intimacy** above — classes reaching into each other's internals | Tighten the interface between them |
 | **Indecent Exposure** | A class exposes internal details (fields, helper methods) it shouldn't | Reduce to a minimal public interface |
 | **Afraid To Fail** | Excessive try/except or defensive checks around things that can't actually go wrong | Trust the boundary; validate only at real trust boundaries |
+| **Fate over Action** | An external manager/service manipulates another object's internal state directly instead of that object managing its own data | "Tell, Don't Ask" — move the behavior into the class that owns the state |
 
 ### Functional Abusers (relevant even outside FP-first languages)
 
@@ -123,6 +127,8 @@ Smells beyond the classic refactoring.guru list — same five categories plus fo
 | **Fallacious Method/Comment** | The name or comment says one thing, the code does another | Fix the mismatch — whichever is wrong, name or code |
 | **Inconsistent Names / Style** | The same concept is called different things in different files | Pick one term, use it everywhere |
 | **Complicated Regex/Boolean Expression** | A one-liner regex or boolean condition nobody can parse at a glance | Break into named intermediate variables, or a small helper function |
+| **Binary Operator in Name** | A method name contains "and"/"or" (`render_and_save()`) — usually two responsibilities bundled as one | Extract Method — split into two single-responsibility functions (`render()`, `save()`) |
+| **Type Embedded in Name** | A name repeats its own type (`player_name: str`, `add_course()` on a class only about courses) | Drop the redundant word, or extract the type into its own class if it's carrying real behavior |
 
 ### Obfuscators
 
@@ -139,6 +145,7 @@ Smells beyond the classic refactoring.guru list — same five categories plus fo
 |---|---|---|
 | **Conditional Complexity** | Alias for **Switch Statements** above — long if/elif or switch chains | Polymorphism, or a lookup table for pure data-driven cases |
 | **Base Class depends on Subclass** | A parent class reaches down to call something only a specific child defines | Invert the dependency — parent shouldn't know about children at all |
+| **Inappropriate Static** | A `@staticmethod`/module-level function is used for behavior that could vary by implementation (e.g. a payment calculation) rather than genuinely stateless, never-changing logic (`math.max`) | Convert to an instance method on a class where the behavior can vary polymorphically and be dependency-injected/mocked in tests |
 
 ## Common Mistakes
 
@@ -148,3 +155,5 @@ Smells beyond the classic refactoring.guru list — same five categories plus fo
 | Treating Duplicate Code and coincidental similarity as the same thing | Two call sites that happen to look alike today may diverge tomorrow — confirm it's the same *rule*, not just the same *text*, before extracting |
 | "Refactoring" Speculative Generality by adding docs instead of deleting | The fix is deletion; documenting an unused abstraction doesn't un-smell it |
 | Applying a smell's textbook fix without checking blast radius | Grep callers first — Extract Method/Class changes call sites; verify nothing else relies on the current shape |
+| Flagging "multiple return statements" as a smell on its own | Not in this catalog. Early returns/guard clauses for genuinely distinct outcomes (success vs. exhausted-retries failure, valid vs. rejected input) are the *fix direction* for nested conditionals, not a smell to remove — collapsing them into one return usually adds a sentinel variable and an `if` just to avoid a keyword. Only flag it if the returns hide duplicated logic or an inconsistent contract, not merely because there's more than one. |
+| Chasing "efficiency"/"compression" on an I/O-bound function | A retry loop around an awaited network/LLM call is bound by that call's latency, not by Python-level code shape — rewriting it for fewer lines changes nothing measurable. Say so plainly instead of manufacturing a cosmetic diff to look responsive. |

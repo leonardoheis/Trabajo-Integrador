@@ -9,14 +9,31 @@ from langgraph.graph.state import CompiledStateGraph
 from lingua import LanguageDetector
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from classiflow.classification.coordinator import build_classification_coordinator
+from classiflow.classification.domain.results import PrimaryClassificationOutput
+from classiflow.classification.nodes import (
+    ConfidenceGateNode,
+    ForeignMunicipalityNode,
+    LlmJudgeNode,
+    PrimaryClassifierNode,
+    RoutingNode,
+    SecondOpinionNode,
+    SmellsRiskNode,
+)
+from classiflow.classification.prompts.llm_judge import JudgeInput
+from classiflow.classification.prompts.primary_classification import PrimaryClassificationInput
 from classiflow.database.base import get_session
 from classiflow.database.repositories.audit import SqlAuditRepository
+from classiflow.database.repositories.classification_record import (
+    SqlClassificationRecordRepository,
+)
 from classiflow.database.repositories.document import SqlDocumentRepository
 from classiflow.database.repositories.document_steps import SqlDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import SqlEnrichedRecordRepository
 from classiflow.database.repositories.hash import IHashRepository, SqlHashRepository
 from classiflow.database.repositories.human_decision import SqlHumanDecisionRepository
 from classiflow.database.repositories.job import SqlJobRepository
+from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
 from classiflow.domain.repositories.document import IDocumentRepository
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
@@ -58,12 +75,17 @@ from classiflow.knowledge.retrieval.retriever import RetrieverService
 from classiflow.knowledge.vectordb.vector_store import VectorStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
+from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
+from classiflow.storage.document_storage import IDocumentStorage
 
 if TYPE_CHECKING:
-    from classiflow.enrichment.nodes.entity_extractor import _EntityChain
-    from classiflow.ingesta.nodes.node2_format_validation import _FormatChain
-    from classiflow.ingesta.nodes.node3_content_validation import _ContentChain
+    from classiflow.classification.domain.results import JudgeOutput
+    from classiflow.classification.nodes.llm_judge import _JudgeChain
+    from classiflow.classification.nodes.primary_classifier import _ClassificationChain
+    from classiflow.enrichment.nodes.entity_extractor import EntityChain
+    from classiflow.ingesta.nodes.node2_format_validation import FormatChain
+    from classiflow.ingesta.nodes.node3_content_validation import ContentChain
 
 _bearer = HTTPBearer()
 
@@ -94,6 +116,14 @@ def get_document_steps_repo(session: DbSession) -> IDocumentStepsRepository:
 
 def get_human_decision_repo(session: DbSession) -> IHumanDecisionRepository:
     return SqlHumanDecisionRepository(session)
+
+
+def get_job_service(
+    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
+    document_steps_repo: Annotated[IDocumentStepsRepository, Depends(get_document_steps_repo)],
+    human_decision_repo: Annotated[IHumanDecisionRepository, Depends(get_human_decision_repo)],
+) -> JobService:
+    return JobService(job_repo, document_steps_repo, human_decision_repo)
 
 
 def get_hash_repo(session: DbSession) -> IHashRepository:
@@ -161,7 +191,7 @@ def get_node2(
     return FormatValidationNode(
         audit=audit_service,
         broadcaster=broadcaster,
-        format_chain=cast("_FormatChain", format_chain),
+        format_chain=cast("FormatChain", format_chain),
     )
 
 
@@ -179,7 +209,7 @@ def get_node3(
         audit=audit_service,
         broadcaster=broadcaster,
         language_detector=language_detector,
-        content_chain=cast("_ContentChain", content_chain),
+        content_chain=cast("ContentChain", content_chain),
     )
 
 
@@ -222,7 +252,7 @@ def get_entity_extractor(
     return EntityExtractorNode(
         audit=audit_service,
         broadcaster=broadcaster,
-        entity_chain=cast("_EntityChain", entity_chain),
+        entity_chain=cast("EntityChain", entity_chain),
     )
 
 
@@ -240,6 +270,108 @@ def get_enrichment_coordinator(
     metadata_enricher: Annotated[MetadataEnricherNode, Depends(get_metadata_enricher)],
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
     return build_enrichment_coordinator(text_cleaner, entity_extractor, metadata_enricher)
+
+
+def get_classification_record_repo(session: DbSession) -> IClassificationRecordRepository:
+    return SqlClassificationRecordRepository(session)
+
+
+@inject
+def get_primary_classifier(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+    classification_chain: Annotated[
+        Runnable[PrimaryClassificationInput, PrimaryClassificationOutput],
+        Depends(Provide[Container.classification_chain]),
+    ],
+) -> PrimaryClassifierNode:
+    return PrimaryClassifierNode(
+        audit=audit_service,
+        broadcaster=broadcaster,
+        classification_chain=cast("_ClassificationChain", classification_chain),
+    )
+
+
+@inject
+def get_second_opinion(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+) -> SecondOpinionNode:
+    return SecondOpinionNode(audit=audit_service, broadcaster=broadcaster)
+
+
+@inject
+def get_foreign_municipality(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+) -> ForeignMunicipalityNode:
+    return ForeignMunicipalityNode(audit=audit_service, broadcaster=broadcaster)
+
+
+@inject
+def get_smells_risk(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+) -> SmellsRiskNode:
+    return SmellsRiskNode(audit=audit_service, broadcaster=broadcaster)
+
+
+@inject
+def get_confidence_gate(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+) -> ConfidenceGateNode:
+    return ConfidenceGateNode(audit=audit_service, broadcaster=broadcaster)
+
+
+@inject
+def get_llm_judge(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+    judge_chain: Annotated[
+        Runnable[JudgeInput, "JudgeOutput"], Depends(Provide[Container.judge_chain])
+    ],
+) -> LlmJudgeNode:
+    return LlmJudgeNode(
+        audit=audit_service, broadcaster=broadcaster, judge_chain=cast("_JudgeChain", judge_chain)
+    )
+
+
+@inject
+def get_routing(
+    audit_service: Annotated[AuditService, Depends(get_audit_service)],
+    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
+    document_storage: Annotated[IDocumentStorage, Depends(Provide[Container.document_storage])],
+    classification_record_repo: Annotated[
+        IClassificationRecordRepository, Depends(get_classification_record_repo)
+    ],
+) -> RoutingNode:
+    return RoutingNode(
+        audit=audit_service,
+        broadcaster=broadcaster,
+        storage=document_storage,
+        classification_repo=classification_record_repo,
+    )
+
+
+def get_classification_coordinator(
+    primary_classifier: Annotated[PrimaryClassifierNode, Depends(get_primary_classifier)],
+    second_opinion: Annotated[SecondOpinionNode, Depends(get_second_opinion)],
+    foreign_municipality: Annotated[ForeignMunicipalityNode, Depends(get_foreign_municipality)],
+    smells_risk: Annotated[SmellsRiskNode, Depends(get_smells_risk)],
+    confidence_gate: Annotated[ConfidenceGateNode, Depends(get_confidence_gate)],
+    llm_judge: Annotated[LlmJudgeNode, Depends(get_llm_judge)],
+    routing: Annotated[RoutingNode, Depends(get_routing)],
+) -> CompiledStateGraph:  # type: ignore[type-arg]
+    return build_classification_coordinator(
+        primary_classifier,
+        second_opinion,
+        foreign_municipality,
+        smells_risk,
+        confidence_gate,
+        llm_judge,
+        routing,
+    )
 
 
 @inject
@@ -296,6 +428,11 @@ def get_pipeline_service(
     enrichment_coordinator: Annotated[  # type: ignore[type-arg]
         CompiledStateGraph, Depends(get_enrichment_coordinator)
     ],
+    document_storage: Annotated[IDocumentStorage, Depends(Provide[Container.document_storage])],
+    classification_coordinator: Annotated[  # type: ignore[type-arg]
+        CompiledStateGraph, Depends(get_classification_coordinator)
+    ],
+    job_semaphore: Annotated[asyncio.Semaphore, Depends(Provide[Container.job_semaphore])],
 ) -> PipelineService:
     return PipelineService(
         job_repo=job_repo,
@@ -304,4 +441,7 @@ def get_pipeline_service(
         broadcaster=broadcaster,
         coordinator=coordinator,
         enrichment_coordinator=enrichment_coordinator,
+        document_storage=document_storage,
+        classification_coordinator=classification_coordinator,
+        job_semaphore=job_semaphore,
     )

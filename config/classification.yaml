@@ -1,0 +1,21 @@
+# Stage 4 (Classification & Routing) thresholds. Per the BERT spec
+# (docs/superpowers/specs/2026-08-17-bert-tunning-classification-integration-design.md)
+# -- this file is unchanged by the Stage 4 routing spec.
+
+confidence_threshold: 0.75
+smell_review_risk_threshold: 4
+max_input_tokens: 512
+second_opinion_enabled: true
+foreign_municipality_enabled: true
+
+bert_model_path: models/bert_tunning_beto_v2 # relative to project root
+
+# Fallback OOD thresholds, only used if a model's own ood_stats.npz isn't calibrated
+# (mirrors bert_tunning's own uncalibrated-fallback design). BETO v2 ships pre-calibrated,
+# so these are a safety net for future retrained models, not what BETO v2 itself uses.
+ood_mahalanobis_p_threshold: 0.001
+ood_cosine_threshold: 13.7366
+ood_knn_distance_threshold: 26.125
+ood_tfidf_cosine_threshold: 2.5
+ood_pca_components: 64
+ood_trained_municipality: rosario

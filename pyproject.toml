@@ -41,6 +41,9 @@ dependencies = [
     # Knowledge base / chat (stage 5)
     "chromadb>=0.5",
     "anthropic>=0.40",
+    "scipy>=1.14",
+    "scikit-learn>=1.5",
+    "transformers>=4.44",
 ]
 
 [dependency-groups]
@@ -93,7 +96,7 @@ packages = ["src/classiflow"]
 line-length = 100
 target-version = "py310"
 extend-include = ["*.ipynb"]
-exclude = [".claude", "tasks", "alembic"]
+exclude = [".claude", "tasks", "alembic", "models"]
 
 fix = true
 preview = true
@@ -118,10 +121,16 @@ ignore = [
 
 [tool.ruff.lint.pylint]
 # Mirrors [tool.pylint.design] max-args below -- FastAPI's Depends()-per-dependency
-# style means DI-composing functions (get_pipeline_service et al.) legitimately grow
-# one param per wired collaborator; 7 already matched pylint's own limit, ruff's
-# PLR0913/PLR0917 (default 5) just wasn't set to match it yet.
-max-args = 7
+# style, and PipelineService's own growing set of injected collaborators (job_repo,
+# document_steps_repo, enriched_record_repo, broadcaster, coordinator,
+# enrichment_coordinator, document_storage, classification_coordinator,
+# job_semaphore), mean DI-composing functions/classes legitimately grow one param per
+# wired collaborator.
+max-args = 9
+# Mirrors [tool.pylint.design] max-public-methods below -- _Settings (settings.py)
+# gets one read-only property per config field by design; each new Settings.* value
+# legitimately adds one property, not unrelated behavior accumulating on one class.
+max-public-methods = 24
 
 [tool.ruff.format]
 # Set Ruff to imitate Black
@@ -133,7 +142,10 @@ line-ending = "auto"
 [tool.ruff.lint.per-file-ignores]
 "src/classiflow/playground/*.ipynb" = ["T201", "F401"]  # playground: print() is intentional output
 "src/classiflow/playground/**/*.ipynb" = ["T201", "F401"]
-"tests/**/*.py" = ["PLR6301"]  # pytest class methods don't need to use self
+"tests/**/*.py" = [
+    "PLR6301", # pytest class methods don't need to use self
+    "PLR0914", # test fixtures wiring many nodes/repos legitimately need more locals
+]
 
 #########################
 # MyPy
@@ -160,7 +172,7 @@ warn_unused_configs = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers", "markitdown", "pymupdf", "easyocr", "chromadb", "chromadb.*"]
+module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers", "markitdown", "pymupdf", "easyocr", "chromadb", "chromadb.*", "scipy.*", "sklearn.*", "transformers"]
 ignore_missing_imports = true
 
 #########################
@@ -254,14 +266,17 @@ valid-metaclass-classmethod-first-arg = ["mcs"]
 bad-functions = ["map", "filter"]
 
 [tool.pylint.design]
-max-args = 7
+max-args = 9
 max-attributes = 7
 max-bool-expr = 5
 max-branches = 12
 max-complexity = 10
 max-locals = 15
 max-parents = 7
-max-public-methods = 20
+# _Settings gets one read-only property per config field (slm_max_tokens, slm_n_ctx,
+# ...) by design -- each new Settings.* field legitimately adds one, this isn't
+# accumulating unrelated behavior on one class.
+max-public-methods = 24
 max-returns = 6
 max-statements = 50
 

@@ -1,7 +1,7 @@
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
-from classiflow.services.pipeline.exceptions import JobNotFoundError, JobNotInReviewError
+from classiflow.services.job.exceptions import JobNotFoundError, JobNotInReviewError
 
 
 def handle_job_not_found_error(_request: Request, exc: Exception) -> JSONResponse:

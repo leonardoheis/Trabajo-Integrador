@@ -8,29 +8,23 @@ from fastapi.responses import StreamingResponse
 from classiflow.api.dependencies import (
     CurrentUser,
     get_current_user,
-    get_document_steps_repo,
-    get_human_decision_repo,
-    get_job_repo,
+    get_job_service,
     get_pipeline_service,
 )
 from classiflow.api.routes.pipeline.schemas import (
+    BulkIngestResponse,
     DecisionRequest,
     DocumentStepSchema,
     IngestResponse,
     ReviewQueueItem,
 )
-from classiflow.database.models import HumanDecision
-from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
-from classiflow.domain.repositories.human_decision import IHumanDecisionRepository
-from classiflow.domain.repositories.job import IJobRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.injections.production import Container
-from classiflow.services.pipeline.exceptions import JobNotFoundError, JobNotInReviewError
+from classiflow.services.job.exceptions import JobNotFoundError
+from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"], dependencies=[Depends(get_current_user)])
-
-_DECISION_TO_STATUS = {"accept": "accepted", "reject": "rejected", "escalate": "escalated"}
 
 
 @router.post("/ingest", status_code=202)
@@ -45,36 +39,46 @@ async def ingest(
     return IngestResponse(job_id=job_id)
 
 
+@router.post("/ingest-bulk", status_code=202)
+async def ingest_bulk(
+    files: list[UploadFile],
+    background_tasks: BackgroundTasks,
+    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+) -> BulkIngestResponse:
+    job_ids = []
+    for file in files:
+        filename = file.filename or "unknown"
+        file_bytes = await file.read()
+        job_ids.append(await pipeline.start(background_tasks, filename, file_bytes))
+    return BulkIngestResponse(job_ids=job_ids)
+
+
 @router.get("/review-queue")
 async def review_queue(
-    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
-    document_steps_repo: Annotated[IDocumentStepsRepository, Depends(get_document_steps_repo)],
+    job_service: Annotated[JobService, Depends(get_job_service)],
 ) -> list[ReviewQueueItem]:
-    jobs = [j for j in await job_repo.list_all() if j.status == "review"]
-    items = []
-    for job in jobs:
-        steps = await document_steps_repo.steps_for_job(job.job_id)
-        items.append(
-            ReviewQueueItem(
-                job_id=job.job_id,
-                filename=job.filename,
-                status=job.status,
-                rejection_reason=job.rejection_reason,
-                created_at=job.created_at,
-                document_steps=[DocumentStepSchema.from_model(s) for s in steps],
-            )
+    queue = await job_service.list_review_queue()
+    return [
+        ReviewQueueItem(
+            job_id=job.job_id,
+            filename=job.filename,
+            status=job.status,
+            rejection_reason=job.rejection_reason,
+            created_at=job.created_at,
+            document_steps=[DocumentStepSchema.from_model(s) for s in steps],
         )
-    return items
+        for job, steps in queue
+    ]
 
 
 @router.get("/{job_id}/events")
 @inject
 async def pipeline_events(
     job_id: str,
-    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
+    job_service: Annotated[JobService, Depends(get_job_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
 ) -> StreamingResponse:
-    if await job_repo.find_by_job_id(job_id) is None:
+    if await job_service.get_job(job_id) is None:
         raise JobNotFoundError(job_id)
 
     async def _stream() -> AsyncGenerator[str, None]:
@@ -92,21 +96,8 @@ async def submit_decision(
     job_id: str,
     body: DecisionRequest,
     current_user: CurrentUser,
-    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
-    human_decision_repo: Annotated[IHumanDecisionRepository, Depends(get_human_decision_repo)],
+    job_service: Annotated[JobService, Depends(get_job_service)],
 ) -> None:
-    job = await job_repo.find_by_job_id(job_id)
-    if job is None:
-        raise JobNotFoundError(job_id)
-    if job.status != "review":
-        raise JobNotInReviewError(job_id, job.status)
-
-    await human_decision_repo.save(
-        HumanDecision(
-            job_id=job_id,
-            decided_by=current_user.email,
-            decision=body.decision,
-            notes=body.notes,
-        )
+    await job_service.submit_decision(
+        job_id, decided_by=current_user.email, decision=body.decision, notes=body.notes
     )
-    await job_repo.update_status(job_id, _DECISION_TO_STATUS[body.decision])

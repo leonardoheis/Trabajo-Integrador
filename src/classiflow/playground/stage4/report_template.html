@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clasificaci&oacute;n Run Report</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ink: #1a2438;
+    --ink-soft: #3d4759;
+    --paper: #f7f3ea;
+    --paper-raised: #fffdf8;
+    --line: #d9d0bd;
+    --accent: #8b3a2f;
+    --accent-soft: #f1ded9;
+    --good: #4a6741;
+    --good-soft: #e3ead9;
+    --warn: #a67c2e;
+    --warn-soft: #f3e6c9;
+    --crash: #6b3fa0;
+    --crash-soft: #e8ddf2;
+    --shadow: 0 1px 2px rgba(26,36,56,0.06), 0 4px 12px rgba(26,36,56,0.05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #ece6d8;
+      --ink-soft: #b8b0a0;
+      --paper: #14181f;
+      --paper-raised: #1c212b;
+      --line: #333a48;
+      --accent: #e0796a;
+      --accent-soft: #3a2420;
+      --good: #8fb37e;
+      --good-soft: #24301f;
+      --warn: #d9ac5c;
+      --warn-soft: #362a15;
+      --crash: #b28ada;
+      --crash-soft: #2a2036;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink: #ece6d8;
+    --ink-soft: #b8b0a0;
+    --paper: #14181f;
+    --paper-raised: #1c212b;
+    --line: #333a48;
+    --accent: #e0796a;
+    --accent-soft: #3a2420;
+    --good: #8fb37e;
+    --good-soft: #24301f;
+    --warn: #d9ac5c;
+    --warn-soft: #362a15;
+    --crash: #b28ada;
+    --crash-soft: #2a2036;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--accent-soft); color: var(--ink); }
+
+  .wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 3.5rem 1.75rem 5rem;
+  }
+
+  header.masthead {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 2.5rem;
+  }
+
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  h1 {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(1.9rem, 4vw, 2.7rem);
+    margin: 0;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+
+  .masthead p {
+    margin: 0;
+    color: var(--ink-soft);
+    max-width: 62ch;
+    font-size: 1rem;
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    margin-top: 0.4rem;
+  }
+
+  .meta-row span b { color: var(--ink); font-weight: 600; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 3rem;
+    box-shadow: var(--shadow);
+  }
+
+  .stat {
+    background: var(--paper-raised);
+    padding: 1.4rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .stat .n {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 2.2rem;
+    font-weight: 600;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stat .label {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+  }
+
+  .stat.correct .n { color: var(--good); }
+  .stat.wrong-caught .n { color: var(--warn); }
+  .stat.wrong-uncaught .n { color: var(--accent); }
+  .stat.held .n { color: var(--crash); }
+  .stat.crash .n { color: var(--crash); }
+
+  h2 {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: 1.5rem;
+    margin: 0 0 0.3rem;
+    letter-spacing: -0.005em;
+  }
+
+  .section-intro {
+    color: var(--ink-soft);
+    max-width: 68ch;
+    margin: 0 0 1.4rem;
+    font-size: 0.95rem;
+  }
+
+  section { margin-bottom: 3.2rem; }
+
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    background: var(--paper-raised);
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 880px;
+    font-size: 0.88rem;
+  }
+
+  thead th {
+    text-align: left;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 600;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--paper);
+    position: sticky;
+    top: 0;
+  }
+
+  tbody td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--accent-soft); }
+
+  .doc-name {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8rem;
+    color: var(--ink);
+  }
+
+  .conf {
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.83rem;
+  }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.18rem 0.6rem;
+    border-radius: 100px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .pill.good { background: var(--good-soft); color: var(--good); }
+  .pill.wrong { background: var(--accent-soft); color: var(--accent); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.crash { background: var(--crash-soft); color: var(--crash); }
+  .pill.neutral {
+    background: var(--paper);
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+  }
+
+  .pill .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor;
+    flex-shrink: 0;
+  }
+
+  tr.row-wrong-uncaught { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+  tr.row-crash { background: color-mix(in srgb, var(--crash-soft) 55%, transparent); }
+
+  .smells {
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+    font-family: "IBM Plex Mono", monospace;
+  }
+
+  .findings {
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+
+  .finding {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 1.3rem 1.5rem;
+    box-shadow: var(--shadow);
+  }
+
+  .finding.severity-caught { border-left-color: var(--good); }
+  .finding.severity-review { border-left-color: var(--warn); }
+
+  .finding h3 {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 1.1rem;
+    margin: 0 0 0.5rem;
+    font-weight: 600;
+  }
+
+  .finding p {
+    margin: 0 0 0.6rem;
+    color: var(--ink-soft);
+    font-size: 0.93rem;
+  }
+
+  .finding p:last-child { margin-bottom: 0; }
+
+  .finding code, .finding .inline-mono {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.85em;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.05em 0.4em;
+  }
+
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--paper-raised);
+    box-shadow: var(--shadow);
+  }
+
+  .flow-step {
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    gap: 1rem;
+    padding: 1.2rem 1.4rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .flow-step:last-child { border-bottom: none; }
+
+  .flow-step .num {
+    font-family: "Fraunces", Georgia, serif;
+    font-weight: 600;
+    font-size: 1.3rem;
+    color: var(--accent);
+    line-height: 1.3;
+  }
+
+  .flow-step h4 {
+    margin: 0 0 0.3rem;
+    font-size: 0.98rem;
+    font-weight: 600;
+  }
+
+  .flow-step p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 0.9rem;
+  }
+
+  .flow-step .inline-mono {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.85em;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.05em 0.4em;
+  }
+
+  .callout {
+    background: var(--warn-soft);
+    border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+    border-radius: 8px;
+    padding: 1rem 1.3rem;
+    margin-top: 1.2rem;
+    font-size: 0.9rem;
+    color: var(--ink);
+  }
+
+  .callout b { color: var(--warn); }
+
+  footer {
+    margin-top: 3.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+  }
+
+  @media (max-width: 800px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .flow-step { grid-template-columns: 2.2rem 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="eyebrow">Classiflow &middot; Stage 4 end-to-end run</span>
+    <h1>Reporte de clasificaci&oacute;n</h1>
+    <p>__INTRO_TEXT__</p>
+    <div class="meta-row">
+      <span>Generated: <b>__GENERATED_AT__</b></span>
+      <span>Model: <b>__PRIMARY_MODEL_NAME__</b> (primary) &middot; <b>BETO v2</b> (second opinion) &middot; <b>__JUDGE_MODEL_NAME__</b> (judge)</span>
+      <span>Documents: <b>__TOTAL__</b></span>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat correct">
+      <div class="n">__CORRECT__<span style="font-size:1rem;color:var(--ink-soft);">/__TOTAL__</span></div>
+      <div class="label">Correct</div>
+    </div>
+    <div class="stat wrong-caught">
+      <div class="n">__WRONG_CAUGHT__</div>
+      <div class="label">Wrong, caught by disagreement</div>
+    </div>
+    <div class="stat wrong-uncaught">
+      <div class="n">__WRONG_UNCAUGHT__</div>
+      <div class="label">Wrong, slipped through</div>
+    </div>
+    <div class="stat held">
+      <div class="n">__HELD_EARLIER__</div>
+      <div class="label">Held earlier in pipeline</div>
+    </div>
+    <div class="stat crash">
+      <div class="n">__CRASHED__</div>
+      <div class="label">Crashed on ingest</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Per-document results</h2>
+    <p class="section-intro">__TABLE_INTRO_TEXT__</p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Document</th>
+            <th>Expected</th>
+            <th>Primary label</th>
+            <th>Conf.</th>
+            <th>Second opinion (BETO v2)</th>
+            <th>Disagreement?</th>
+            <th>Route</th>
+            <th>LLM Judge</th>
+            <th>Smells / detail</th>
+          </tr>
+        </thead>
+        <tbody>__ROWS_HTML__
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>What the numbers mean</h2>
+    <p class="section-intro">Correct/wrong alone hides the more important question: did the safety net catch what the primary classifier got wrong?</p>
+    <div class="findings">
+      <div class="finding severity-caught">
+        <h3>The safety net working as intended</h3>
+        <p>__CAUGHT_FINDING_TEXT__</p>
+      </div>
+      <div class="finding">
+        <h3>Wrong predictions that slipped through</h3>
+        <p>__UNCAUGHT_FINDING_TEXT__</p>
+      </div>
+      <div class="finding severity-review">
+        <h3>Held earlier in the pipeline</h3>
+        <p>__HELD_FINDING_TEXT__</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Human review &mdash; from the user's side, today</h2>
+    <p class="section-intro">There is currently no dedicated review screen in this codebase. Reaching a "reviewer" experience today means calling the classification API directly.</p>
+    <div class="flow">
+      <div class="flow-step">
+        <div class="num">1</div>
+        <div>
+          <h4>Pull the queue</h4>
+          <p><span class="inline-mono">GET /classification/review-queue</span> returns every document at <code class="inline-mono">review_route = human_review</code> &mdash; job id, guessed label, and the <code class="inline-mono">smells</code> that triggered the flag.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="num">2</div>
+        <div>
+          <h4>Look at the file</h4>
+          <p>The reviewer opens the PDF from its <code class="inline-mono">stored_path</code> under <code class="inline-mono">storage/documents/review/human_review/</code> and reads it directly &mdash; no in-app viewer yet.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="num">3</div>
+        <div>
+          <h4>Submit the correct label</h4>
+          <p><span class="inline-mono">POST /classification/{job_id}/decision</span> with the corrected <code class="inline-mono">label</code> and an optional <code class="inline-mono">notes</code> string.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="num">4</div>
+        <div>
+          <h4>The system finalizes it</h4>
+          <p>The record flips to <code class="inline-mono">accept</code>, <code class="inline-mono">human_overridden = True</code>, and <code class="inline-mono">RoutingNode</code> moves the file into <code class="inline-mono">classified/&lt;label&gt;/</code>.</p>
+        </div>
+      </div>
+    </div>
+    <div class="callout">
+      <b>No frontend exists for this yet.</b> Every step above is an API call &mdash; today's "reviewer" is whoever calls these two endpoints directly.
+    </div>
+  </section>
+
+  <footer>
+    Generated by full_pipeline_end_to_end.ipynb (section 10) &middot; Stage 4 (Classification &amp; Routing)
+  </footer>
+
+</div>
+</body>
+</html>

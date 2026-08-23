@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from classiflow.database.base import Base
@@ -140,11 +140,54 @@ class EnrichedRecord(Base):
         String(36), ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False, index=True
     )
     cleaned_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Stage 2's raw, pre-cleaning extraction output -- nullable because a migration
+    # cannot backfill historical rows. Populated for every accepted job (unlike
+    # Job.extracted_text, which only persists for non-accepted jobs) so it is
+    # available for future embedding/analysis work.
+    raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     entities: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     # Named metadata_ (not metadata) because `metadata` is reserved on every SQLAlchemy
     # Declarative class (Base.metadata is the schema's MetaData object) -- the DB column
     # itself is still named "metadata", only the Python attribute differs.
     metadata_: Mapped[dict[str, object]] = mapped_column("metadata", JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+class ClassificationRecord(Base):
+    __tablename__ = "classification_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    enriched_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("enriched_records.id", ondelete="CASCADE"), nullable=False
+    )
+    label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    all_scores: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    second_opinion_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    second_opinion_confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    classifier_disagreement: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ood_metrics: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    svm_scores: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+    svm_agrees_with_prediction: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    review_route: Mapped[str] = mapped_column(String(20), nullable=False)
+    smells: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    risk_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    smell_review_suggested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    foreign_municipality: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Whether the LLM Judge tier ran and produced the final review_route (spec Decision 6).
+    judged_by_llm: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Populated only when judged_by_llm=True (spec Decision 2's judge-as-advisory-opinion).
+    judge_final_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    judge_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set by RoutingNode once the file has been moved to its final location (Decision 8).
+    stored_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Set by the human-decision endpoint (Decision 9).
+    human_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

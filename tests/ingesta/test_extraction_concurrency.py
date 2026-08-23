@@ -34,6 +34,7 @@ from tests.fakes import make_indexing_node
 if TYPE_CHECKING:
     from classiflow.database.models import DocumentStep
     from classiflow.ingesta.domain import JobState
+    from classiflow.storage.document_storage import IDocumentStorage
 
 _MINIMAL_PDF = (
     b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
@@ -168,6 +169,11 @@ async def test_extractor_used_is_queryable_from_document_step() -> None:
         broadcaster=EventBroadcaster(),
         coordinator=cast("CompiledStateGraph", None),  # unused: only _persist_steps runs
         enrichment_coordinator=cast("CompiledStateGraph", None),  # unused: only _persist_steps runs
+        document_storage=cast("IDocumentStorage", None),  # unused: only _persist_steps runs
+        classification_coordinator=cast(  # unused: only _persist_steps runs
+            "CompiledStateGraph", None
+        ),
+        job_semaphore=asyncio.Semaphore(1),  # unused: only _persist_steps runs
     )
     job_id = "persisted-job"
     final_state: JobState = {

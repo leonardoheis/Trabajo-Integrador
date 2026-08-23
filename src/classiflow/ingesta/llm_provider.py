@@ -3,10 +3,11 @@ from functools import lru_cache
 
 import llama_cpp
 import torch
-from langchain_community.llms import LlamaCpp
+from langchain_community.llms.llamacpp import LlamaCpp
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseLLM
 from langchain_core.outputs import Generation, LLMResult
+from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 from pydantic import Field
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
@@ -20,6 +21,54 @@ def n_gpu_layers() -> int:
     if torch.cuda.is_available() and llama_cpp.llama_supports_gpu_offload():
         return -1
     return 0
+
+
+def _token_text(model: llama_cpp.Llama, token_id: int) -> str:
+    vocab = llama_cpp.llama_model_get_vocab(model.model)
+    text: bytes = llama_cpp.llama_token_get_text(vocab, token_id)
+    return text.decode("utf-8", errors="replace")
+
+
+class ChatTemplatedLlamaCpp(LlamaCpp):
+    # Every model this app loads (Phi-4-mini, Gemma 4, ...) is instruction-tuned and
+    # trained expecting its own chat-formatted prompt (e.g. Phi-4:
+    # "<|user|>{content}<|end|><|assistant|>"). LlamaCpp's _call() sends the bare
+    # prompt straight to llama.cpp's raw completion API with no role markers at all --
+    # confirmed empirically that this makes an instruction-tuned model drift into
+    # unstructured hallucinated continuation instead of following the instruction.
+    # The fix reads each model's own chat_template out of its GGUF metadata (rather
+    # than hardcoding per-model template strings) so it's correct for any model file
+    # dropped into models/, including the eos token used to stop generation at the
+    # template's own turn boundary.
+
+    def _call(
+        self,
+        prompt: str,
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: str,
+    ) -> str:
+        model = self.client
+        template = model.metadata.get("tokenizer.chat_template")
+        if template is None:
+            return super()._call(prompt, stop=stop, run_manager=run_manager, **kwargs)
+
+        eos = _token_text(model, model.token_eos())
+        # bos_token="" (not the model's real BOS text): llama_cpp's own tokenizer
+        # already prepends BOS by default (Llama.tokenize(add_bos=True)), so a
+        # template that also renders its bos_token (e.g. Gemma's "{{ bos_token }}")
+        # would duplicate it -- confirmed via a "duplicate leading <bos>" runtime
+        # warning otherwise. The tokenizer's own BOS insertion is kept as the single
+        # source; only the template's role-tag structure is needed here.
+        formatter = Jinja2ChatFormatter(
+            template=template, bos_token="", eos_token=eos, add_generation_prompt=True
+        )
+        rendered = formatter(messages=[{"role": "user", "content": prompt}])
+        rendered_stop = (
+            [rendered.stop] if isinstance(rendered.stop, str) else list(rendered.stop or [])
+        )
+        combined_stop = list({*rendered_stop, *(stop or [])})
+        return super()._call(rendered.prompt, stop=combined_stop, run_manager=run_manager, **kwargs)
 
 
 class MockLlm(BaseLLM):
@@ -60,10 +109,11 @@ def unload_slm() -> None:
 @lru_cache(maxsize=4)
 def get_llm_langchain(model_path: str) -> BaseLLM:
     try:
-        return LlamaCpp(  # type: ignore[no-any-return]
+        return ChatTemplatedLlamaCpp(
             model_path=model_path,
-            n_ctx=2048,
+            n_ctx=Settings.slm_n_ctx,
             n_gpu_layers=n_gpu_layers(),
+            max_tokens=Settings.slm_max_tokens,
             temperature=Settings.slm_temperature,
             top_p=Settings.slm_top_p,
             seed=Settings.slm_seed,

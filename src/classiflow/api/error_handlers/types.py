@@ -7,6 +7,10 @@ from classiflow.api.error_handlers.auth import (
     handle_not_allowed_error,
     handle_oauth_error,
 )
+from classiflow.api.error_handlers.classification import (
+    handle_classification_not_in_review_error,
+    handle_classification_record_not_found_error,
+)
 from classiflow.api.error_handlers.knowledge import (
     handle_chat_refusal,
     handle_knowledge_error,
@@ -20,11 +24,15 @@ from classiflow.api.error_handlers.pipeline import (
     handle_job_not_found_error,
     handle_job_not_in_review_error,
 )
+from classiflow.classification.exceptions import (
+    ClassificationNotInReviewError,
+    ClassificationRecordNotFoundError,
+)
 from classiflow.ingesta.exceptions import LlmProviderError, ModelLoadError, ModelNotFoundError
 from classiflow.knowledge.exceptions import KnowledgeError
 from classiflow.knowledge.llm.exceptions import ChatRefusalError
 from classiflow.services.auth.exceptions import AuthError, NotAllowedError, OAuthError
-from classiflow.services.pipeline.exceptions import JobNotFoundError, JobNotInReviewError
+from classiflow.services.job.exceptions import JobNotFoundError, JobNotInReviewError
 
 ExceptionHandler = Callable[[Request, Exception], Response]
 
@@ -39,4 +47,6 @@ EXCEPTION_HANDLERS: dict[type[Exception], ExceptionHandler] = {
     JobNotInReviewError: handle_job_not_in_review_error,
     ChatRefusalError: handle_chat_refusal,
     KnowledgeError: handle_knowledge_error,
+    ClassificationRecordNotFoundError: handle_classification_record_not_found_error,
+    ClassificationNotInReviewError: handle_classification_not_in_review_error,
 }

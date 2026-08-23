@@ -1,15 +1,15 @@
 """Add documents catalogue for the knowledge base
 
-Revision ID: 0004
-Revises: 0003
+Revision ID: 0008
+Revises: 0007
 Create Date: 2026-08-14
 """
 import sqlalchemy as sa
 
 from alembic import op
 
-revision = "0004"
-down_revision = "0003"
+revision = "0008"
+down_revision = "0007"
 branch_labels = None
 depends_on = None
 

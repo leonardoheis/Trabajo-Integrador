@@ -1,4 +1,5 @@
 import asyncio
+import tempfile
 from collections.abc import AsyncIterator
 
 import numpy as np
@@ -6,7 +7,27 @@ import numpy.typing as npt
 from dependency_injector import containers, providers
 from langchain_core.runnables import Runnable
 
+from classiflow.classification.config_classification import ClassificationConfig
+from classiflow.classification.coordinator import build_classification_coordinator
+from classiflow.classification.domain.results import JudgeOutput, PrimaryClassificationOutput
+from classiflow.classification.nodes import (
+    ConfidenceGateNode,
+    ForeignMunicipalityNode,
+    LlmJudgeNode,
+    PrimaryClassifierNode,
+    RoutingNode,
+    SecondOpinionNode,
+    SmellsRiskNode,
+)
+from classiflow.classification.prompts.llm_judge import JudgeInput, build_judge_chain
+from classiflow.classification.prompts.primary_classification import (
+    PrimaryClassificationInput,
+    build_classification_chain,
+)
 from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.database.repositories.classification_record import (
+    InMemoryClassificationRecordRepository,
+)
 from classiflow.database.repositories.document import InMemoryDocumentRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
@@ -42,7 +63,9 @@ from classiflow.knowledge.retrieval.retriever import RetrieverService
 from classiflow.knowledge.vectordb.in_memory_store import InMemoryVectorStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
+from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
+from classiflow.storage.document_storage import LocalDiskStorage
 
 # ponytail: fixed Spanish sample instead of real extraction — tests need deterministic,
 # non-empty, allowed-language text to reach node3/node4, and shouldn't pay for real
@@ -113,6 +136,31 @@ def _test_entity_chain() -> Runnable[EntityExtractionInput, EntityExtractionOutp
     return build_entity_extraction_chain(MockLlm(response=_TEST_ENTITY_RESPONSE))
 
 
+_TEST_PRIMARY_RESPONSE = '{"label": "ordenanzas", "confidence": 0.95, "reasoning": "test"}'
+_TEST_JUDGE_RESPONSE = '{"accept": true, "final_label": "ordenanzas", "reasoning": "test"}'
+# ponytail: second_opinion disabled in tests -- avoids loading the real ~425MB BETO
+# model (weights + OOD/SVM artifacts) on every test run. SecondOpinionNode already
+# treats this as a normal, fully-supported config state (returns None).
+_TEST_CLASSIFICATION_CONFIG = ClassificationConfig(second_opinion_enabled=False)
+
+
+def _test_classification_chain() -> Runnable[
+    PrimaryClassificationInput, PrimaryClassificationOutput
+]:
+    return build_classification_chain(MockLlm(response=_TEST_PRIMARY_RESPONSE))
+
+
+def _test_judge_chain() -> Runnable[JudgeInput, JudgeOutput]:
+    return build_judge_chain(MockLlm(response=_TEST_JUDGE_RESPONSE))
+
+
+# ponytail: reuse the real LocalDiskStorage against a throwaway temp directory instead
+# of inventing a fake in-memory storage class -- one less code path to diverge from
+# production, and TestContainer is module-scoped so a pytest tmp_path fixture isn't
+# available here.
+_TEST_STORAGE_ROOT = tempfile.mkdtemp(prefix="classiflow-test-storage-")
+
+
 class TestContainer(containers.DeclarativeContainer):
     hash_repo = providers.Factory(InMemoryHashRepository)
     audit_repo = providers.Factory(InMemoryAuditRepository)
@@ -123,10 +171,20 @@ class TestContainer(containers.DeclarativeContainer):
     human_decision_repo = providers.Singleton(InMemoryHumanDecisionRepository)
     job_repo = providers.Singleton(InMemoryJobRepository)
     enriched_record_repo = providers.Singleton(InMemoryEnrichedRecordRepository)
+    document_storage = providers.Singleton(LocalDiskStorage, root=_TEST_STORAGE_ROOT)
     entity_extraction_chain = providers.Singleton(_test_entity_chain)
+    classification_record_repo = providers.Singleton(InMemoryClassificationRecordRepository)
+    classification_chain = providers.Singleton(_test_classification_chain)
+    judge_chain = providers.Singleton(_test_judge_chain)
 
     audit_service = providers.Factory(AuditService, repo=audit_repo)
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
+    job_service = providers.Factory(
+        JobService,
+        job_repo=job_repo,
+        document_steps_repo=document_steps_repo,
+        human_decision_repo=human_decision_repo,
+    )
     broadcaster = providers.Singleton(EventBroadcaster)
 
     text_extractor = providers.Object(
@@ -136,6 +194,7 @@ class TestContainer(containers.DeclarativeContainer):
     )
     # Generous cap -- shouldn't gate tests, just needs to satisfy the now-required param.
     extraction_semaphore = providers.Singleton(asyncio.Semaphore, 100)
+    job_semaphore = providers.Singleton(asyncio.Semaphore, 100)
     extraction_step = providers.Factory(
         ExtractionStep,
         audit=audit_service,
@@ -207,6 +266,57 @@ class TestContainer(containers.DeclarativeContainer):
         entity_extractor=enrichment_entity_extractor,
         metadata_enricher=enrichment_metadata_enricher,
     )
+    classification_primary_classifier = providers.Factory(
+        PrimaryClassifierNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        classification_chain=classification_chain,
+        config=_TEST_CLASSIFICATION_CONFIG,
+    )
+    classification_second_opinion = providers.Factory(
+        SecondOpinionNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        config=_TEST_CLASSIFICATION_CONFIG,
+    )
+    classification_foreign_municipality = providers.Factory(
+        ForeignMunicipalityNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        config=_TEST_CLASSIFICATION_CONFIG,
+    )
+    classification_smells_risk = providers.Factory(
+        SmellsRiskNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        config=_TEST_CLASSIFICATION_CONFIG,
+    )
+    classification_confidence_gate = providers.Factory(
+        ConfidenceGateNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        config=_TEST_CLASSIFICATION_CONFIG,
+    )
+    classification_llm_judge = providers.Factory(
+        LlmJudgeNode, audit=audit_service, broadcaster=broadcaster, judge_chain=judge_chain
+    )
+    classification_routing = providers.Factory(
+        RoutingNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        storage=document_storage,
+        classification_repo=classification_record_repo,
+    )
+    classification_coordinator = providers.Factory(
+        build_classification_coordinator,
+        primary_classifier=classification_primary_classifier,
+        second_opinion=classification_second_opinion,
+        foreign_municipality=classification_foreign_municipality,
+        smells_risk=classification_smells_risk,
+        confidence_gate=classification_confidence_gate,
+        llm_judge=classification_llm_judge,
+        routing=classification_routing,
+    )
     coordinator = providers.Factory(
         build_coordinator,
         node1=node1,
@@ -224,4 +334,7 @@ class TestContainer(containers.DeclarativeContainer):
         broadcaster=broadcaster,
         coordinator=coordinator,
         enrichment_coordinator=enrichment_coordinator,
+        document_storage=document_storage,
+        classification_coordinator=classification_coordinator,
+        job_semaphore=job_semaphore,
     )
