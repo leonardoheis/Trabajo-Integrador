@@ -1330,12 +1330,11 @@ Also ran the full automated suite as a safety check (not the primary validation 
 this task): `uv run pytest tests/ -v` → 326 passed. `uv run poe check` → all steps
 clean, including the full pre-commit hook set.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
-```bash
-git add src/classiflow/classification/prompts/primary_classification.py
-git commit -m "fix: tighten primary classifier prompt for the Concejo-municipal sibling-pair confusion"
-```
+Committed as `1c4ffda` — "fix: tighten primary classifier prompt for the
+Concejo-municipal sibling-pair confusion" (bundled with the local DB's alembic
+migration catch-up from Step 1) — and pushed to `origin/feat/classification-routing`.
 
 ---
 
