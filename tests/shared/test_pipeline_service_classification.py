@@ -46,6 +46,7 @@ from classiflow.ingesta.prompts import build_content_chain
 from classiflow.services.audit.service import AuditService
 from classiflow.services.pipeline.service import PipelineService
 from classiflow.storage.document_storage import LocalDiskStorage
+from tests.fakes import make_indexing_node
 
 _SPANISH_TEXT = (
     "El Concejo Municipal de Rosario sanciona la siguiente ordenanza: "
@@ -125,7 +126,8 @@ def _build_service(tmp_path: Path) -> _ServiceUnderTest:
         broadcaster=broadcaster,
         embedding_store=EmbeddingStore(dim=4, embed_fn=_stub_embed),
     )
-    coordinator = build_coordinator(n1, n2, n3, n4, extraction_step=extraction_step)
+    n5 = make_indexing_node(audit, broadcaster)
+    coordinator = build_coordinator(n1, n2, n3, n4, n5, extraction_step=extraction_step)
 
     text_cleaner = TextCleanerNode(audit=audit, broadcaster=broadcaster)
     entity_extractor = EntityExtractorNode(
