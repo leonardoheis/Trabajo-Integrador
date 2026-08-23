@@ -1164,12 +1164,10 @@ check-yaml, debug-statements, uv-lock, gitleaks, ruff-format, ruff-check, mypy,
 codespell) — confirms the new alembic migration file itself doesn't break `uv-lock`
 or any hook.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
-```bash
-git add src/classiflow/database/models.py src/classiflow/classification/domain/results.py src/classiflow/classification/domain/state.py src/classiflow/classification/nodes/routing.py src/classiflow/classification/coordinator.py src/classiflow/api/routes/classification/schemas.py alembic/versions/0006_add_judge_verdict_fields.py tests/classification/test_routing_node.py tests/classification/test_coordinator.py tests/api/routes/test_classification.py
-git commit -m "feat: persist and expose the LLM judge's final_label/reasoning verdict on the review queue"
-```
+Committed as `9f00d37` — "feat: persist and expose the LLM judge's final_label/reasoning
+verdict on the review queue" — and pushed to `origin/feat/classification-routing`.
 
 ---
 
