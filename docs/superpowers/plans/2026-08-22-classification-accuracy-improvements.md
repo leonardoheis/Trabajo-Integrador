@@ -109,7 +109,7 @@ _substitutions = {
 }
 ```
 
-- [ ] **Step 4: Hand the notebook re-run command to the user**
+- [x] **Step 4: Hand the notebook re-run command to the user**
 
 Per this project's execution-workflow rule, do not run the notebook yourself. Hand
 over:
@@ -120,12 +120,11 @@ Ask the user to confirm the generated report under `storage/reports/` shows the 
 model names in its masthead (e.g. `Meta-Llama-3.1-8B-Instruct-Q4_K_M` instead of
 `Phi-4-mini-instruct`) instead of running it yourself.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
-```bash
-git add src/classiflow/playground/stage4/report_template.html src/classiflow/playground/stage4/full_pipeline_end_to_end.ipynb
-git commit -m "fix: report masthead reflects the real configured model names"
-```
+Committed as `5bf2602` — "feat: enhance model configuration and reporting" (bundled
+with the `pyproject.toml`/`.pre-commit-config.yaml` `models/` exclusion fixes from
+the same working session).
 
 ---
 
