@@ -141,7 +141,7 @@ the same working session).
   (`HUMAN_REVIEW`); `classifier_disagreement` now yields `LLM_JUDGE` instead of
   `HUMAN_REVIEW`.
 
-- [ ] **Step 1: Update the existing disagreement test to expect `llm_judge`**
+- [x] **Step 1: Update the existing disagreement test to expect `llm_judge`**
 
 In `tests/classification/test_confidence_gate_node.py`, replace:
 ```python
@@ -156,7 +156,7 @@ def test_classifier_disagreement_routes_to_llm_judge_regardless_of_confidence(se
     assert route == "llm_judge"
 ```
 
-- [ ] **Step 2: Add a test asserting `foreign_municipality` still overrides even when disagreement is also set**
+- [x] **Step 2: Add a test asserting `foreign_municipality` still overrides even when disagreement is also set**
 
 Add to `TestConfidenceGateDecide`:
 ```python
@@ -167,7 +167,7 @@ Add to `TestConfidenceGateDecide`:
         assert route == "human_review"
 ```
 
-- [ ] **Step 3: Run the tests to verify they fail against current code**
+- [x] **Step 3: Run the tests to verify they fail against current code**
 
 Run: `uv run pytest tests/classification/test_confidence_gate_node.py -v`
 Expected: `test_classifier_disagreement_routes_to_llm_judge_regardless_of_confidence`
@@ -175,7 +175,7 @@ FAILs (`decide()` still returns `human_review`); the new override test PASSes al
 (current code also returns `human_review` for that combination, coincidentally the
 same as the new expectation).
 
-- [ ] **Step 4: Update `decide()`**
+- [x] **Step 4: Update `decide()`**
 
 Replace:
 ```python
@@ -210,7 +210,7 @@ with:
         return ReviewRoute.LLM_JUDGE
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `uv run pytest tests/classification/test_confidence_gate_node.py -v`
 Expected: all PASS.

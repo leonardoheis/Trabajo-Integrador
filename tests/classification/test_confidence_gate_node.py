@@ -24,9 +24,15 @@ class TestConfidenceGateDecide:
         )
         assert route == "human_review"
 
-    def test_classifier_disagreement_routes_to_human_review_regardless_of_confidence(self) -> None:
+    def test_classifier_disagreement_routes_to_llm_judge_regardless_of_confidence(self) -> None:
         route = _node().decide(
             confidence=0.99, foreign_municipality=None, classifier_disagreement=True
+        )
+        assert route == "llm_judge"
+
+    def test_foreign_municipality_wins_over_disagreement(self) -> None:
+        route = _node().decide(
+            confidence=0.99, foreign_municipality="Cordoba", classifier_disagreement=True
         )
         assert route == "human_review"
 

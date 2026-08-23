@@ -63,8 +63,10 @@ class ConfidenceGateNode(BaseNode):
         foreign_municipality: str | None,
         classifier_disagreement: bool,
     ) -> ReviewRoute:
-        if foreign_municipality is not None or classifier_disagreement:
+        if foreign_municipality is not None:
             return ReviewRoute.HUMAN_REVIEW
+        if classifier_disagreement:
+            return ReviewRoute.LLM_JUDGE
         if confidence >= self.config.confidence_threshold:
             return ReviewRoute.ACCEPT
         return ReviewRoute.LLM_JUDGE
