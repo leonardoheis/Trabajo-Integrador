@@ -103,7 +103,16 @@ _CATEGORY_DEFS: dict[DocumentCategory, str] = {
         "issuing body is 'Concejo Municipal'. This is the hardest pair to separate "
         "from decretos_concejo_municipal -- both share the same 'HA SANCIONADO...' "
         "opening and Concejo issuer; the deciding signal is specifically which noun "
-        "(DECRETO vs. RESOLUCION) follows 'HA SANCIONADO EL/LA SIGUIENTE'."
+        "(DECRETO vs. RESOLUCION) follows 'HA SANCIONADO EL/LA SIGUIENTE'. Not every "
+        "Concejo resolución uses that exact formula -- some instead read '...se "
+        "consideró la siguiente: RESOLUCION' or similar committee-referral phrasing. "
+        "When the 'HA SANCIONADO...' formula is absent but Concejo Municipal "
+        "involvement is otherwise confirmed, the deciding signal is still whichever "
+        "noun (DECRETO vs. RESOLUCION/RESOLUCIÓN) names the document's own act type "
+        "-- look for it near the document's own number/heading, not only inside the "
+        "'HA SANCIONADO' phrase specifically. OCR noise can garble this noun's "
+        "spacing or accents (e.g. 'R ES0 LU CIÓN' for 'RESOLUCIÓN') -- read past "
+        "such corruption rather than treating a garbled match as absent."
     ),
 }
 _CATEGORIES_BLOCK = "\n".join(f"- {label.value}: {desc}" for label, desc in _CATEGORY_DEFS.items())
@@ -137,7 +146,21 @@ Text -- most decretos/resoluciones in this corpus are ordinary executive \
 acts (issued by the Intendente/Departamento Ejecutivo/a Secretaría) with \
 no Concejo Municipal involvement at all, and those stay plain \
 "decretos"/"resoluciones". Re-read the Text below before applying this \
-rule; do not apply it from memory of the examples above.
+rule; do not apply it from memory of the examples above. This check runs \
+BOTH ways: it is just as much a mistake to conclude the phrase is absent \
+without having actually scanned for it as it is to invent one that is not \
+there. Scan the ENTIRE Text below line by line for "Concejo Municipal" \
+before writing your reasoning -- if you are about to state that the \
+phrase does not appear, verify that claim word-for-word against the Text \
+first; do not state absence merely because the operative verb (decreta/ \
+resuelve) or the issuing office named in the header looks executive, since \
+the Concejo can still be named later in the same document (e.g. in a \
+salutation, a body header, or a referral line) even when an executive \
+office is mentioned first. If your own reasoning states or acknowledges \
+that "Concejo Municipal" appears anywhere in the Text, your label MUST be \
+the matching "_concejo_municipal" variant -- never write a reasoning that \
+confirms the phrase is present and then output the plain "decretos" or \
+"resoluciones" label anyway; those two must always agree.
 - decreto_ordenanzas and compendios_de_boletines are rare categories -- only \
 pick them when their specific anchor (recess/extraordinary-faculty language; \
 a range of boletín numbers) is actually present, not just because the text \

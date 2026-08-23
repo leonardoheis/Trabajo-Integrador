@@ -1187,7 +1187,15 @@ verdict on the review queue" — and pushed to `origin/feat/classification-routi
 - Produces: one targeted edit to `_TEMPLATE`'s `Rules:` block or `_CATEGORY_DEFS`,
   validated against both failing rows and the regression-check row set below.
 
-- [ ] **Step 1: Pull the real `cleaned_text` for both failing documents**
+- [x] **Step 1: Pull the real `cleaned_text` for both failing documents**
+
+**Blocker found and fixed first**: `data/classiflow.db` had no `alembic_version`
+tracking (schema was created via `Base.metadata.create_all()` at some point, not
+through alembic), so it was missing Tasks 6/9's `judge_final_label`/`judge_reasoning`/
+`raw_text` columns despite the ORM models already declaring them. Backed up the DB,
+ran `uv run alembic stamp 0005` (matching its actual pre-Task-6 schema state) then
+`uv run alembic upgrade head` to apply `0006`/`0007`. Verified row counts unchanged
+(18 jobs, 17 enriched/classification records) before deleting the backup.
 
 Run a one-off script (not committed — this is diagnostic, use the scratchpad
 directory) that does:
@@ -1224,7 +1232,7 @@ Confirm the exact session-acquisition helper name via
 `codegraph_explore("AsyncSession session database engine get_session")` before
 writing this script — do not guess the import path.
 
-- [ ] **Step 2: Invoke the primary classification chain directly at temperature=0 against both texts**
+- [x] **Step 2: Invoke the primary classification chain directly at temperature=0 against both texts**
 
 ```python
 from classiflow.classification.prompts.primary_classification import build_classification_chain, PrimaryClassificationInput
@@ -1243,38 +1251,84 @@ in the header but still default to `decretos`? Does it correctly identify the
 issuing body but miss the `RESOLUCION` vs `DECRETO` noun distinction from
 `_CATEGORY_ANCHORS`'s documented "HA SANCIONADO LA SIGUIENTE: X" formula?
 
-- [ ] **Step 3: Based on the trace, make ONE targeted edit to `_TEMPLATE` or `_CATEGORY_DEFS`**
+- [x] **Step 3: Based on the trace, make ONE targeted edit to `_TEMPLATE` or `_CATEGORY_DEFS`**
 
-The exact wording is intentionally not prescribed here — the spec is explicit that
-this is contingent on what Step 2's trace reveals (mirroring how the earlier
-Concejo-override rule and `compendios_de_boletines` tightening were each developed:
-trace first, write one precise rule, validate). Whatever the edit turns out to be,
-it must be a single additive rule or definition tightening — not a rewrite of
-`_TEMPLATE`'s existing structure.
+**Critical finding that changed this task's scope**: the trace revealed the spec's
+own assumption about `resolucion_cm_197_2024.pdf` was wrong. Its full text shows it
+is genuinely issued by "Secretaría de Salud Pública" (executive branch) — it mentions
+"Concejo Municipal" exactly once, only as a reference to an unrelated prior ordinance
+("...las Ordenanzas nro: 10.037... el Concejo Municipal... aprueba..."), and ends
+"SECRETARIA DE SA.UD PÚBLICA MUNICIPALIDAD LE ROSARIO". The model's `resoluciones`
+label for this document was already CORRECT before any prompt change — this was never
+a bug. Per user decision, this document was dropped from the fix/validation scope
+entirely and treated as a correctly-passing row instead.
 
-- [ ] **Step 4: Validate against both failing rows using the same direct-invocation harness**
+`resolucion_cm_16879_2024.pdf` was a real, confirmed bug, diagnosed through three
+trace iterations (each edit validated by re-running the real model before the next):
 
-Re-run Step 2's script against the edited prompt. Expected: both
-`resolucion_cm_16879_2024.pdf` and `resolucion_cm_197_2024.pdf` now classify as
-`resoluciones_concejo_municipal`, or at minimum no longer silently agree with a wrong
-label (i.e. if still wrong, `classifier_disagreement` at least fires so Task 5's
-judge path catches it).
+1. **First trace (unmodified prompt)**: model output `decretos` with reasoning
+   explicitly claiming "[the text] does not contain the exact phrase 'Concejo
+   Municipal'" — false; the excerpt the model was actually given contains "Concejo
+   Municipal" twice, verbatim. A genuine grounding/hallucination failure, traceable
+   directly to the existing anti-hallucination guard rule (added in an earlier
+   session) being worded so strongly against inventing a Concejo Municipal mention
+   that it overcorrected the model into denying a real one.
 
-- [ ] **Step 5: Validate no regression on the previously-passing rows**
+2. **First edit**: added a "this check runs BOTH ways" paragraph to the existing
+   override rule in `_TEMPLATE`'s `Rules:` block, explicitly requiring the model to
+   scan the full text before claiming absence. Re-traced: the model now correctly
+   *acknowledged* the phrase was present in its `reasoning` ("but then mentions
+   'Concejo Municipal'...") but still output the plain `decretos` label anyway — the
+   reasoning and the label picks were no longer connected.
 
-Using the same harness, re-run against: `decreto_cm_10554_1995.pdf`,
-`decreto_cm_1016_2025.pdf`, `decreto_1000_2008.pdf`, `resolucion_100_2020.pdf`.
-Expected: all four still classify correctly after the edit.
+3. **Second edit**: added one sentence binding reasoning to label: "If your own
+   reasoning states or acknowledges that 'Concejo Municipal' appears anywhere in the
+   Text, your label MUST be the matching `_concejo_municipal` variant... those two
+   must always agree." Re-traced: model now switched to a `_concejo_municipal`
+   variant, but picked the wrong sibling — `decretos_concejo_municipal` instead of
+   `resoluciones_concejo_municipal` — despite its own reasoning correctly identifying
+   "Resuelve" as the operative verb. Root cause: this document doesn't follow the
+   `_CATEGORY_DEFS` anchor's assumed "HA SANCIONADO LA SIGUIENTE: RESOLUCION"
+   formula at all — it instead reads "...se consideró la siguiente: R ES0 LU CIÓN
+   (N' 6.016)" (OCR-garbled "RESOLUCIÓN"), a structurally different committee-referral
+   pattern the `RESOLUCIONES_CONCEJO_MUNICIPAL`/`DECRETOS_CONCEJO_MUNICIPAL` category
+   definitions didn't account for.
 
-- [ ] **Step 6: If the trace produces a rule expressible as a deterministic `MockLlm` test, add it**
+4. **Third edit (final)**: extended `_CATEGORY_DEFS[RESOLUCIONES_CONCEJO_MUNICIPAL]`
+   with a clause covering the non-"HA SANCIONADO" case: when that formula is absent
+   but Concejo involvement is confirmed, the deciding signal is still whichever noun
+   (DECRETO vs. RESOLUCIÓN) names the document's own act type near its own
+   number/heading — not only inside the "HA SANCIONADO" phrase — plus an explicit
+   instruction to read past OCR corruption of that noun's spelling/spacing rather
+   than treating a garbled match as absent.
 
-Only if Step 3's edit is a structural prompt change verifiable independent of real
-model behavior (e.g. a new category anchor string that should appear in
-`_format_prompt`'s output) — add a case to
-`tests/classification/test_primary_classification_chain.py` following its existing
-pattern. If the fix is purely about how the real model interprets nuanced text
-(the expected case, per the spec), skip this step — the validation is Steps 4-5, not
-a new automated test.
+All three edits are additive (new sentences/clauses), not rewrites of `_TEMPLATE`'s
+or `_CATEGORY_DEFS`'s existing structure.
+
+- [x] **Step 4: Validate against both failing rows using the same direct-invocation harness**
+
+Final re-trace: `resolucion_cm_16879_2024.pdf` → `resoluciones_concejo_municipal`
+(correct, was `decretos`). `resolucion_cm_197_2024.pdf` → `resoluciones` (correct,
+unchanged — confirmed never a bug, see Step 3).
+
+- [x] **Step 5: Validate no regression on the previously-passing rows**
+
+Re-ran against all four: `decreto_cm_10554_1995.pdf` → `decretos_concejo_municipal`
+(OK), `decreto_cm_1016_2025.pdf` → `decretos_concejo_municipal` (OK),
+`decreto_1000_2008.pdf` → `decretos` (OK), `resolucion_100_2020.pdf` →
+`resoluciones` (OK). All four still correct after the edits.
+
+- [x] **Step 6: If the trace produces a rule expressible as a deterministic `MockLlm` test, add it**
+
+Skipped, per the plan's own guidance — the fix is entirely about how the real model
+interprets nuanced/OCR-corrupted text and reasoning-to-label consistency, not a
+structural prompt change verifiable independent of real model behavior. Validation
+is Steps 4-5's direct real-model tracing, matching how the earlier Concejo-override
+rule and `compendios_de_boletines` tightening were each validated.
+
+Also ran the full automated suite as a safety check (not the primary validation for
+this task): `uv run pytest tests/ -v` → 326 passed. `uv run poe check` → all steps
+clean, including the full pre-commit hook set.
 
 - [ ] **Step 7: Commit**
 
@@ -1282,7 +1336,6 @@ a new automated test.
 git add src/classiflow/classification/prompts/primary_classification.py
 git commit -m "fix: tighten primary classifier prompt for the Concejo-municipal sibling-pair confusion"
 ```
-(Include the test file in the `git add` list only if Step 6 produced one.)
 
 ---
 
@@ -1495,12 +1548,11 @@ Run: `uv run pytest tests/shared/test_pipeline_service_enrichment.py -v` → 4 p
 Ran directly: `uv run pytest tests/ -v` → 326 passed. `uv run poe check` → all steps
 pass, including the full pre-commit hook set.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
-```bash
-git add src/classiflow/database/models.py src/classiflow/services/pipeline/service.py alembic/versions/0007_add_enriched_record_raw_text.py tests/shared/test_pipeline_service_enrichment.py
-git commit -m "feat: persist raw pre-cleaning extraction text on EnrichedRecord for future embedding use"
-```
+Committed as `0ea28b9` — "feat: persist raw pre-cleaning extraction text on
+EnrichedRecord for future embedding use" — and pushed to
+`origin/feat/classification-routing`.
 
 ---
 
