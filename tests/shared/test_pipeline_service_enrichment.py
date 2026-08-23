@@ -207,6 +207,7 @@ class TestPipelineServiceEnrichmentHappyPath:
         record = await under_test.enriched_record_repo.find_by_job_id(job_id)
         assert record is not None
         assert "Artículo 1" in record.cleaned_text
+        assert record.raw_text == _SPANISH_TEXT
         assert record.entities["doc_type_hint"] == "ordenanza"
         assert record.metadata_["source"] == "manual_upload"
 

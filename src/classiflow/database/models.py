@@ -113,6 +113,11 @@ class EnrichedRecord(Base):
         String(36), ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False, index=True
     )
     cleaned_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Stage 2's raw, pre-cleaning extraction output -- nullable because a migration
+    # cannot backfill historical rows. Populated for every accepted job (unlike
+    # Job.extracted_text, which only persists for non-accepted jobs) so it is
+    # available for future embedding/analysis work.
+    raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     entities: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     # Named metadata_ (not metadata) because `metadata` is reserved on every SQLAlchemy
     # Declarative class (Base.metadata is the schema's MetaData object) -- the DB column

@@ -178,6 +178,7 @@ class PipelineService:
                 record = EnrichedRecord(
                     job_id=job_id,
                     cleaned_text=result["cleaned_text"],
+                    raw_text=final_state["text"],
                     entities=result["entities"].model_dump(),
                     metadata_=result["metadata"].model_dump(),
                 )

@@ -1365,7 +1365,7 @@ git commit -m "fix: raise OCR render DPI default based on legibility comparison 
   `select(EnrichedRecord.raw_text).where(...)` for future embedding work (out of
   scope here per the spec's non-goals).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add an assertion to the existing happy-path test in
 `tests/shared/test_pipeline_service_enrichment.py`:
@@ -1394,12 +1394,12 @@ stubbed extraction output in this test file — Stage 2's "raw" text in this tes
 IS `_SPANISH_TEXT` verbatim, since the stub extractor returns it unchanged and no
 Stage-2-level cleaning happens before enrichment.)
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
-Run: `uv run pytest tests/shared/test_pipeline_service_enrichment.py -v`
-Expected: FAIL — `EnrichedRecord` has no `raw_text` attribute yet.
+Confirmed: `AttributeError: 'EnrichedRecord' object has no attribute 'raw_text'` —
+exactly as predicted.
 
-- [ ] **Step 3: Add the migration**
+- [x] **Step 3: Add the migration**
 
 Create `alembic/versions/0007_add_enriched_record_raw_text.py`:
 ```python
@@ -1432,7 +1432,7 @@ def downgrade() -> None:
 reordered, update `down_revision` to whatever the actual prior head revision is at
 execution time, per the spec's own open question about exact revision numbers.)
 
-- [ ] **Step 4: Add the column to `EnrichedRecord`**
+- [x] **Step 4: Add the column to `EnrichedRecord`**
 
 In `src/classiflow/database/models.py`, replace:
 ```python
@@ -1464,7 +1464,7 @@ class EnrichedRecord(Base):
     entities: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
 ```
 
-- [ ] **Step 5: Populate `raw_text` in `_run_enrichment`**
+- [x] **Step 5: Populate `raw_text` in `_run_enrichment`**
 
 In `src/classiflow/services/pipeline/service.py`, replace:
 ```python
@@ -1486,19 +1486,14 @@ with:
                 )
 ```
 
-- [ ] **Step 6: Run the test to verify it passes**
+- [x] **Step 6: Run the test to verify it passes**
 
-Run: `uv run pytest tests/shared/test_pipeline_service_enrichment.py -v`
-Expected: all PASS.
+Run: `uv run pytest tests/shared/test_pipeline_service_enrichment.py -v` → 4 passed.
 
-- [ ] **Step 7: Run the full test suite and `uv run poe check`**
+- [x] **Step 7: Run the full test suite and `uv run poe check`**
 
-Hand these to the user or run directly if permitted:
-```
-uv run pytest tests/ -v
-uv run poe check
-```
-Expected: all PASS.
+Ran directly: `uv run pytest tests/ -v` → 326 passed. `uv run poe check` → all steps
+pass, including the full pre-commit hook set.
 
 - [ ] **Step 8: Commit**
 
