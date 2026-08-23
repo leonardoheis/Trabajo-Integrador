@@ -11,4 +11,5 @@ def run_api() -> None:
         factory=True,
         host=Settings.HOST,
         port=Settings.API_PORT,
+        reload=True,
     )
