@@ -381,12 +381,10 @@ Run: `uv run pytest tests/classification/ tests/shared/ -v` → 168 passed. Full
 `uv run pytest tests/ -v` → 320 passed. `uv run poe lint`/`uv run poe typecheck` both
 clean.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
-```bash
-git add src/classiflow/classification/domain/results.py src/classiflow/classification/prompts/llm_judge.py tests/classification/test_llm_judge_chain.py tests/classification/test_llm_judge_node.py tests/classification/test_coordinator.py tests/classification/test_domain.py tests/shared/test_pipeline_service_enrichment.py tests/shared/test_pipeline_service_classification.py src/classiflow/injections/test.py
-git commit -m "feat: LLM judge output includes final_label, arbitrating primary vs second-opinion disagreement"
-```
+Committed as `fe2dd4a` — "feat: add final_label to JudgeOutput and update related
+logic for classifier disagreement".
 
 ---
 
@@ -410,13 +408,36 @@ git commit -m "feat: LLM judge output includes final_label, arbitrating primary 
   `JudgeInput.svm_agrees_with_prediction: bool` — Task 5's coordinator wiring passes
   these through from `ClassificationState`.
 
-- [ ] **Step 1: Write the failing test for the new fields rendering into the prompt**
+- [x] **Step 1: Write the failing test for the new fields rendering into the prompt**
 
-Add to `tests/classification/test_llm_judge_chain.py`:
+**Deviation from the plan's original approach**: the plan assumed importing the
+private `_format_prompt` directly was an established pattern in this codebase (citing
+`test_primary_classification_chain.py`). That file was checked and does NOT do this —
+it only imports the public `build_classification_chain`/`PrimaryClassificationInput`.
+Importing `_format_prompt` privately trips ruff's `PLC2701` (private-member-access)
+rule, which is enforced (`extend-select = ["ALL"]` in `pyproject.toml`, not
+suppressed for this rule). Fixed by testing through the fully public
+`build_judge_chain(...)` interface instead, using a small `_PromptCapturingLlm(LLM)`
+test double that records the exact prompt string it receives:
 ```python
-from classiflow.classification.bert.ood_scorer import OodMetrics
+class _PromptCapturingLlm(LLM):
+    captured_prompt: str = ""
 
+    def _call(self, prompt: str, stop: list[str] | None = None, **kwargs: object) -> str:
+        del stop, kwargs
+        self.captured_prompt = prompt
+        return _ACCEPT_WITH_LABEL_RESPONSE
 
+    @property
+    def _llm_type(self) -> str:
+        return "prompt-capturing-mock"
+```
+(`stop`/`**kwargs` must keep those exact names — LangChain's `LLM.invoke()` internally
+calls `self._call(prompt, stop=stop, **kwargs)` by keyword; `del stop, kwargs` marks
+them intentionally unused without renaming, since renaming breaks the real call.)
+
+Added to `tests/classification/test_llm_judge_chain.py`:
+```python
 def _ood_metrics(**overrides: object) -> OodMetrics:
     defaults: dict[str, object] = {
         "mahalanobis_p_value": 0.484758,
@@ -432,35 +453,41 @@ def _ood_metrics(**overrides: object) -> OodMetrics:
 
 class TestFormatPromptOodSignals:
     def test_degenerate_mahalanobis_status_is_flagged_not_silently_trusted(self) -> None:
+        llm = _PromptCapturingLlm()
+        chain = build_judge_chain(llm)
         chain_input = _input(
             second_opinion_label="resoluciones",
             second_opinion_confidence=0.996,
             ood_metrics=_ood_metrics(),
             svm_agrees_with_prediction=False,
         )
-        prompt = _format_prompt(chain_input)
-        assert "refused_degenerate" in prompt
-        assert "0.484758" in prompt
+        chain.invoke(chain_input)
+        assert "degenerate calibration" in llm.captured_prompt
+        assert "do not treat this value as trustworthy evidence" in llm.captured_prompt
+        assert "0.484758" in llm.captured_prompt
 
     def test_in_distribution_and_svm_agreement_both_render(self) -> None:
+        llm = _PromptCapturingLlm()
+        chain = build_judge_chain(llm)
         chain_input = _input(
             second_opinion_label="resoluciones",
             second_opinion_confidence=0.996,
             ood_metrics=_ood_metrics(in_distribution=False),
             svm_agrees_with_prediction=False,
         )
-        prompt = _format_prompt(chain_input)
+        chain.invoke(chain_input)
+        prompt = llm.captured_prompt
         assert "in_distribution: False" in prompt or "not in-distribution" in prompt.lower()
         assert "svm" in prompt.lower()
 ```
-Import `_format_prompt` (already a module-level function in `llm_judge.py`, add it
-to this test file's existing `from classiflow.classification.prompts.llm_judge
-import JudgeInput, build_judge_chain` line as `_format_prompt` too — it's a private
-name but this test file already lives in the same conceptual unit and other test
-files in this codebase (e.g. `test_primary_classification_chain.py`, referenced in
-the spec) follow the same pattern of testing private formatting functions directly).
+(The first assertion also changed from checking for the literal `"refused_degenerate"`
+enum string to checking for the actual human-readable interpretation text the prompt
+renders — `"degenerate calibration"` / `"do not treat this value as trustworthy
+evidence"` — which is what `_ood_signal_block` in Step 4 below actually produces, and
+matches the spec's intent more precisely: the judge should see an explicit warning,
+not just the raw status token.)
 
-- [ ] **Step 2: Run to verify it fails**
+- [x] **Step 2: Run to verify it fails**
 
 Run: `uv run pytest tests/classification/test_llm_judge_chain.py -v`
 Expected: FAIL — `JudgeInput` has no `ood_metrics`/`svm_agrees_with_prediction`/
@@ -471,7 +498,7 @@ setting, so Pydantic's own default `extra="ignore"` applies, meaning the test fa
 not on construction but on the assertion that the new content actually appears in
 the rendered prompt, since `_format_prompt` doesn't reference these fields yet).
 
-- [ ] **Step 3: Add the new fields to `JudgeInput`**
+- [x] **Step 3: Add the new fields to `JudgeInput`**
 
 In `src/classiflow/classification/prompts/llm_judge.py`, replace:
 ```python
@@ -503,7 +530,7 @@ Add the import at the top of the file:
 from classiflow.classification.bert.ood_scorer import OodMetrics
 ```
 
-- [ ] **Step 4: Add an OOD-signal interpretation block to `_TEMPLATE` and render it in `_format_prompt`**
+- [x] **Step 4: Add an OOD-signal interpretation block to `_TEMPLATE` and render it in `_format_prompt`**
 
 Add a new template section (insert after the existing `Automated risk signals` /
 `Foreign municipality detected` lines, before the `Decide HUMAN_REVIEW` block):
@@ -612,18 +639,15 @@ def _format_prompt(chain_input: JudgeInput) -> str:
     )
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
-Run: `uv run pytest tests/classification/test_llm_judge_chain.py -v`
-Expected: all PASS, including the two new tests from Step 1.
+Run: `uv run pytest tests/classification/test_llm_judge_chain.py -v` → 5 passed.
 
-- [ ] **Step 6: Run the broader classification test suite to check for regressions**
+- [x] **Step 6: Run the broader classification test suite to check for regressions**
 
-Run: `uv run pytest tests/classification/ -v`
-Expected: all PASS (no other test constructs `JudgeInput` with positional args that
-would break from the new fields — all existing tests use keyword construction with
-defaults, per the `_input()` helper's `model_validate(defaults)` pattern already
-shown in `test_llm_judge_chain.py`).
+Run: `uv run pytest tests/classification/ -v` → 100 passed. Full suite
+`uv run pytest tests/ -v` → 322 passed. `uv run poe lint`/`uv run poe typecheck` both
+clean.
 
 - [ ] **Step 7: Commit**
 

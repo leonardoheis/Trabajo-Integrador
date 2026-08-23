@@ -7,6 +7,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable, RunnableLambda
 from pydantic import Field
 
+from classiflow.classification.bert.ood_scorer import OodMetrics
 from classiflow.classification.domain.results import JudgeOutput
 from classiflow.domain.base import BaseEntity
 
@@ -16,6 +17,9 @@ class JudgeInput(BaseEntity):
     primary_label: str
     primary_confidence: float
     second_opinion_label: str | None = None
+    second_opinion_confidence: float | None = None
+    ood_metrics: OodMetrics | None = None
+    svm_agrees_with_prediction: bool = True
     smells: list[str] = Field(default_factory=list)
     risk_score: int = 0
     foreign_municipality: str | None = None
@@ -87,10 +91,18 @@ Category anchors -- what the text for each label should actually contain:
 {category_anchors}
 
 Primary classifier's label: {primary_label} (confidence: {primary_confidence})
-Second opinion label (independent model, "none" if disabled): {second_opinion_label}
+Second opinion label (independent model, "none" if disabled): {second_opinion_label} \
+(confidence: {second_opinion_confidence})
 Automated risk signals (heuristic, not verified against the text -- treat as a \
 caution flag, not a verdict): smells={smells}, risk_score={risk_score}
 Foreign municipality detected: {foreign_municipality}
+
+Second opinion's own statistical grounding (how much to trust ITS disagreement, \
+distinct from whether it agrees with the primary label):
+{ood_signal_block}
+SVM reviewer agreement with second opinion's own predicted label (a same-model \
+internal consistency check on the second opinion, NOT the primary-vs-second-opinion \
+disagreement itself): {svm_agrees_with_prediction}
 
 Decide HUMAN_REVIEW, not ACCEPT, when any of these hold:
 - foreign_municipality is not "none" -- the document may not even be from \
@@ -105,8 +117,12 @@ text clearly supports.
 When the primary and second-opinion labels disagree, decide which one the document \
 text actually supports using the category anchors above, and return that exact label \
 string as final_label -- never a different category, even if you believe neither \
-candidate is fully correct. If the text is genuinely ambiguous between the two, still \
-pick the more likely candidate and reflect the uncertainty in reasoning, not by \
+candidate is fully correct. Trust the second opinion's disagreement more when its \
+statistical grounding above is in-distribution/calibrated/SVM-consistent, and less \
+when it is out-of-distribution, uncalibrated, or SVM-inconsistent -- that grounding \
+describes how reliable the second opinion's OWN prediction is, separate from whether \
+it agrees with the primary label. If the text is genuinely ambiguous between the two, \
+still pick the more likely candidate and reflect the uncertainty in reasoning, not by \
 refusing to choose. If second_opinion_label is "none" or matches the primary label, \
 final_label is simply {primary_label}.
 
@@ -134,6 +150,30 @@ def _extract(text: str) -> JudgeOutput:
     raise ValueError(msg)
 
 
+def _ood_signal_block(ood_metrics: OodMetrics | None) -> str:
+    if ood_metrics is None:
+        return "not available (second opinion disabled or OOD scoring not configured)"
+    mahalanobis_note = (
+        "-- degenerate calibration, this specific model's calibration step could not "
+        "produce a reliable p-value here; do not treat this value as trustworthy evidence"
+        if ood_metrics.mahalanobis_calibration_status == "refused_degenerate"
+        else f"-- {ood_metrics.mahalanobis_calibration_status}"
+    )
+    return (
+        f"- mahalanobis_p_value: {ood_metrics.mahalanobis_p_value} "
+        f"(low = anomalous/atypical for the predicted class, high = statistically "
+        f"typical) {mahalanobis_note}\n"
+        f"- cosine_z: {ood_metrics.cosine_z} (near 0 = typical, large magnitude = "
+        f"anomalous) -- {ood_metrics.cosine_calibration_status}\n"
+        f"- knn_distance: {ood_metrics.knn_distance} (distance to nearest training "
+        f"examples of the predicted class in embedding space; larger = less similar "
+        f"to anything this model was trained on) "
+        f"-- {ood_metrics.knn_distance_calibration_status}\n"
+        f"- in_distribution: {ood_metrics.in_distribution} (headline summary: whether "
+        f"any calibrated signal above actually fired as anomalous)"
+    )
+
+
 def _format_prompt(chain_input: JudgeInput) -> str:
     return _TEMPLATE.format(
         category_anchors=_CATEGORY_ANCHORS_BLOCK,
@@ -141,9 +181,16 @@ def _format_prompt(chain_input: JudgeInput) -> str:
         primary_label=chain_input.primary_label,
         primary_confidence=chain_input.primary_confidence,
         second_opinion_label=chain_input.second_opinion_label or "none",
+        second_opinion_confidence=(
+            "n/a"
+            if chain_input.second_opinion_confidence is None
+            else chain_input.second_opinion_confidence
+        ),
         smells=", ".join(chain_input.smells) or "none",
         risk_score=chain_input.risk_score,
         foreign_municipality=chain_input.foreign_municipality or "none",
+        ood_signal_block=_ood_signal_block(chain_input.ood_metrics),
+        svm_agrees_with_prediction=chain_input.svm_agrees_with_prediction,
     )
 
 
