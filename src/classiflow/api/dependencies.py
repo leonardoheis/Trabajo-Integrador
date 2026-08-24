@@ -1,8 +1,9 @@
 import asyncio
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Annotated, cast
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.runnables import Runnable
 from langgraph.graph.state import CompiledStateGraph
@@ -89,6 +90,12 @@ async def get_current_user(
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def require_admin(current_user: CurrentUser) -> None:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Admin access required")
+
 
 # Session-scoped repos/services, built fresh per request from FastAPI's own native
 # yield-dependency (not dependency_injector's Resource, which has no per-request
