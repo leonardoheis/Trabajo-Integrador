@@ -25,8 +25,8 @@ _TEST_STATE = "test-csrf-state"
 @pytest.fixture
 def user_repo() -> InMemoryUserRepository:
     repo = InMemoryUserRepository()
-    repo.seed(AllowedUser(email=_ALLOWED_EMAIL, is_active=True, is_blocked=False))
-    repo.seed(AllowedUser(email=_BLOCKED_EMAIL, is_active=False, is_blocked=True))
+    repo.seed(AllowedUser(email=_ALLOWED_EMAIL, is_active=True, is_blocked=False, is_admin=False))
+    repo.seed(AllowedUser(email=_BLOCKED_EMAIL, is_active=False, is_blocked=True, is_admin=False))
     return repo
 
 

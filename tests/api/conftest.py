@@ -45,7 +45,7 @@ def client(test_container: TestContainer) -> TestClient:
 
     # `auth_headers` issues a JWT for this email — whitelist it so CurrentUser-protected
     # routes accept it, matching a real logged-in (allowed) user.
-    allowed = AllowedUser(email=_TEST_EMAIL, is_active=True, is_blocked=False)
+    allowed = AllowedUser(email=_TEST_EMAIL, is_active=True, is_blocked=False, is_admin=False)
     test_container.user_repo().seed(allowed)
 
     # job_repo/document_steps_repo/human_decision_repo/pipeline_service are built from
