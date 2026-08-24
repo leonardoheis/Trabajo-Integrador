@@ -1,6 +1,7 @@
 """Repository round-trip tests — all Sql* variants run against in-memory SQLite."""
 
 from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from classiflow.database.base import Base
 from classiflow.database.models import (
     AllowedUser,
+    AuditRecord,
     ClassificationRecord,
     DocumentStep,
     EnrichedRecord,
@@ -46,6 +48,8 @@ _JOB = "job-001"
 _EMAIL = "test@example.com"
 _ROWS_1 = 1
 _ROWS_2 = 2
+_ROWS_5 = 5
+_PAGE_SIZE_2 = 2
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -132,6 +136,164 @@ class TestInMemoryAuditRepository:
         await repo.save(r1)
         await repo.save(r2)
         assert await repo.list_for_job(_JOB) == [r1]
+
+
+class TestSqlAuditRepositoryListFiltered:
+    async def test_filters_by_job_id(self, session: AsyncSession) -> None:
+        repo = SqlAuditRepository(session)
+        await repo.save(make_audit_record("job-1", "node1", "started"))
+        await repo.save(make_audit_record("job-2", "node1", "started"))
+
+        records, total = await repo.list_filtered(
+            job_id="job-1",
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert [r.job_id for r in records] == ["job-1"]
+
+    async def test_filters_by_node_and_event(self, session: AsyncSession) -> None:
+        repo = SqlAuditRepository(session)
+        await repo.save(make_audit_record(_JOB, "node1", "started"))
+        await repo.save(make_audit_record(_JOB, "node2", "passed"))
+
+        records, total = await repo.list_filtered(
+            job_id=None,
+            node="node1",
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert records[0].node == "node1"
+
+    async def test_paginates(self, session: AsyncSession) -> None:
+        repo = SqlAuditRepository(session)
+        for i in range(_ROWS_5):
+            await repo.save(make_audit_record(f"job-{i}", "node1", "started"))
+
+        page_1, total = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=_PAGE_SIZE_2,
+        )
+        page_2, _ = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=2,
+            page_size=_PAGE_SIZE_2,
+        )
+
+        assert total == _ROWS_5
+        assert len(page_1) == _PAGE_SIZE_2
+        assert len(page_2) == _PAGE_SIZE_2
+        assert {r.job_id for r in page_1} != {r.job_id for r in page_2}
+
+    async def test_filters_by_date_range(self, session: AsyncSession) -> None:
+        repo = SqlAuditRepository(session)
+        now = datetime.now(timezone.utc)
+        old = AuditRecord(job_id="job-old", node="n", event="e", timestamp=now - timedelta(days=10))
+        recent = AuditRecord(job_id="job-recent", node="n", event="e", timestamp=now)
+        await repo.save(old)
+        await repo.save(recent)
+
+        records, total = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=now - timedelta(days=1),
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert records[0].job_id == "job-recent"
+
+
+class TestInMemoryAuditRepositoryListFiltered:
+    async def test_filters_by_job_id(self) -> None:
+        repo = InMemoryAuditRepository()
+        await repo.save(make_audit_record("job-1", "node1", "started"))
+        await repo.save(make_audit_record("job-2", "node1", "started"))
+
+        records, total = await repo.list_filtered(
+            job_id="job-1",
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert [r.job_id for r in records] == ["job-1"]
+
+    async def test_paginates(self) -> None:
+        repo = InMemoryAuditRepository()
+        for i in range(_ROWS_5):
+            await repo.save(make_audit_record(f"job-{i}", "node1", "started"))
+
+        page_1, total = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=_PAGE_SIZE_2,
+        )
+        page_2, _ = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=2,
+            page_size=_PAGE_SIZE_2,
+        )
+
+        assert total == _ROWS_5
+        assert len(page_1) == _PAGE_SIZE_2
+        assert len(page_2) == _PAGE_SIZE_2
+        assert {r.job_id for r in page_1} != {r.job_id for r in page_2}
+
+    async def test_filters_by_date_range(self) -> None:
+        repo = InMemoryAuditRepository()
+        now = datetime.now(timezone.utc)
+        old = AuditRecord(job_id="job-old", node="n", event="e", timestamp=now - timedelta(days=10))
+        recent = AuditRecord(job_id="job-recent", node="n", event="e", timestamp=now)
+        await repo.save(old)
+        await repo.save(recent)
+
+        records, total = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=now - timedelta(days=1),
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert records[0].job_id == "job-recent"
 
 
 # ---------------------------------------------------------------------------
