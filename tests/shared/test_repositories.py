@@ -174,6 +174,22 @@ class TestSqlUserRepository:
         repo = SqlUserRepository(session)
         assert not await repo.is_allowed(_EMAIL)
 
+    async def test_is_admin_persists(self, session: AsyncSession) -> None:
+        session.add(AllowedUser(email=_EMAIL, is_active=True, is_blocked=False, is_admin=True))
+        await session.flush()
+        repo = SqlUserRepository(session)
+        user = await repo.find_by_email(_EMAIL)
+        assert user is not None
+        assert user.is_admin is True
+
+    async def test_is_admin_defaults_false(self, session: AsyncSession) -> None:
+        session.add(_active_user())
+        await session.flush()
+        repo = SqlUserRepository(session)
+        user = await repo.find_by_email(_EMAIL)
+        assert user is not None
+        assert user.is_admin is False
+
 
 class TestInMemoryUserRepository:
     async def test_find_and_allowed(self) -> None:
@@ -190,6 +206,13 @@ class TestInMemoryUserRepository:
     async def test_missing_not_allowed(self) -> None:
         repo = InMemoryUserRepository()
         assert not await repo.is_allowed(_EMAIL)
+
+    async def test_is_admin_persists(self) -> None:
+        repo = InMemoryUserRepository()
+        repo.seed(AllowedUser(email=_EMAIL, is_active=True, is_blocked=False, is_admin=True))
+        user = await repo.find_by_email(_EMAIL)
+        assert user is not None
+        assert user.is_admin is True
 
 
 # ---------------------------------------------------------------------------
