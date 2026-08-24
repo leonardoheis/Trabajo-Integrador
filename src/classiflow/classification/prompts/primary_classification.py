@@ -114,6 +114,20 @@ _CATEGORY_DEFS: dict[DocumentCategory, str] = {
         "spacing or accents (e.g. 'R ES0 LU CIÓN' for 'RESOLUCIÓN') -- read past "
         "such corruption rather than treating a garbled match as absent."
     ),
+    DocumentCategory.OTRO: (
+        "Otro: the document is NOT from Municipalidad de Rosario at all -- a "
+        "completely different issuing institution (a national government agency, "
+        "a bank, a different municipality's own letterhead, a private company). "
+        "This is NOT for municipal documents that are merely ambiguous, hard to "
+        "categorize, or a poor fit for the 10 categories above -- if the issuer is "
+        "genuinely Municipalidad de Rosario (any of its Secretarías, the "
+        "Departamento Ejecutivo, or the Concejo Municipal), pick the closest real "
+        "category above and reflect any uncertainty with a lower confidence, never "
+        "'otro'. Anchor: the document's own letterhead, seal, or issuing-body line "
+        'names an institution other than Municipalidad de Rosario -- e.g. "Banco '
+        "Central de la República Argentina\", a different city's municipal "
+        "government, a national ministry."
+    ),
 }
 _CATEGORIES_BLOCK = "\n".join(f"- {label.value}: {desc}" for label, desc in _CATEGORY_DEFS.items())
 
@@ -165,6 +179,13 @@ confirms the phrase is present and then output the plain "decretos" or \
 pick them when their specific anchor (recess/extraordinary-faculty language; \
 a range of boletín numbers) is actually present, not just because the text \
 resembles a decreto or a boletín.
+- "otro" is reserved for documents that are not from Municipalidad de Rosario at \
+all -- wrong issuing institution entirely. Never pick "otro" just because a \
+genuinely municipal document is confusing or doesn't cleanly match one of the \
+10 real categories above; in that case pick the closest real category and lower \
+your confidence instead. Check the document's own letterhead/seal/issuing-body \
+line before choosing "otro" -- do not infer a non-municipal issuer from topic \
+or subject matter alone.
 - An anchor phrase only counts as a signal when it introduces THIS \
 document's own operative content -- typically the very first substantive \
 line, immediately followed by that category's own structural markers (a \

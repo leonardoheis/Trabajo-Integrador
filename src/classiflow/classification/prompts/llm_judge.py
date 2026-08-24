@@ -77,6 +77,12 @@ _CATEGORY_ANCHORS = {
         "on parliamentary/internal Concejo matters (not RESUELVE verb -- that's the "
         "executive resoluciones anchor)"
     ),
+    "otro": (
+        "the document is not from Municipalidad de Rosario at all -- a different "
+        "issuing institution entirely (national agency, bank, another city's "
+        "government). Not for genuinely-municipal documents that are merely "
+        "ambiguous between two of the other categories."
+    ),
 }
 _CATEGORY_ANCHORS_BLOCK = "\n".join(f"- {k}: {v}" for k, v in _CATEGORY_ANCHORS.items())
 

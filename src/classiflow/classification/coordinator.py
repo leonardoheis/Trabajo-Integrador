@@ -105,6 +105,7 @@ def build_classification_coordinator(
         ctx = JobContext(job_id=state["job_id"], filename=state["filename"])
         route = await confidence_gate.run(
             ctx,
+            primary_label=state["label"],
             confidence=state["confidence"],
             foreign_municipality=state.get("foreign_municipality"),
             classifier_disagreement=state.get("classifier_disagreement", False),

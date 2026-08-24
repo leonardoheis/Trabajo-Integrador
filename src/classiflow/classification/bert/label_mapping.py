@@ -1,6 +1,7 @@
 """BETO-to-Classiflow label normalization -- see the BERT spec's Decision 5. BETO v2 was
-trained on 8 of Classiflow's 10 categories (singular Spanish, not plural snake_case) plus
-its own "otro" catch-all with no Classiflow equivalent.
+trained on 8 real Classiflow categories (singular Spanish, not plural snake_case) plus
+its own "otro" catch-all, which now maps onto Classiflow's own OTRO category too --
+all 9 of BETO's labels have a real Classiflow equivalent.
 
 REVIEW AT END OF STAGE 4: normalize_bert_label currently has exactly one real caller
 (classifier_disagreement, below) -- it's kept as a separate public function only because
@@ -21,7 +22,7 @@ _LABEL_NORMALIZE: dict[str, str | None] = {
     "ordenanza": "ordenanzas",
     "resolucion": "resoluciones",
     "resolucion_concejo_municipal": "resoluciones_concejo_municipal",
-    "otro": None,  # BETO's catch-all -- no Classiflow category equivalent
+    "otro": "otro",  # otro is now a real, comparable Classiflow category (see Decision 3)
 }
 _BETO_TRAINED_LABELS = frozenset(v for v in _LABEL_NORMALIZE.values() if v is not None)
 

@@ -6,6 +6,7 @@ from classiflow.classification.config_classification import (
     ClassificationConfig,
     get_classification_config,
 )
+from classiflow.classification.domain.categories import DocumentCategory
 from classiflow.classification.domain.review_route import ReviewRoute
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.events.broadcaster import EventBroadcaster
@@ -35,12 +36,14 @@ class ConfidenceGateNode(BaseNode):
         self,
         ctx: JobContext,
         *,
+        primary_label: str,
         confidence: float,
         foreign_municipality: str | None,
         classifier_disagreement: bool,
     ) -> ReviewRoute:
         start = await self._emit_started(ctx)
         route = self.decide(
+            primary_label=primary_label,
             confidence=confidence,
             foreign_municipality=foreign_municipality,
             classifier_disagreement=classifier_disagreement,
@@ -59,11 +62,14 @@ class ConfidenceGateNode(BaseNode):
     def decide(
         self,
         *,
+        primary_label: str,
         confidence: float,
         foreign_municipality: str | None,
         classifier_disagreement: bool,
     ) -> ReviewRoute:
         if foreign_municipality is not None:
+            return ReviewRoute.HUMAN_REVIEW
+        if primary_label == DocumentCategory.OTRO.value:
             return ReviewRoute.HUMAN_REVIEW
         if classifier_disagreement:
             return ReviewRoute.LLM_JUDGE
