@@ -47,6 +47,8 @@ same-origin-in-production confirmation reached during plan review (see Task 8).
 
 ### Task 1: `AllowedUser.is_admin` column + migration
 
+**Status: done**
+
 **Files:**
 - Modify: `src/classiflow/database/models.py` (`AllowedUser` class, currently lines 9-18)
 - Create: `alembic/versions/0008_add_allowed_user_is_admin.py`
@@ -56,20 +58,20 @@ same-origin-in-production confirmation reached during plan review (see Task 8).
 - Produces: `AllowedUser.is_admin: bool` (default `False`), readable by every later task
   that touches `AllowedUser`.
 
-- [ ] **Step 1: Add the column**
+- [x] **Step 1: Add the column**
 
 ```python
 # database/models.py, inside class AllowedUser (after is_blocked)
 is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 ```
 
-- [ ] **Step 2: Check the latest migration revision id**
+- [x] **Step 2: Check the latest migration revision id**
 
 Run: `uv run alembic heads`
 Expected: prints the current head revision (should be `0007_...` per the spec's
 migration history — confirm before writing the new revision's `down_revision`).
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 ```python
 """add allowed_user.is_admin
@@ -99,14 +101,14 @@ def downgrade() -> None:
     op.drop_column("allowed_users", "is_admin")
 ```
 
-- [ ] **Step 4: Apply the migration to the local dev DB**
+- [x] **Step 4: Apply the migration to the local dev DB**
 
 Hand this to the user to run (per project convention, never run migrations yourself):
 `uv run alembic upgrade head`
 Expected: no errors; `data/classiflow.db`'s `allowed_users` table gains an `is_admin`
 column.
 
-- [ ] **Step 5: Write a repository test asserting the new field round-trips**
+- [x] **Step 5: Write a repository test asserting the new field round-trips**
 
 ```python
 # tests/shared/test_repositories.py -- add to whatever class already covers AllowedUser
@@ -124,12 +126,12 @@ async def test_allowed_user_is_admin_persists(self, user_repo: IUserRepository) 
 method — if running Task 1 before Task 3, seed via the `InMemoryUserRepository.seed()`
 method that already exists instead, and revisit this test once Task 3 lands.)
 
-- [ ] **Step 6: Run the test**
+- [x] **Step 6: Run the test**
 
 Run: `uv run pytest tests/shared/test_repositories.py -k is_admin -v`
 Expected: PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/classiflow/database/models.py alembic/versions/0008_add_allowed_user_is_admin.py tests/shared/test_repositories.py
@@ -139,6 +141,8 @@ git commit -m "feat: add AllowedUser.is_admin column"
 ---
 
 ### Task 2: `User.is_admin` + `AuthService` fetches the full row
+
+**Status: done**
 
 **Files:**
 - Modify: `src/classiflow/domain/user.py` (`User` class)
@@ -152,7 +156,7 @@ git commit -m "feat: add AllowedUser.is_admin column"
 - Produces: `User(email: str, is_admin: bool = False)`; `AuthService.verify_token`
   returns a `User` with `is_admin` populated from the DB.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/services/test_auth_service.py
@@ -184,14 +188,14 @@ class TestAuthServiceIsAdmin:
         assert user.is_admin is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/services/test_auth_service.py -v`
 Expected: FAIL — `User` has no `is_admin` field yet (pydantic will silently ignore
 extra kwargs or `AttributeError` depending on config; either way `assert user.is_admin`
 fails or errors).
 
-- [ ] **Step 3: Add `is_admin` to `User` and update `AuthService`**
+- [x] **Step 3: Add `is_admin` to `User` and update `AuthService`**
 
 ```python
 # domain/user.py
@@ -219,17 +223,17 @@ class AuthService:
 the fetched row — same three conditions `is_allowed` already checks, now read once
 instead of fetched twice.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/services/test_auth_service.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Run the full existing auth test suite to confirm nothing broke**
+- [x] **Step 5: Run the full existing auth test suite to confirm nothing broke**
 
 Run: `uv run pytest tests/services/ tests/api/routes/test_auth_oauth.py -v`
 Expected: all PASS — `is_allowed` itself is untouched, only its caller changed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/classiflow/domain/user.py src/classiflow/services/auth/service.py tests/services/test_auth_service.py
@@ -239,6 +243,8 @@ git commit -m "feat: populate User.is_admin from AllowedUser on token verificati
 ---
 
 ### Task 3: `IUserRepository` CRUD methods (`list_all`, `create`, `update`, `delete`)
+
+**Status: done**
 
 **Files:**
 - Modify: `src/classiflow/domain/repositories/user.py`
@@ -252,7 +258,7 @@ git commit -m "feat: populate User.is_admin from AllowedUser on token verificati
   `update(email: str, *, is_active: bool | UnsetType = UNSET, is_admin: bool | UnsetType = UNSET, is_blocked: bool | UnsetType = UNSET) -> None`,
   `delete(email: str) -> None` — used by Task 9's `/users` endpoints.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/shared/test_repositories.py -- add a new test class near the existing user_repo tests
@@ -293,13 +299,13 @@ class TestUserRepositoryCrud:
 `Sql`/`InMemory`, check the existing pattern other `test_repositories.py` classes use —
 follow it exactly rather than inventing a new fixture shape.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/shared/test_repositories.py::TestUserRepositoryCrud -v`
 Expected: FAIL — `create`/`update`/`delete`/`list_all` don't exist yet on
 `IUserRepository`.
 
-- [ ] **Step 3: Extend the Protocol**
+- [x] **Step 3: Extend the Protocol**
 
 ```python
 # domain/repositories/user.py
@@ -332,7 +338,7 @@ class IUserRepository(Protocol):
 from the package `__init__`, import from `classiflow.domain.repositories` directly
 rather than reaching into `job.py`, matching this project's import-style convention.)
 
-- [ ] **Step 4: Implement on `SqlUserRepository` and `InMemoryUserRepository`**
+- [x] **Step 4: Implement on `SqlUserRepository` and `InMemoryUserRepository`**
 
 ```python
 # database/repositories/user.py
@@ -405,18 +411,18 @@ class InMemoryUserRepository:
         self._users.pop(email, None)
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest tests/shared/test_repositories.py::TestUserRepositoryCrud -v`
 Expected: PASS
 
-- [ ] **Step 6: Run the full test suite to confirm nothing else broke**
+- [x] **Step 6: Run the full test suite to confirm nothing else broke**
 
 Run: `uv run pytest -v`
 Expected: all PASS (in particular, `seed()` on `InMemoryUserRepository` still works
 unchanged — this task only adds methods, doesn't remove any).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/classiflow/domain/repositories/user.py src/classiflow/database/repositories/user.py tests/shared/test_repositories.py
@@ -426,6 +432,8 @@ git commit -m "feat: add CRUD methods to IUserRepository"
 ---
 
 ### Task 4: `IAuditRepository.list_filtered` (paginated, filterable)
+
+**Status: done**
 
 **Files:**
 - Modify: `src/classiflow/services/audit/repository.py`
@@ -439,7 +447,7 @@ git commit -m "feat: add CRUD methods to IUserRepository"
   (records for the requested page, plus the total matching count for pagination) — used
   by Task 10's `GET /audit`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/shared/test_repositories.py
@@ -524,12 +532,12 @@ class TestAuditRepositoryListFiltered:
 `Sql`/`InMemory` — if there's no existing `audit_repo` fixture, add one following the
 same shape as `user_repo`/`job_repo`.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/shared/test_repositories.py::TestAuditRepositoryListFiltered -v`
 Expected: FAIL — `list_filtered` doesn't exist yet.
 
-- [ ] **Step 3: Extend the Protocol**
+- [x] **Step 3: Extend the Protocol**
 
 ```python
 # services/audit/repository.py
@@ -555,7 +563,7 @@ class IAuditRepository(Protocol):
     ) -> tuple[list[AuditRecord], int]: ...
 ```
 
-- [ ] **Step 4: Implement on `SqlAuditRepository` and `InMemoryAuditRepository`**
+- [x] **Step 4: Implement on `SqlAuditRepository` and `InMemoryAuditRepository`**
 
 ```python
 # database/repositories/audit.py
@@ -631,12 +639,12 @@ class InMemoryAuditRepository:
         return matches[start : start + page_size], len(matches)
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest tests/shared/test_repositories.py::TestAuditRepositoryListFiltered -v`
 Expected: PASS
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/classiflow/services/audit/repository.py src/classiflow/database/repositories/audit.py tests/shared/test_repositories.py
@@ -646,6 +654,8 @@ git commit -m "feat: add IAuditRepository.list_filtered for paginated audit quer
 ---
 
 ### Task 5: Queued vs. processing `Job` status
+
+**Status: done**
 
 **Files:**
 - Modify: `src/classiflow/domain/job.py` (`JobStatus` enum)
@@ -659,7 +669,7 @@ git commit -m "feat: add IAuditRepository.list_filtered for paginated audit quer
   `"processing"` → a terminal status, instead of `"started"` → terminal. Used by
   Task 6's `GET /pipeline/jobs` and the frontend's Processing page.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/shared/test_pipeline_service_enrichment.py -- add near existing PipelineService tests
@@ -700,12 +710,12 @@ existing fixtures are actually called; read the file first if `Glob` finds it, o
 place these tests directly alongside `TestPipelineServiceStaging` mentioned in
 CodeGraph's earlier survey of this file.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/shared/test_pipeline_service_enrichment.py -k QueuedProcessing -v`
 Expected: FAIL — `Job.status` is `"started"`, not `"queued"`.
 
-- [ ] **Step 3: Add `JobStatus.PROCESSING`**
+- [x] **Step 3: Add `JobStatus.PROCESSING`**
 
 ```python
 # domain/job.py
@@ -719,7 +729,7 @@ class JobStatus(str, Enum):
     DONE = "done"
 ```
 
-- [ ] **Step 4: Update `PipelineService.start` and `_run`**
+- [x] **Step 4: Update `PipelineService.start` and `_run`**
 
 ```python
 # services/pipeline/service.py
@@ -746,18 +756,18 @@ async def _run(self, job_id: str, filename: str, file_bytes: bytes) -> None:
         # ... rest of _run unchanged from here ...
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [x] **Step 5: Run tests to verify they pass**
 
 Run: `uv run pytest tests/shared/test_pipeline_service_enrichment.py -k QueuedProcessing -v`
 Expected: PASS
 
-- [ ] **Step 6: Run the full pipeline test suite to confirm nothing broke**
+- [x] **Step 6: Run the full pipeline test suite to confirm nothing broke**
 
 Run: `uv run pytest tests/shared/ tests/api/routes/test_pipeline.py -v`
 Expected: all PASS — no other code reads `Job.status == "started"` as a magic string
 (confirm with a quick grep before running, per Step 6a below).
 
-- [ ] **Step 6a: Grep for any other code depending on the old `"started"` value**
+- [x] **Step 6a: Grep for any other code depending on the old `"started"` value**
 
 Run: `grep -rn '"started"' src/classiflow/ tests/ --include="*.py"`
 Expected: only `domain/job.py`'s `JobStatus.STARTED` definition itself and this task's
@@ -765,7 +775,7 @@ own changed call site remain — if anything else matches (e.g. a UI string comp
 elsewhere), that's a real dependency this task must also update; don't silently leave
 it broken.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/classiflow/domain/job.py src/classiflow/services/pipeline/service.py tests/shared/test_pipeline_service_enrichment.py
@@ -775,6 +785,8 @@ git commit -m "feat: distinguish queued from processing Job status"
 ---
 
 ### Task 6: `GET /pipeline/jobs` and `GET /pipeline/jobs/{job_id}/timeline`
+
+**Status: done**
 
 **Files:**
 - Modify: `src/classiflow/api/routes/pipeline/schemas.py`
@@ -789,7 +801,7 @@ git commit -m "feat: distinguish queued from processing Job status"
   `GET /pipeline/jobs/{job_id}/timeline` routes — consumed by the frontend's
   Processing page (Task 15).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/api/routes/test_pipeline.py
@@ -830,13 +842,13 @@ class TestJobTimelineEndpoint:
         assert all("node" in e and "timestamp" in e for e in entries)
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/api/routes/test_pipeline.py -k "Jobs or Timeline" -v`
 Expected: FAIL — routes don't exist (404 on both, but the assertions expect 200/other
 404s for a different reason, so these genuinely fail).
 
-- [ ] **Step 3: Add `get_audit_repo` dependency**
+- [x] **Step 3: Add `get_audit_repo` dependency**
 
 ```python
 # api/dependencies.py -- add near get_hash_repo (uses the same DbSession pattern)
@@ -850,7 +862,7 @@ def get_audit_repo(session: DbSession) -> IAuditRepository:
 (`SqlAuditRepository` is already imported in this file at line 26 — no new import
 needed for that symbol, only for `IAuditRepository` itself.)
 
-- [ ] **Step 4: Add the schemas**
+- [x] **Step 4: Add the schemas**
 
 ```python
 # api/routes/pipeline/schemas.py -- add below existing schemas
@@ -871,7 +883,7 @@ class TimelineEntry(BaseSchema):
     duration_ms: int | None
 ```
 
-- [ ] **Step 5: Add the endpoints**
+- [x] **Step 5: Add the endpoints**
 
 ```python
 # api/routes/pipeline/endpoints.py -- add imports for JobSummary, TimelineEntry,
@@ -958,12 +970,12 @@ Add `IJobRepository`, `IDocumentStepsRepository` (already imported per existing
 endpoint signatures in this file's neighbors), `IAuditRepository`, `get_audit_repo`,
 `JobSummary`, `TimelineEntry` to this file's imports.
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `uv run pytest tests/api/routes/test_pipeline.py -k "Jobs or Timeline" -v`
 Expected: PASS
 
-- [ ] **Step 7: Add `get_audit_repo` override to `conftest.py`**
+- [x] **Step 7: Add `get_audit_repo` override to `conftest.py`**
 
 ```python
 # tests/api/conftest.py -- add alongside the other _X_repo_override functions
@@ -983,12 +995,12 @@ app.dependency_overrides[get_audit_repo] = _audit_repo_override
 — this step only wires FastAPI's override to point at it, following the exact pattern
 every other `_X_repo_override` function in this file already uses.)
 
-- [ ] **Step 8: Run the full API test suite**
+- [x] **Step 8: Run the full API test suite**
 
 Run: `uv run pytest tests/api/ -v`
 Expected: all PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/classiflow/api/dependencies.py src/classiflow/api/routes/pipeline/schemas.py src/classiflow/api/routes/pipeline/endpoints.py tests/api/routes/test_pipeline.py tests/api/conftest.py
