@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 class JobStatus(str, Enum):
     STARTED = "started"
+    PROCESSING = "processing"
     PASSED = "passed"
     FAILED = "failed"
     REJECTED = "rejected"

@@ -79,13 +79,17 @@ class PipelineService:
         # server_default only fires on a real INSERT — InMemoryJobRepository never
         # round-trips through SQL, so created_at/updated_at must be set explicitly.
         await self._job_repo.create(
-            Job(job_id=job_id, filename=filename, status="started", created_at=now, updated_at=now)
+            Job(job_id=job_id, filename=filename, status="queued", created_at=now, updated_at=now)
         )
         background_tasks.add_task(self._run, job_id, filename, file_bytes)
         return job_id
 
     async def _run(self, job_id: str, filename: str, file_bytes: bytes) -> None:
         async with self._job_semaphore:
+            await self._job_repo.update_status(job_id, "processing")
+            await self._broadcaster.emit(
+                NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.PROCESSING)
+            )
             initial: JobState = {"job_id": job_id, "filename": filename, "file_bytes": file_bytes}
             final_state = cast("JobState", await self._coordinator.ainvoke(initial))
 

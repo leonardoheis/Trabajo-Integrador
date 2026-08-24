@@ -29,6 +29,7 @@ from classiflow.database.repositories.document_steps import InMemoryDocumentStep
 from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
 from classiflow.database.repositories.job import InMemoryJobRepository
+from classiflow.domain.job import JobStatus, NodeEvent
 from classiflow.enrichment.coordinator import build_enrichment_coordinator
 from classiflow.enrichment.nodes import EntityExtractorNode, MetadataEnricherNode, TextCleanerNode
 from classiflow.enrichment.prompts.entity_extraction import build_entity_extraction_chain
@@ -99,6 +100,7 @@ class _ServiceUnderTest:
     service: PipelineService
     job_repo: InMemoryJobRepository
     enriched_record_repo: InMemoryEnrichedRecordRepository
+    broadcaster: EventBroadcaster
 
 
 def _build_service(
@@ -188,7 +190,10 @@ def _build_service(
         job_semaphore=asyncio.Semaphore(10),
     )
     return _ServiceUnderTest(
-        service=service, job_repo=job_repo, enriched_record_repo=enriched_record_repo
+        service=service,
+        job_repo=job_repo,
+        enriched_record_repo=enriched_record_repo,
+        broadcaster=broadcaster,
     )
 
 
@@ -277,3 +282,46 @@ class TestPipelineServiceStaging:
         assert job is not None
         assert job.status == "rejected"
         assert not await anyio.Path(tmp_path / "staging" / f"{job_id}_bad.pdf").exists()
+
+
+class TestPipelineServiceQueuedProcessing:
+    async def test_job_starts_as_queued(self, tmp_path: Path) -> None:
+        under_test = _build_service(_VALID_ENTITY_RESPONSE, tmp_path)
+        background_tasks = BackgroundTasks()
+
+        job_id = await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
+
+        job = await under_test.job_repo.find_by_job_id(job_id)
+        assert job is not None
+        assert job.status == "queued"
+
+    async def test_job_moves_past_queued_once_run(self, tmp_path: Path) -> None:
+        under_test = _build_service(_VALID_ENTITY_RESPONSE, tmp_path)
+        background_tasks = BackgroundTasks()
+        job_id = await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
+        for task in background_tasks.tasks:
+            await task()
+
+        job = await under_test.job_repo.find_by_job_id(job_id)
+        assert job is not None
+        assert job.status != "queued"
+
+    async def test_broadcasts_processing_event_once_semaphore_acquired(
+        self, tmp_path: Path
+    ) -> None:
+        under_test = _build_service(_VALID_ENTITY_RESPONSE, tmp_path)
+        background_tasks = BackgroundTasks()
+        job_id = await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
+
+        received: list[NodeEvent] = []
+
+        async def _consume() -> None:
+            received.extend([event async for event in under_test.broadcaster.subscribe(job_id)])
+
+        consume_task = asyncio.create_task(_consume())
+        for task in background_tasks.tasks:
+            await task()
+        await consume_task
+
+        statuses = [e.status for e in received]
+        assert JobStatus.PROCESSING in statuses
