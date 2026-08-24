@@ -140,7 +140,7 @@ class TestInMemoryAuditRepository:
 
 
 def _active_user(email: str = _EMAIL) -> AllowedUser:
-    return AllowedUser(email=email, is_active=True, is_blocked=False)
+    return AllowedUser(email=email, is_active=True, is_blocked=False, is_admin=False)
 
 
 class TestSqlUserRepository:
@@ -213,6 +213,72 @@ class TestInMemoryUserRepository:
         user = await repo.find_by_email(_EMAIL)
         assert user is not None
         assert user.is_admin is True
+
+
+class TestSqlUserRepositoryCrud:
+    async def test_list_all_returns_every_user(self, session: AsyncSession) -> None:
+        repo = SqlUserRepository(session)
+        await repo.create(_active_user("a@example.com"))
+        await repo.create(_active_user("b@example.com"))
+
+        users = await repo.list_all()
+
+        assert {u.email for u in users} == {"a@example.com", "b@example.com"}
+
+    async def test_update_changes_only_the_given_fields(self, session: AsyncSession) -> None:
+        repo = SqlUserRepository(session)
+        await repo.create(
+            AllowedUser(email=_EMAIL, is_active=True, is_admin=False, is_blocked=False)
+        )
+
+        await repo.update(_EMAIL, is_admin=True)
+
+        updated = await repo.find_by_email(_EMAIL)
+        assert updated is not None
+        assert updated.is_admin is True
+        assert updated.is_active is True
+        assert updated.is_blocked is False
+
+    async def test_delete_removes_the_user(self, session: AsyncSession) -> None:
+        repo = SqlUserRepository(session)
+        await repo.create(_active_user())
+
+        await repo.delete(_EMAIL)
+
+        assert await repo.find_by_email(_EMAIL) is None
+
+
+class TestInMemoryUserRepositoryCrud:
+    async def test_list_all_returns_every_user(self) -> None:
+        repo = InMemoryUserRepository()
+        await repo.create(_active_user("a@example.com"))
+        await repo.create(_active_user("b@example.com"))
+
+        users = await repo.list_all()
+
+        assert {u.email for u in users} == {"a@example.com", "b@example.com"}
+
+    async def test_update_changes_only_the_given_fields(self) -> None:
+        repo = InMemoryUserRepository()
+        await repo.create(
+            AllowedUser(email=_EMAIL, is_active=True, is_admin=False, is_blocked=False)
+        )
+
+        await repo.update(_EMAIL, is_admin=True)
+
+        updated = await repo.find_by_email(_EMAIL)
+        assert updated is not None
+        assert updated.is_admin is True
+        assert updated.is_active is True
+        assert updated.is_blocked is False
+
+    async def test_delete_removes_the_user(self) -> None:
+        repo = InMemoryUserRepository()
+        await repo.create(_active_user())
+
+        await repo.delete(_EMAIL)
+
+        assert await repo.find_by_email(_EMAIL) is None
 
 
 # ---------------------------------------------------------------------------
