@@ -167,3 +167,57 @@ class TestDecisionEndpoint:
 
         queue = client.get("/pipeline/review-queue", headers=auth_headers).json()
         assert job_id not in [i["jobId"] for i in queue]
+
+
+class TestJobsEndpoint:
+    def test_requires_auth(self, client: TestClient) -> None:
+        response = client.get("/pipeline/jobs")
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+    def test_default_status_running_excludes_terminal_jobs(
+        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _ingest(client, auth_headers, monkeypatch, legitimate=False, filename="rejected-jobs.pdf")
+
+        response = client.get("/pipeline/jobs", headers=auth_headers)
+
+        assert response.status_code == HTTPStatus.OK
+        filenames = [j["filename"] for j in response.json()]
+        assert "rejected-jobs.pdf" not in filenames
+
+    def test_status_all_includes_terminal_jobs(
+        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _ingest(client, auth_headers, monkeypatch, legitimate=True, filename="all-jobs.pdf")
+
+        response = client.get("/pipeline/jobs?status=all", headers=auth_headers)
+
+        assert response.status_code == HTTPStatus.OK
+        filenames = [j["filename"] for j in response.json()]
+        assert "all-jobs.pdf" in filenames
+
+
+class TestJobTimelineEndpoint:
+    def test_requires_auth(self, client: TestClient) -> None:
+        response = client.get("/pipeline/jobs/whatever/timeline")
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+    def test_unknown_job_returns_404(
+        self, client: TestClient, auth_headers: dict[str, str]
+    ) -> None:
+        response = client.get("/pipeline/jobs/no-such-job/timeline", headers=auth_headers)
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+    def test_returns_merged_document_steps_and_audit_records(
+        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        job_id = _ingest(
+            client, auth_headers, monkeypatch, legitimate=True, filename="timeline.pdf"
+        )
+
+        response = client.get(f"/pipeline/jobs/{job_id}/timeline", headers=auth_headers)
+
+        assert response.status_code == HTTPStatus.OK
+        entries = response.json()
+        assert len(entries) > 0
+        assert all("node" in e and "timestamp" in e for e in entries)

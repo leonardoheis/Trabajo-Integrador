@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from classiflow.api.app import create_app
 from classiflow.api.dependencies import (
+    get_audit_repo,
     get_classification_record_repo,
     get_document_steps_repo,
     get_human_decision_repo,
@@ -19,6 +20,7 @@ from classiflow.domain.repositories import (
 )
 from classiflow.injections.production import Container
 from classiflow.injections.test import TestContainer
+from classiflow.services.audit.repository import IAuditRepository
 from classiflow.services.auth import encode_token
 from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
@@ -77,6 +79,9 @@ def client(test_container: TestContainer) -> TestClient:
     def _job_service_override() -> JobService:
         return test_container.job_service()
 
+    def _audit_repo_override() -> IAuditRepository:
+        return test_container.audit_repo()
+
     app = create_app()
     app.dependency_overrides[get_job_repo] = _job_repo_override
     app.dependency_overrides[get_document_steps_repo] = _document_steps_repo_override
@@ -84,6 +89,7 @@ def client(test_container: TestContainer) -> TestClient:
     app.dependency_overrides[get_classification_record_repo] = _classification_record_repo_override
     app.dependency_overrides[get_pipeline_service] = _pipeline_service_override
     app.dependency_overrides[get_job_service] = _job_service_override
+    app.dependency_overrides[get_audit_repo] = _audit_repo_override
 
     return TestClient(app)
 

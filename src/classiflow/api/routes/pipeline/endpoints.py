@@ -7,7 +7,10 @@ from fastapi.responses import StreamingResponse
 
 from classiflow.api.dependencies import (
     CurrentUser,
+    get_audit_repo,
     get_current_user,
+    get_document_steps_repo,
+    get_job_repo,
     get_job_service,
     get_pipeline_service,
 )
@@ -16,10 +19,15 @@ from classiflow.api.routes.pipeline.schemas import (
     DecisionRequest,
     DocumentStepSchema,
     IngestResponse,
+    JobSummary,
     ReviewQueueItem,
+    TimelineEntry,
 )
+from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
+from classiflow.domain.repositories.job import IJobRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.injections.production import Container
+from classiflow.services.audit.repository import IAuditRepository
 from classiflow.services.job.exceptions import JobNotFoundError
 from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
@@ -69,6 +77,66 @@ async def review_queue(
         )
         for job, steps in queue
     ]
+
+
+@router.get("/jobs")
+async def list_jobs(
+    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
+    status: str = "running",
+) -> list[JobSummary]:
+    all_jobs = await job_repo.list_all()
+    if status == "running":
+        jobs = [j for j in all_jobs if j.status in {"queued", "processing"}]
+    else:
+        jobs = all_jobs
+    return [
+        JobSummary(
+            job_id=j.job_id,
+            filename=j.filename,
+            status=j.status,
+            created_at=j.created_at,
+            updated_at=j.updated_at,
+        )
+        for j in jobs
+    ]
+
+
+@router.get("/jobs/{job_id}/timeline")
+async def job_timeline(
+    job_id: str,
+    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
+    document_steps_repo: Annotated[IDocumentStepsRepository, Depends(get_document_steps_repo)],
+    audit_repo: Annotated[IAuditRepository, Depends(get_audit_repo)],
+) -> list[TimelineEntry]:
+    if await job_repo.find_by_job_id(job_id) is None:
+        raise JobNotFoundError(job_id)
+
+    steps = await document_steps_repo.steps_for_job(job_id)
+    audit_records = await audit_repo.list_for_job(job_id)
+
+    entries = [
+        TimelineEntry(
+            node=s.node,
+            status=s.status,
+            passed=s.passed,
+            detail=s.detail,
+            timestamp=s.timestamp,
+            duration_ms=s.duration_ms,
+        )
+        for s in steps
+    ] + [
+        TimelineEntry(
+            node=a.node,
+            status=a.event,
+            passed=None,
+            detail=a.detail,
+            timestamp=a.timestamp,
+            duration_ms=a.duration_ms,
+        )
+        for a in audit_records
+    ]
+    entries.sort(key=lambda e: e.timestamp)
+    return entries
 
 
 @router.get("/{job_id}/events")

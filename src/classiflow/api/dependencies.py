@@ -62,6 +62,7 @@ from classiflow.ingesta.prompts import (
     LegitimacyDecisionOutput,
 )
 from classiflow.injections.production import Container
+from classiflow.services.audit.repository import IAuditRepository
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.job.service import JobService
@@ -117,6 +118,10 @@ def get_job_service(
 
 def get_hash_repo(session: DbSession) -> IHashRepository:
     return SqlHashRepository(session)
+
+
+def get_audit_repo(session: DbSession) -> IAuditRepository:
+    return SqlAuditRepository(session)
 
 
 def get_audit_service(session: DbSession) -> AuditService:
