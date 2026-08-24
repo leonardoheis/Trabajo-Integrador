@@ -1,0 +1,9 @@
+from typing import Protocol
+
+from classiflow.database.models import ClassificationRecord
+
+
+class IClassificationRecordRepository(Protocol):
+    async def save(self, record: ClassificationRecord) -> None: ...
+    async def find_by_job_id(self, job_id: str) -> ClassificationRecord | None: ...
+    async def list_needing_human_review(self) -> list[ClassificationRecord]: ...

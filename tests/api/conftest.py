@@ -3,13 +3,16 @@ from fastapi.testclient import TestClient
 
 from classiflow.api.app import create_app
 from classiflow.api.dependencies import (
+    get_classification_record_repo,
     get_document_steps_repo,
     get_human_decision_repo,
     get_job_repo,
+    get_job_service,
     get_pipeline_service,
 )
 from classiflow.database.models import AllowedUser
 from classiflow.domain.repositories import (
+    IClassificationRecordRepository,
     IDocumentStepsRepository,
     IHumanDecisionRepository,
     IJobRepository,
@@ -17,20 +20,25 @@ from classiflow.domain.repositories import (
 from classiflow.injections.production import Container
 from classiflow.injections.test import TestContainer
 from classiflow.services.auth import encode_token
+from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
 
 _TEST_EMAIL = "test@classiflow.dev"
 
 
 @pytest.fixture(scope="module")
-def client() -> TestClient:
+def test_container() -> TestContainer:
+    return TestContainer()
+
+
+@pytest.fixture(scope="module")
+def client(test_container: TestContainer) -> TestClient:
     # `Provide[Container.x]` markers throughout the app reference the *production*
     # Container class by identity, so wiring a same-named but unrelated TestContainer
     # instance can't satisfy them (dependency_injector's wiring maps providers by name
     # within one declarative class, not across two independent classes). Overriding a
     # Container() instance with a fresh TestContainer() instance keeps the exact provider
     # objects the markers point at, while swapping in the in-memory implementations.
-    test_container = TestContainer()
     container = Container()
     container.override(test_container)
     container.wire(packages=["classiflow"])
@@ -60,14 +68,22 @@ def client() -> TestClient:
     def _human_decision_repo_override() -> IHumanDecisionRepository:
         return test_container.human_decision_repo()
 
+    def _classification_record_repo_override() -> IClassificationRecordRepository:
+        return test_container.classification_record_repo()
+
     def _pipeline_service_override() -> PipelineService:
         return test_container.pipeline_service()
+
+    def _job_service_override() -> JobService:
+        return test_container.job_service()
 
     app = create_app()
     app.dependency_overrides[get_job_repo] = _job_repo_override
     app.dependency_overrides[get_document_steps_repo] = _document_steps_repo_override
     app.dependency_overrides[get_human_decision_repo] = _human_decision_repo_override
+    app.dependency_overrides[get_classification_record_repo] = _classification_record_repo_override
     app.dependency_overrides[get_pipeline_service] = _pipeline_service_override
+    app.dependency_overrides[get_job_service] = _job_service_override
 
     return TestClient(app)
 

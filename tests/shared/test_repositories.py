@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from classiflow.database.base import Base
 from classiflow.database.models import (
     AllowedUser,
+    ClassificationRecord,
     DocumentStep,
     EnrichedRecord,
     HumanDecision,
@@ -17,6 +18,10 @@ from classiflow.database.repositories.audit import (
     InMemoryAuditRepository,
     SqlAuditRepository,
     make_audit_record,
+)
+from classiflow.database.repositories.classification_record import (
+    InMemoryClassificationRecordRepository,
+    SqlClassificationRecordRepository,
 )
 from classiflow.database.repositories.document_steps import (
     InMemoryDocumentStepsRepository,
@@ -430,3 +435,81 @@ class TestInMemoryEnrichedRecordRepository:
     async def test_find_missing_returns_none(self) -> None:
         repo = InMemoryEnrichedRecordRepository()
         assert await repo.find_by_job_id("no-such-job") is None
+
+
+# ---------------------------------------------------------------------------
+# IClassificationRecordRepository
+# ---------------------------------------------------------------------------
+
+
+def _classification_record(
+    job_id: str = _JOB, review_route: str = "accept"
+) -> ClassificationRecord:
+    return ClassificationRecord(
+        job_id=job_id,
+        enriched_id=1,
+        label="ordenanzas",
+        confidence=0.91,
+        all_scores={"ordenanzas": 0.91, "decretos": 0.05},
+        second_opinion_label="ordenanza",
+        second_opinion_confidence=0.88,
+        classifier_disagreement=False,
+        ood_metrics=None,
+        svm_scores={"ordenanzas": 0.7},
+        svm_agrees_with_prediction=True,
+        review_route=review_route,
+        smells=[],
+        risk_score=0,
+        smell_review_suggested=False,
+        foreign_municipality=None,
+        judged_by_llm=False,
+        stored_path=None,
+        human_overridden=False,
+    )
+
+
+class TestSqlClassificationRecordRepository:
+    async def test_save_and_find(self, session: AsyncSession) -> None:
+        repo = SqlClassificationRecordRepository(session)
+        await repo.save(_classification_record())
+        record = await repo.find_by_job_id(_JOB)
+        assert record is not None
+        assert record.label == "ordenanzas"
+        assert record.all_scores == {"ordenanzas": 0.91, "decretos": 0.05}
+        assert record.judged_by_llm is False
+        assert record.human_overridden is False
+
+    async def test_find_missing_returns_none(self, session: AsyncSession) -> None:
+        repo = SqlClassificationRecordRepository(session)
+        assert await repo.find_by_job_id("no-such-job") is None
+
+    async def test_list_needing_human_review_filters_by_route(self, session: AsyncSession) -> None:
+        repo = SqlClassificationRecordRepository(session)
+        await repo.save(_classification_record(job_id=_JOB, review_route="human_review"))
+        pending = await repo.list_needing_human_review()
+        assert [r.job_id for r in pending] == [_JOB]
+
+    async def test_list_needing_human_review_excludes_accepted(self, session: AsyncSession) -> None:
+        repo = SqlClassificationRecordRepository(session)
+        await repo.save(_classification_record(job_id=_JOB, review_route="accept"))
+        assert await repo.list_needing_human_review() == []
+
+
+class TestInMemoryClassificationRecordRepository:
+    async def test_save_and_find(self) -> None:
+        repo = InMemoryClassificationRecordRepository()
+        await repo.save(_classification_record())
+        record = await repo.find_by_job_id(_JOB)
+        assert record is not None
+        assert record.label == "ordenanzas"
+
+    async def test_find_missing_returns_none(self) -> None:
+        repo = InMemoryClassificationRecordRepository()
+        assert await repo.find_by_job_id("no-such-job") is None
+
+    async def test_list_needing_human_review_filters_by_route(self) -> None:
+        repo = InMemoryClassificationRecordRepository()
+        await repo.save(_classification_record(job_id=_JOB, review_route="human_review"))
+        await repo.save(_classification_record(job_id="job-002", review_route="accept"))
+        pending = await repo.list_needing_human_review()
+        assert [r.job_id for r in pending] == [_JOB]

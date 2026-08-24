@@ -192,8 +192,19 @@ desktop.ini
 # Ignores everything under the root models/ directory regardless of file extension --
 # *.gguf is already covered above, but a HF sentence-transformers model's
 # config.json/tokenizer files/.safetensors aren't caught by any extension-based rule.
+# bert_tunning_beto_v2/ is a tracked exception (below), stored via Git LFS -- everything
+# else under models/ (the GGUF LLMs, and models/embeddings/ -- a Hugging Face Hub cache
+# directory regenerated on first use) stays gitignored.
 models/**
 !models/**/.gitkeep
+!models/bert_tunning_beto_v2/
+!models/bert_tunning_beto_v2/**
+
+# ---- Local document storage root (staged uploads, classified/review-queue files) ----
+storage/documents/**
+
+# ---- Generated HTML reports (one per notebook run, not source) ----
+storage/reports/**
 
 # ---- Un-ignore the main dev database (other *.db files stay ignored) ----
 !data/classiflow.db
@@ -210,3 +221,6 @@ models/**
 
 # ---- superpowers subagent-driven-development scratch workspace ----
 .superpowers/
+
+# ----- Ignore Memory.md (local only) ----
+MEMORY.md

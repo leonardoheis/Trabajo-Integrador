@@ -4,6 +4,8 @@ from functools import cache
 import easyocr
 from dependency_injector import containers, providers
 
+from classiflow.classification.prompts.llm_judge import build_judge_chain
+from classiflow.classification.prompts.primary_classification import build_classification_chain
 from classiflow.database.base import get_session
 from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.enrichment.prompts.entity_extraction import build_entity_extraction_chain
@@ -21,10 +23,15 @@ from classiflow.ingesta.nodes.node4_duplicate_control import (
 from classiflow.ingesta.prompts import build_content_chain, build_format_chain
 from classiflow.services.auth.service import AuthService
 from classiflow.settings import Settings
+from classiflow.storage.document_storage import LocalDiskStorage
 
 
 def _extraction_concurrency_limit() -> int:
     return get_extraction_config().max_concurrent_extractions
+
+
+def _job_concurrency_limit() -> int:
+    return Settings.max_concurrent_jobs
 
 
 class Container(containers.DeclarativeContainer):
@@ -42,6 +49,10 @@ class Container(containers.DeclarativeContainer):
     auth_service = providers.Factory(AuthService, user_repo=user_repo)
     broadcaster = providers.Singleton(EventBroadcaster)
 
+    # Singleton: stateless (root path fixed at construction), no per-request teardown
+    # needed -- same reasoning as broadcaster above.
+    document_storage = providers.Singleton(LocalDiskStorage)
+
     # ThreadSafeSingleton (not Singleton): construction races are real — multiple
     # coordinator jobs' background tasks can hit OCR around the same time — and
     # reconstruction is expensive, so the shared reader needs a lock around its
@@ -53,6 +64,9 @@ class Container(containers.DeclarativeContainer):
     text_extractor = providers.Factory(TextExtractor, chain=extraction_chain)
     extraction_semaphore = providers.Singleton(
         asyncio.Semaphore, providers.Callable(_extraction_concurrency_limit)
+    )
+    job_semaphore = providers.Singleton(
+        asyncio.Semaphore, providers.Callable(_job_concurrency_limit)
     )
 
     language_detector = providers.Callable(get_language_detector)
@@ -89,6 +103,12 @@ class Container(containers.DeclarativeContainer):
     # slot, so unload_slm()'s cache_clear() still releases this model's VRAM too.
     enrichment_llm = providers.Callable(get_llm_langchain, Settings.enrichment_model_path)
     entity_extraction_chain = providers.Callable(build_entity_extraction_chain, enrichment_llm)
+
+    # Same Callable-wrapping-a-cache reasoning as the other *_llm providers above.
+    classification_llm = providers.Callable(get_llm_langchain, Settings.classification_model_path)
+    classification_chain = providers.Callable(build_classification_chain, classification_llm)
+    judge_llm = providers.Callable(get_llm_langchain, Settings.judge_model_path)
+    judge_chain = providers.Callable(build_judge_chain, judge_llm)
 
 
 @cache

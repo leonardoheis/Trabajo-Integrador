@@ -9,6 +9,10 @@ class IngestResponse(BaseSchema):
     job_id: str
 
 
+class BulkIngestResponse(BaseSchema):
+    job_ids: list[str]
+
+
 class DocumentStepSchema(BaseSchema):
     step_order: int
     node: str
