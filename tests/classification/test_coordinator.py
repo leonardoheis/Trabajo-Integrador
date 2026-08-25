@@ -161,6 +161,42 @@ class TestClassificationCoordinatorHumanReviewPath:
         assert record.review_route == "human_review"
 
 
+_OTRO_HIGH_CONFIDENCE_RESPONSE = (
+    '{"label": "otro", "confidence": 0.9, "reasoning": "not a municipal document"}'
+)
+
+
+class TestClassificationCoordinatorOtroPath:
+    async def test_primary_otro_routes_to_human_review_without_visiting_judge(
+        self, tmp_path: Path
+    ) -> None:
+        graph, repo = _build_graph(_OTRO_HIGH_CONFIDENCE_RESPONSE, tmp_path)
+        job_id = "coord-otro-001"
+        filename = "banco_central_circular.pdf"
+        _stage_file(tmp_path, job_id, filename)
+        initial: ClassificationState = {
+            "job_id": job_id,
+            "filename": filename,
+            "cleaned_text": "Banco Central de la República Argentina, Comunicación A 470.",
+            "enriched_id": 1,
+        }
+        result = await graph.ainvoke(initial)
+
+        assert result["review_route"] == "human_review"
+        # judged_by_llm is only ever set when the llm_judge branch actually ran
+        # (ClassificationState is total=False) -- absent here proves the otro
+        # override skipped the judge entirely, distinguishing this path from the
+        # disagreement path (which does visit the judge).
+        assert result.get("judged_by_llm", False) is False
+        assert Path("review", "human_review").as_posix() in Path(result["stored_path"]).as_posix()
+
+        record = await repo.find_by_job_id(job_id)
+        assert record is not None
+        assert record.review_route == "human_review"
+        assert record.label == "otro"
+        assert record.judged_by_llm is False
+
+
 class _DisagreeingClassifier:
     def predict(self, _text: str) -> SecondOpinionResult:
         return SecondOpinionResult(

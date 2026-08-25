@@ -48,6 +48,19 @@ Sources (inputs)
                 upload · agent visualization · classification · chat
 ```
 
+## Stages
+
+| Stage | Scope | Status |
+|---|---|---|
+| 1 | Ingesta pipeline — reception, format/content validation, duplicate control | ✅ done — [PR #17](https://github.com/leonardoheis/Trabajo-Integrador/pull/17) |
+| 2 | Extraction hardening — bounded concurrency + observability around Stage 1's text extraction | ✅ done — [PR #20](https://github.com/leonardoheis/Trabajo-Integrador/pull/20) |
+| 3 | Refinement & enrichment — text cleaning, entity extraction, metadata enrichment | ✅ done — [PR #21](https://github.com/leonardoheis/Trabajo-Integrador/pull/21) |
+| 4 | Classification & routing — primary classifier, BETO v2 second opinion, LLM judge, review queue | ✅ done — [PR #22](https://github.com/leonardoheis/Trabajo-Integrador/pull/22) |
+| 5 | Knowledge base + chat agent | 🔲 not started — see [`tasks/plan_stage5.md`](tasks/plan_stage5.md) |
+
+Full task-by-task detail per stage: [`tasks/todo_stage2.md`](tasks/todo_stage2.md) ·
+[`tasks/todo_stage3.md`](tasks/todo_stage3.md) · [`tasks/todo_stage4.md`](tasks/todo_stage4.md).
+
 ## Stage 1 — Ingesta Pipeline (done — merged to `main` via [PR #17](https://github.com/leonardoheis/Trabajo-Integrador/pull/17))
 
 Stage 1 is the first and only processing gate before a document enters the system.
@@ -75,7 +88,7 @@ concurrency + observability, not re-extraction) already carrying their extracted
 │   NODE 2    │  Format Validation
 │             │  · magic bytes match MIME? extension consistent?
 │             │  · known-mismatches lookup table (config)
-│             │  · gray zone → Phi-4-mini SLM decides
+│             │  · gray zone → SLM decides (shared Meta-Llama-3.1-8B-Instruct)
 └──────┬──────┘
        │ passed=True
        │ passed=False ──────────────────────────────► REJECTED  (wrong format)
@@ -102,7 +115,7 @@ concurrency + observability, not re-extraction) already carrying their extracted
 │   NODE 3    │  Content Validation
 │             │  · length ≥ min_chars?
 │             │  · language = Spanish? (lingua detector)
-│             │  · SLM legitimacy check (Phi-4-mini)
+│             │  · SLM legitimacy check (shared Meta-Llama-3.1-8B-Instruct)
 └──────┬──────┘
        │ passed=True
        │ passed=False (too short) ──────────────────► REJECTED
@@ -147,16 +160,18 @@ not re-extract anything.
 ├── .claude/                        Claude Code project settings
 ├── documents/                      Reference documents and architecture diagrams
 ├── docs/superpowers/specs/         Architecture design specs (superpowers:brainstorming)
-├── config/                         YAML config, one file per ingesta stage
+├── config/                         YAML config, one file per pipeline stage/concern
 │   ├── allowed_formats.yaml · content_validation.yaml
-│   └── duplicate_control.yaml · extraction.yaml
-├── models/                         SLM + embedding model weights (gitignored — see "Models" below)
+│   ├── duplicate_control.yaml · extraction.yaml
+│   └── enrichment.yaml · classification.yaml
+├── models/                         SLM/LLM + embedding model weights (see "Models" below —
+│                                   bert_tunning_beto_v2/ committed via Git LFS, rest gitignored)
 ├── src/
 │   └── classiflow/                 Main Python package
 │       ├── settings.py             pydantic-settings config (DATABASE_URL, JWT_*, model paths, etc.)
 │       ├── domain/                 job.py (NodeEvent, JobStatus) · user.py (User, AuthToken) ·
 │       │                           base.py (BaseEntity) · repositories/ (Protocol interfaces)
-│       ├── database/                base.py (async engine/session) · models.py (ORM, 6 tables) ·
+│       ├── database/                base.py (async engine/session) · models.py (ORM, 8 tables) ·
 │       │                           repositories/ (Sql*/InMemory* implementations)
 │       ├── events/
 │       │   └── broadcaster.py      EventBroadcaster — asyncio.Queue per job_id, SSE source
@@ -175,83 +190,119 @@ not re-extract anything.
 │       │   ├── nodes/               base.py (BaseNode) · node1-4 · extraction_step.py
 │       │   ├── domain/              context.py (JobContext) · results.py · state.py (JobState, NodeUpdate)
 │       │   └── prompts/            format_validation.py · content_validation.py — SLM chain builders
+│       ├── enrichment/              Stage 3 — text cleaning + entity/metadata enrichment
+│       │   ├── coordinator.py       build_enrichment_coordinator() — LangGraph state machine
+│       │   ├── nodes/               text_cleaner.py · entity_extractor.py · metadata_enricher.py
+│       │   ├── domain/              EnrichedRecord and related result types
+│       │   └── prompts/             entity_extraction.py — LLM chain builder
+│       ├── classification/          Stage 4 — classification, second opinion, routing
+│       │   ├── coordinator.py       build_classification_coordinator() — LangGraph state machine
+│       │   ├── bert/                BETO v2 second-opinion classifier, SVM reviewer, OOD scorer
+│       │   ├── nodes/               primary_classifier · second_opinion · foreign_municipality ·
+│       │   │                       smells_risk · confidence_gate · llm_judge · routing
+│       │   ├── domain/              DocumentCategory · ReviewRoute · results
+│       │   └── prompts/             primary_classification.py · llm_judge.py
+│       ├── pipeline/                base.py (BaseNode) · context.py (JobContext) — shared across stages
+│       ├── storage/                 document_storage.py — classified-document filesystem layout
 │       ├── api/                    FastAPI application
 │       │   ├── app.py · runner.py · dependencies.py (DI-wired Depends() aliases)
-│       │   ├── routes/             auth/ · health/ · pipeline/ (ingest, SSE events, review queue)
+│       │   ├── routes/             auth/ · health/ · pipeline/ (ingest, SSE events, review queue) ·
+│       │   │                       classification/ (review-queue decisions)
 │       │   └── error_handlers/     typed exception → JSONResponse handlers
 │       ├── injections/             production.py (Container) · test.py (TestContainer)
-│       └── playground/             stage1/ (7 demo notebooks) · stage2/ (concurrency demo) ·
+│       └── playground/             stage1/ · stage2/ · stage3/ · stage4/ demo notebooks ·
 │                                   samples/ (sample PDFs the notebooks depend on)
 ├── alembic/versions/                0001 initial schema · 0002 rename agent→node ·
-│                                   0003 add Job.extracted_text
+│                                   0003 add Job.extracted_text · 0004 enriched_records ·
+│                                   0005 classification_records · 0006 judge verdict fields ·
+│                                   0007 enriched_record raw_text
 ├── tasks/                          plan_stageN.md + todo_stageN.md per stage (1–5)
 ├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
 └── uv.lock                         Locked dependency graph
 ```
 
+## Stage 3 — Refinement & Enrichment (done — merged via [PR #21](https://github.com/leonardoheis/Trabajo-Integrador/pull/21))
+
+Runs automatically after a job is `ACCEPTED` by Stage 1. Cleans the raw extracted text
+and enriches it with structured metadata ahead of classification:
+
+- **Text cleaner** (`enrichment/nodes/text_cleaner.py`) — NFC normalization, gibberish-line
+  detection, table-border/whitespace fixes. Produces `cleaned_text`; the pre-cleaning
+  `raw_text` is also persisted on `EnrichedRecord` for future embedding use.
+- **Entity extractor** (`entity_extractor.py`) — LLM chain pulling structured entities
+  (dates, ordinance numbers, named parties) out of `cleaned_text`.
+- **Metadata enricher** (`metadata_enricher.py`) — attaches derived metadata to the
+  `EnrichedRecord` persisted for Stage 4.
+
+## Stage 4 — Classification & Routing (done — merged via [PR #22](https://github.com/leonardoheis/Trabajo-Integrador/pull/22))
+
+A LangGraph pipeline (`classification/coordinator.py`) that classifies each
+`EnrichedRecord`, cross-checks the result, and routes it to auto-accept, an LLM judge,
+or a human reviewer:
+
+```
+primary_classifier ──► second_opinion ──► foreign_municipality ──► smells_risk ──► confidence_gate
+                                                                                        │
+                                                    ┌───────────────────────────────────┤
+                                                    ▼                                   ▼
+                                                llm_judge                           routing
+                                                    │                                   ▲
+                                                    └───────────────────────────────────┘
+```
+
+- **Primary classifier** (LLM, shared Llama 3.1 8B) — assigns one of 11
+  `DocumentCategory` labels + confidence + `all_scores`.
+- **Second opinion** (BETO v2, `classification/bert/`) — a fine-tuned Spanish BERT
+  classifier + SVM reviewer, with out-of-distribution (OOD) scoring (Mahalanobis /
+  cosine / kNN) to gauge how much to trust its own disagreement.
+- **Foreign municipality detector** — flags text naming an issuing body other than
+  Municipalidad de Rosario.
+- **Smells + risk score** — heuristic caution flags (not a verdict) surfaced to the judge.
+- **Confidence gate** (`nodes/confidence_gate.py`) — pure routing logic: `foreign_municipality`
+  or a primary label of `otro` always force `human_review`; a primary/second-opinion
+  disagreement or low confidence routes to the LLM judge; otherwise auto-`accept`.
+- **LLM judge** (Gemma 4) — final quality gate for judge-routed cases; weighs the second
+  opinion's OOD/SVM grounding and returns `final_label` + `reasoning`, but a genuine
+  disagreement never auto-accepts regardless of its verdict.
+- **Routing** — persists the `ClassificationRecord` (including judge verdict fields) and
+  writes the audit log entry.
+
+Human-reviewed jobs are corrected via `POST /classification/{job_id}/decision`, which
+upserts the existing record rather than duplicating it.
+
 ## Build Status
 
-**Stage 1 closed** — merged to `main` via [PR #17](https://github.com/leonardoheis/Trabajo-Integrador/pull/17). 18 / 19 Stage-1 tasks complete · 1 pending (T22, not blocking).
-
-| Task | Description | Status |
-|------|-------------|--------|
-| T01 | Package skeleton + dependencies | ✅ done |
-| T02 | Database models + Alembic migration | ✅ done |
-| T03 | Repository implementations | ✅ done |
-| T04 | JWT utilities | ✅ done |
-| T05 | Google OAuth + whitelist | ✅ done |
-| T06 | JWT auth dependency | ✅ done |
-| T07 | Shared domain + AuditService + EventBroadcaster | ✅ done |
-| T08 | Ingesta domain models | ✅ done |
-| T09 | Node 1 — File Reception | ✅ done |
-| T10 | Node 2 — Format Validation (rule-based) | ✅ done |
-| T11 | LLM Provider singleton | ✅ done |
-| T12 | Node 2 — SLM escalation path | ✅ done |
-| T13 | Node 3 — Content Validation | ✅ done |
-| T14 | Node 4 — Duplicate Control | ✅ done |
-| T15 | Coordinator — LangGraph | ✅ done |
-| T16 | FastAPI app + health route | ✅ done |
-| T17 | Pipeline endpoints + SSE stream | ✅ done |
-| T21 | Text extraction — MarkItDown + EasyOCR fallback | ✅ done |
-| T22 | Bulk document ingest endpoint | 🔲 pending |
-
-GitHub Actions CI, Docker build+push, and wandb tracing (formerly T18-T20) don't gate
-pipeline functionality — moved to Stage 4, see [`tasks/todo_stage4.md`](tasks/todo_stage4.md).
-
-Full task details and dependency graph: [tasks/todo.md](tasks/todo.md) ·
-[Stage 2 plan](tasks/plan_stage2.md) · [Stage 2 tasks](tasks/todo_stage2.md)
-
-**Stage 2 implemented** — bounded concurrency and full SSE/DB observability around Stage
-1's existing text-extraction step (MarkItDown → EasyOCR fallback); no re-extraction. Also
-fixed several hidden-dependency singletons (`get_language_detector`,
-`get_sentence_model`/`embedding_store`, node2/node3 SLM chains) by wiring them through the
-DI `Container`, matching the existing `broadcaster`/`text_extractor` pattern. All 7 tasks
-committed to `feat/extraction-hardening`; open for merge to `main` via
-[PR #20](https://github.com/leonardoheis/Trabajo-Integrador/pull/20).
-
-| Task | Description | Status |
-|------|-------------|--------|
-| S2-T01 | `ExtractionConfig` | ✅ done |
-| S2-T02 | `ExtractionResult` domain entity | ✅ done |
-| S2-T03 | Bounded concurrency (`asyncio.Semaphore`, Container-injected) | ✅ done |
-| S2-T04 | `ExtractionStep` + `DocumentStep` observability | ✅ done |
-| S2-T05 | Integration test — concurrency + observability | ✅ done |
-| S2-T06 | Relocate models to project root + document download sources | ✅ done |
-| S2-T07 | Track `playground/samples/` in git | ✅ done |
+Stage 1–4 status, task tables, and PR links are summarized in the [Stages](#stages)
+table above. Full per-task detail: [`tasks/todo.md`](tasks/todo.md) (Stage 1) ·
+[`tasks/todo_stage2.md`](tasks/todo_stage2.md) · [`tasks/todo_stage3.md`](tasks/todo_stage3.md) ·
+[`tasks/todo_stage4.md`](tasks/todo_stage4.md).
 
 ## Key Technical Decisions
 
 - **SQLAlchemy 2.0 async** (`Mapped[]` annotations, `async_sessionmaker`, `aiosqlite` for local dev)
 - **Repository pattern** — Protocol interfaces; `Sql*` for production, `InMemory*` for tests
-- **LangGraph** — 4-node sequential pipeline (File Reception → Format Validation → Content Validation → Duplicate Control)
+- **LangGraph** — one coordinator per stage: Stage 1's 4-node ingesta pipeline (File
+  Reception → Format Validation → Content Validation → Duplicate Control), plus
+  dedicated Stage 3 (enrichment) and Stage 4 (classification & routing) coordinators
 - **FastAPI + SSE** — `POST /pipeline/ingest` triggers background task; `GET /pipeline/{job_id}/events` streams node state
 - **`dependency-injector`** — `DeclarativeContainer` + `@inject` + `Provide[Container.*]`; `TestContainer` swaps all `Sql*` repos with `InMemory*`
 - **Document tracking** — `document_steps` records per-node path; `human_decisions` records reviewer actions; review queue via `GET /pipeline/review-queue`
 - **Alembic async migrations** — `asyncio.run()` pattern in `env.py`; single connection string swap to move from SQLite to PostgreSQL
+- **BETO v2 second opinion** — a fine-tuned Spanish BERT classifier + SVM reviewer + OOD
+  scoring (Mahalanobis / cosine / kNN), used to cross-check the primary LLM classifier
+  without duplicating its cost on every job
+- **LLM judge as disagreement arbiter** — a separate model (Gemma 4) resolves
+  primary/second-opinion disagreements using the second opinion's own OOD/SVM grounding,
+  but never auto-accepts a genuine disagreement regardless of its verdict
 
 ## Document Categories
 
-The dataset covers 10 categories of municipal documents from Rosario's open-data portal:
+The dataset covers 10 categories of municipal documents from Rosario's open-data portal,
+plus an 11th (`otro`) added to give the primary classifier an escape hatch for documents
+that aren't from Municipalidad de Rosario at all — closing a gap where such documents
+could otherwise get silently auto-accepted under the wrong municipal label. BETO v2 (the
+second-opinion agent) was only trained on 9 of these — `compendios_de_boletines` and
+`convenios` are LLM-only labels.
 
 | Category | Description | Documents |
 |----------|-------------|-----------|
@@ -263,6 +314,7 @@ The dataset covers 10 categories of municipal documents from Rosario's open-data
 | `decretos` | Decrees | 5,483 |
 | `decretos_concejo_municipal` | Municipal council decrees | 6,738 |
 | `ordenanzas` | Ordinances | 5,306 |
+| `otro` | Not a Municipalidad de Rosario document | — |
 | `resoluciones` | Resolutions | 173 |
 | `resoluciones_concejo_municipal` | Municipal council resolutions | 167 |
 | **Total** | | **~20,318** |
@@ -280,20 +332,25 @@ Always use `uv sync` — do not use `pip install`.
 
 ## Models
 
-The pipeline uses two models, neither of which is committed to git (see `.gitignore` —
-everything under `models/` is ignored except a `.gitkeep` placeholder). A fresh clone
-needs to fetch both before `node2`/`node3`/`node4` will work.
+The pipeline uses four models. `models/bert_tunning_beto_v2/` is committed via Git LFS
+(clone as normal — no separate download step). Everything else under `models/` is
+gitignored and must be fetched manually before the pipeline will run end to end.
 
 | Model | Purpose | Source | Target path |
 |---|---|---|---|
-| Phi-4-mini-instruct (Q4_K_M GGUF) | SLM used by node2 (format gray-zone) and node3 (content legitimacy) | [unsloth/Phi-4-mini-instruct-GGUF](https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF) | `models/Phi-4-mini-instruct-Q4_K_M.gguf` |
+| Meta-Llama-3.1-8B-Instruct (Q4_K_M GGUF) | Shared SLM/LLM for node2 (format gray-zone), node3 (content legitimacy), Stage 3 enrichment, and the Stage 4 primary classifier | Hugging Face — search for a Q4_K_M GGUF quantization of `Meta-Llama-3.1-8B-Instruct` | `models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf` |
+| Gemma 4 E4B-it (Q4_K_M GGUF) | LLM judge — final quality gate for judge-routed classification cases | Hugging Face — search for a Q4_K_M GGUF quantization of `gemma-4-E4B-it` | `models/gemma-4-E4B-it-Q4_K_M.gguf` |
+| BETO v2 (fine-tuned) | Stage 4 second-opinion classifier + SVM reviewer + OOD scoring | committed via Git LFS | `models/bert_tunning_beto_v2/` |
 | all-MiniLM-L6-v2 | Embedding model used by node4 for semantic duplicate detection | [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | `models/embeddings/` (auto-downloaded on first use) |
 
-**SLM — manual download required:**
+**LLM/SLM — manual download required.** Find a Q4_K_M GGUF release for each model on
+Hugging Face (e.g. via the Hub search UI or `huggingface-cli search`), then:
 
 ```bash
-uv run huggingface-cli download unsloth/Phi-4-mini-instruct-GGUF \
-    Phi-4-mini-instruct-Q4_K_M.gguf --local-dir models
+uv run huggingface-cli download <repo-id> \
+    Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf --local-dir models
+uv run huggingface-cli download <repo-id> \
+    gemma-4-E4B-it-Q4_K_M.gguf --local-dir models
 ```
 
 **Embedding model — no action needed.** `node4_duplicate_control.py`'s
