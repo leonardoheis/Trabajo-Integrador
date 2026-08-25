@@ -1011,6 +1011,8 @@ git commit -m "feat: add GET /pipeline/jobs and GET /pipeline/jobs/{job_id}/time
 
 ### Task 7: `require_admin` dependency
 
+**Status: done**
+
 **Files:**
 - Modify: `src/classiflow/api/dependencies.py`
 - Test: `tests/api/routes/test_users.py` (created fully in Task 9 — this task only adds
@@ -1021,7 +1023,7 @@ git commit -m "feat: add GET /pipeline/jobs and GET /pipeline/jobs/{job_id}/time
 - Produces: `require_admin` — a FastAPI dependency raising `403` when
   `CurrentUser.is_admin` is `False`; used by Task 9 and Task 10's routers.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/api/test_dependencies.py (create if it doesn't exist)
@@ -1045,12 +1047,12 @@ class TestRequireAdmin:
         await require_admin(User(email="admin@example.com", is_admin=True))
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/api/test_dependencies.py -v`
 Expected: FAIL — `require_admin` doesn't exist.
 
-- [ ] **Step 3: Implement `require_admin`**
+- [x] **Step 3: Implement `require_admin`**
 
 ```python
 # api/dependencies.py -- add just below CurrentUser
@@ -1063,12 +1065,12 @@ async def require_admin(current_user: CurrentUser) -> None:
         raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Admin access required")
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/api/test_dependencies.py -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/api/dependencies.py tests/api/test_dependencies.py
@@ -1078,6 +1080,8 @@ git commit -m "feat: add require_admin FastAPI dependency"
 ---
 
 ### Task 8: OAuth redirect target → frontend popup route
+
+**Status: done**
 
 **Files:**
 - Modify: `src/classiflow/settings.py` (`GOOGLE_REDIRECT_URI` default)
@@ -1093,14 +1097,14 @@ git commit -m "feat: add require_admin FastAPI dependency"
   JS, so it lands on the frontend, which then calls the unchanged `/auth/callback`
   JSON endpoint itself via `fetch`.
 
-- [ ] **Step 1: Update the default**
+- [x] **Step 1: Update the default**
 
 ```python
 # settings.py, line 82-84
 GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5173/oauth-popup")
 ```
 
-- [ ] **Step 2: Update `.env.example` to match**
+- [x] **Step 2: Update `.env.example` to match**
 
 ```bash
 # .env.example -- find the existing GOOGLE_REDIRECT_URI line (if present) or add one
@@ -1110,14 +1114,14 @@ GOOGLE_REDIRECT_URI=http://localhost:5173/oauth-popup
 (Check `.env.example`'s current content first — the user has been editing this file
 recently per this session's git status; add rather than blindly overwrite.)
 
-- [ ] **Step 3: Confirm no test hardcodes the old default**
+- [x] **Step 3: Confirm no test hardcodes the old default**
 
 Run: `grep -rn "localhost:8000/auth/callback\|GOOGLE_REDIRECT_URI" tests/ src/classiflow/`
 Expected: only `settings.py`'s own definition and this task's `.env.example` change —
 if any test asserts against the literal old URL string, update it to the new default
 in this same task.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/classiflow/settings.py .env.example
@@ -1127,6 +1131,8 @@ git commit -m "feat: point GOOGLE_REDIRECT_URI at the frontend's OAuth popup rou
 ---
 
 ### Task 9: `/users` CRUD router (admin-only)
+
+**Status: done**
 
 **Files:**
 - Create: `src/classiflow/api/routes/users/__init__.py`
@@ -1141,7 +1147,7 @@ git commit -m "feat: point GOOGLE_REDIRECT_URI at the frontend's OAuth popup rou
 - Produces: `GET/POST/PATCH/DELETE /users` routes — consumed by the frontend's Users
   page (Task 18).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/api/routes/test_users.py
@@ -1209,7 +1215,7 @@ class TestUsersEndpoint:
         assert response.status_code == HTTPStatus.NO_CONTENT
 ```
 
-- [ ] **Step 2: Add an `admin_auth_headers` fixture to `conftest.py`**
+- [x] **Step 2: Add an `admin_auth_headers` fixture to `conftest.py`**
 
 ```python
 # tests/api/conftest.py
@@ -1225,12 +1231,12 @@ def admin_auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {encode_token(_ADMIN_EMAIL)}"}
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run: `uv run pytest tests/api/routes/test_users.py -v`
 Expected: FAIL — `/users` router doesn't exist (404s where 200/201/403 expected).
 
-- [ ] **Step 4: Add `get_user_repo` dependency**
+- [x] **Step 4: Add `get_user_repo` dependency**
 
 ```python
 # api/dependencies.py
@@ -1242,7 +1248,7 @@ def get_user_repo(session: DbSession) -> IUserRepository:
     return SqlUserRepository(session)
 ```
 
-- [ ] **Step 5: Write the schemas**
+- [x] **Step 5: Write the schemas**
 
 ```python
 # api/routes/users/schemas.py
@@ -1281,7 +1287,7 @@ class UpdateUserRequest(BaseSchema):
     is_blocked: bool | None = None
 ```
 
-- [ ] **Step 6: Write the router**
+- [x] **Step 6: Write the router**
 
 ```python
 # api/routes/users/endpoints.py
@@ -1354,7 +1360,7 @@ from classiflow.api.routes.users.endpoints import router
 __all__ = ["router"]
 ```
 
-- [ ] **Step 7: Register the router**
+- [x] **Step 7: Register the router**
 
 ```python
 # api/routes/registry.py
@@ -1369,7 +1375,7 @@ ROUTERS: list[APIRouter] = [
 ]
 ```
 
-- [ ] **Step 8: Override `get_user_repo` in `conftest.py`**
+- [x] **Step 8: Override `get_user_repo` in `conftest.py`**
 
 ```python
 # tests/api/conftest.py
@@ -1384,17 +1390,17 @@ def _user_repo_override() -> IUserRepository:
 app.dependency_overrides[get_user_repo] = _user_repo_override
 ```
 
-- [ ] **Step 9: Run tests to verify they pass**
+- [x] **Step 9: Run tests to verify they pass**
 
 Run: `uv run pytest tests/api/routes/test_users.py -v`
 Expected: PASS
 
-- [ ] **Step 10: Run the full test suite**
+- [x] **Step 10: Run the full test suite**
 
 Run: `uv run pytest -v`
 Expected: all PASS
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/classiflow/api/routes/users/ src/classiflow/api/dependencies.py src/classiflow/api/routes/registry.py tests/api/routes/test_users.py tests/api/conftest.py
@@ -1405,6 +1411,8 @@ git commit -m "feat: add admin-only /users CRUD router"
 
 ### Task 10: `GET /audit` (admin-only)
 
+**Status: done**
+
 **Files:**
 - Modify: `src/classiflow/api/routes/pipeline/schemas.py` (or create
   `api/routes/audit/` as its own router — see Step 1's decision note)
@@ -1414,14 +1422,14 @@ git commit -m "feat: add admin-only /users CRUD router"
 - Consumes: `IAuditRepository.list_filtered` (Task 4), `require_admin` (Task 7).
 - Produces: `GET /audit` — consumed by the frontend's Audit Log page (Task 19).
 
-- [ ] **Step 1: Decide the router location**
+- [x] **Step 1: Decide the router location**
 
 This endpoint doesn't belong under `/pipeline` or `/classification` (it's a
 cross-cutting admin view, not scoped to one pipeline stage) — create a new
 `api/routes/audit/` package mirroring `api/routes/users/`'s shape from Task 9
 (`__init__.py` re-exporting `router`, `schemas.py`, `endpoints.py`).
 
-- [ ] **Step 2: Write the failing tests**
+- [x] **Step 2: Write the failing tests**
 
 ```python
 # tests/api/routes/test_audit.py
@@ -1476,12 +1484,12 @@ import it from there if the project allows cross-test-file imports, or duplicate
 minimal ingest-and-wait logic locally, matching however `test_classification.py`
 already handles the same need.)
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run: `uv run pytest tests/api/routes/test_audit.py -v`
 Expected: FAIL — `/audit` doesn't exist.
 
-- [ ] **Step 4: Write the schemas**
+- [x] **Step 4: Write the schemas**
 
 ```python
 # api/routes/audit/schemas.py
@@ -1518,7 +1526,7 @@ class AuditPage(BaseSchema):
     page_size: int
 ```
 
-- [ ] **Step 5: Write the router**
+- [x] **Step 5: Write the router**
 
 ```python
 # api/routes/audit/endpoints.py
@@ -1567,7 +1575,7 @@ from classiflow.api.routes.audit.endpoints import router
 __all__ = ["router"]
 ```
 
-- [ ] **Step 6: Register the router**
+- [x] **Step 6: Register the router**
 
 ```python
 # api/routes/registry.py
@@ -1583,12 +1591,12 @@ ROUTERS: list[APIRouter] = [
 ]
 ```
 
-- [ ] **Step 7: Run tests to verify they pass**
+- [x] **Step 7: Run tests to verify they pass**
 
 Run: `uv run pytest tests/api/routes/test_audit.py -v`
 Expected: PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/classiflow/api/routes/audit/ src/classiflow/api/routes/registry.py tests/api/routes/test_audit.py
@@ -1599,6 +1607,8 @@ git commit -m "feat: add admin-only GET /audit endpoint"
 
 ### Task 11: `GET /auth/me`
 
+**Status: done**
+
 **Files:**
 - Modify: `src/classiflow/api/routes/auth/endpoints.py`
 - Test: `tests/api/routes/test_auth_oauth.py`
@@ -1607,7 +1617,7 @@ git commit -m "feat: add admin-only GET /audit endpoint"
 - Consumes: `CurrentUser` (Task 2's `is_admin`-populated `User`).
 - Produces: `GET /auth/me` — consumed by the frontend's `AuthContext` (Task 14).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 # tests/api/routes/test_auth_oauth.py -- add to existing test file
@@ -1628,12 +1638,12 @@ class TestAuthMeEndpoint:
 whether `_TEST_EMAIL` is already imported/defined at module scope here or needs
 importing from `conftest.py`.)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/api/routes/test_auth_oauth.py -k AuthMe -v`
 Expected: FAIL — `/auth/me` doesn't exist.
 
-- [ ] **Step 3: Add the endpoint**
+- [x] **Step 3: Add the endpoint**
 
 ```python
 # api/routes/auth/endpoints.py -- add below auth_callback
@@ -1651,12 +1661,12 @@ async def auth_me(current_user: CurrentUser) -> User:
 for other things, so verify with a quick `uv run mypy src` after adding rather than
 guessing.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/api/routes/test_auth_oauth.py -k AuthMe -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/api/routes/auth/endpoints.py tests/api/routes/test_auth_oauth.py
@@ -1666,6 +1676,8 @@ git commit -m "feat: add GET /auth/me"
 ---
 
 ### Task 12: `GET /jobs`, `GET /jobs/{job_id}/detail`, `GET /documents/{job_id}/file`
+
+**Status: done**
 
 **Files:**
 - Create: `src/classiflow/api/routes/documents/__init__.py`
@@ -1682,7 +1694,7 @@ git commit -m "feat: add GET /auth/me"
 - Produces: `GET /jobs`, `GET /jobs/{job_id}/detail`, `GET /documents/{job_id}/file` —
   consumed by the frontend's Classification and Document Detail pages (Tasks 16-17).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/api/routes/test_documents.py
@@ -1732,12 +1744,12 @@ multi-step ingest-and-poll pattern `test_classification.py` already uses for
 equivalent setup; don't skip the 404 cases above, they're the cheap, always-correct
 baseline.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/api/routes/test_documents.py -v`
 Expected: FAIL — routes don't exist.
 
-- [ ] **Step 3: Write the schemas**
+- [x] **Step 3: Write the schemas**
 
 ```python
 # api/routes/documents/schemas.py
@@ -1850,7 +1862,7 @@ class JobDetailResponse(BaseSchema):
     audit: list[AuditRecordSchema]
 ```
 
-- [ ] **Step 4: Write the router**
+- [x] **Step 4: Write the router**
 
 ```python
 # api/routes/documents/endpoints.py
@@ -2007,7 +2019,7 @@ localized to what changed — the actual file must have them at the top, per thi
 project's no-`TYPE_CHECKING`-unless-circular convention, which applies equally to any
 avoidable inline import.)
 
-- [ ] **Step 5: Register the router**
+- [x] **Step 5: Register the router**
 
 ```python
 # api/routes/registry.py
@@ -2024,19 +2036,19 @@ ROUTERS: list[APIRouter] = [
 ]
 ```
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 Run: `uv run pytest tests/api/routes/test_documents.py -v`
 Expected: PASS
 
-- [ ] **Step 7: Run `uv run poe check`**
+- [x] **Step 7: Run `uv run poe check`**
 
 Hand this to the user to run (per project convention): `uv run poe check`
 Expected: lint, format, and mypy all pass — pay particular attention to the inline
 imports called out in Step 4's note; mypy strict will not itself flag inline imports,
 but they must be moved regardless per `CLAUDE.md`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/classiflow/api/routes/documents/ src/classiflow/api/routes/registry.py tests/api/routes/test_documents.py
@@ -2046,6 +2058,8 @@ git commit -m "feat: add GET /jobs, GET /jobs/{job_id}/detail, GET /documents/{j
 ---
 
 ### Task 13: Serve the built frontend from FastAPI (production same-origin)
+
+**Status: done**
 
 **Files:**
 - Modify: `src/classiflow/api/app.py`
@@ -2057,7 +2071,7 @@ git commit -m "feat: add GET /jobs, GET /jobs/{job_id}/detail, GET /documents/{j
   then — this task's mount is written defensively so its absence doesn't break `uv run
   poe check` or the test suite in the meantime).
 
-- [ ] **Step 1: Mount static files conditionally**
+- [x] **Step 1: Mount static files conditionally**
 
 ```python
 # api/app.py
@@ -2091,20 +2105,20 @@ def create_app() -> FastAPI:
     return app
 ```
 
-- [ ] **Step 2: Run the full test suite to confirm the conditional mount doesn't break anything**
+- [x] **Step 2: Run the full test suite to confirm the conditional mount doesn't break anything**
 
 Run: `uv run pytest -v`
 Expected: all PASS — `_FRONTEND_DIST` doesn't exist yet in this repo state, so the
 `if` branch is skipped entirely; existing route tests are unaffected.
 
-- [ ] **Step 3: Note for later manual verification**
+- [x] **Step 3: Note for later manual verification**
 
 After Task 21 builds the frontend (`npm run build` inside
 `src/classiflow/frontend/`), re-run the app and confirm `GET /` serves the built
 `index.html` instead of a 404 — this can't be automated in this task since the
 directory doesn't exist yet.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/classiflow/api/app.py
