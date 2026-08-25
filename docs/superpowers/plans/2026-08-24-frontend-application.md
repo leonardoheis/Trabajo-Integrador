@@ -3848,6 +3848,8 @@ git commit -m "feat: add ClassificationPage, DocumentDetailPage, PDF viewer, rec
 
 ### Task 19: `UsersPage`, `AuditLogPage`
 
+**Status: done**
+
 **Files:**
 - Create: `src/classiflow/frontend/src/api/users.ts`
 - Create: `src/classiflow/frontend/src/api/audit.ts`
@@ -3857,7 +3859,7 @@ git commit -m "feat: add ClassificationPage, DocumentDetailPage, PDF viewer, rec
 **Interfaces:**
 - Consumes: `GET/POST/PATCH/DELETE /users` (Task 9), `GET /audit` (Task 10).
 
-- [ ] **Step 1: Write `api/users.ts`**
+- [x] **Step 1: Write `api/users.ts`**
 
 ```typescript
 // src/api/users.ts
@@ -3914,7 +3916,7 @@ export async function deleteUser(email: string): Promise<void> {
 }
 ```
 
-- [ ] **Step 2: Implement `UsersPage.tsx`**
+- [x] **Step 2: Implement `UsersPage.tsx`**
 
 ```typescript
 // src/pages/UsersPage.tsx
@@ -3993,7 +3995,7 @@ export default function UsersPage() {
 }
 ```
 
-- [ ] **Step 3: Write `api/audit.ts`**
+- [x] **Step 3: Write `api/audit.ts`**
 
 ```typescript
 // src/api/audit.ts
@@ -4028,7 +4030,7 @@ export async function fetchAuditPage(params: { jobId?: string; node?: string }):
 }
 ```
 
-- [ ] **Step 4: Implement `AuditLogPage.tsx`**
+- [x] **Step 4: Implement `AuditLogPage.tsx`**
 
 ```typescript
 // src/pages/AuditLogPage.tsx
@@ -4080,13 +4082,13 @@ export default function AuditLogPage() {
 `.map()` call. Fix by using `` `${r.jobId}-${r.node}-${r.timestamp}` `` instead, which
 is unique without needing `DataTable`'s API to change.)
 
-- [ ] **Step 5: Run lint and typecheck**
+- [x] **Step 5: Run lint and typecheck**
 
 Hand this to the user to run:
 `cd src/classiflow/frontend && npm run lint && npx tsc -b`
 Expected: no errors.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/api/users.ts src/classiflow/frontend/src/api/audit.ts src/classiflow/frontend/src/pages/UsersPage.tsx src/classiflow/frontend/src/pages/AuditLogPage.tsx
