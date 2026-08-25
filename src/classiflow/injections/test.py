@@ -113,7 +113,11 @@ _TEST_STORAGE_ROOT = tempfile.mkdtemp(prefix="classiflow-test-storage-")
 
 class TestContainer(containers.DeclarativeContainer):
     hash_repo = providers.Factory(InMemoryHashRepository)
-    audit_repo = providers.Factory(InMemoryAuditRepository)
+    # Singleton (not Factory) so audit records written during a request (e.g. via
+    # PipelineService's own audit_service, built once from this same provider) stay
+    # visible to anything resolving audit_repo afterward in the same test -- matches
+    # every other stateful in-memory repo below (job_repo, document_steps_repo, ...).
+    audit_repo = providers.Singleton(InMemoryAuditRepository)
     # ponytail: Singleton so state (seeded users, created jobs/steps/decisions) survives
     # across the multiple requests one test makes against the shared `client` fixture.
     user_repo = providers.Singleton(InMemoryUserRepository)

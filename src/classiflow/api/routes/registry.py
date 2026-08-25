@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from classiflow.api.routes.audit import router as audit_router
 from classiflow.api.routes.auth import router as auth_router
 from classiflow.api.routes.classification import router as classification_router
 from classiflow.api.routes.health import router as health_router
@@ -12,4 +13,5 @@ ROUTERS: list[APIRouter] = [
     pipeline_router,
     classification_router,
     users_router,
+    audit_router,
 ]
