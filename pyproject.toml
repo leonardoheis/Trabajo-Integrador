@@ -84,6 +84,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/classiflow"]
+exclude = ["src/classiflow/frontend"]
 
 #########################
 # RUFF
@@ -93,7 +94,7 @@ packages = ["src/classiflow"]
 line-length = 100
 target-version = "py310"
 extend-include = ["*.ipynb"]
-exclude = [".claude", "tasks", "alembic", "models"]
+exclude = [".claude", "tasks", "alembic", "models", "src/classiflow/frontend"]
 
 fix = true
 preview = true
@@ -154,7 +155,7 @@ follow_imports = "normal"
 python_version = "3.10"
 mypy_path = ["src"]
 plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
-exclude = ["src/classiflow/playground/"]
+exclude = ["src/classiflow/playground/", "src/classiflow/frontend/"]
 
 disallow_any_unimported = true
 disallow_any_generics = true
