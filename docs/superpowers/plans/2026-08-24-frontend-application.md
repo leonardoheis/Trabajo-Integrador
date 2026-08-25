@@ -2875,6 +2875,8 @@ git commit -m "feat: add AuthContext, popup OAuth flow, RequireAuth/RequireAdmin
 
 ### Task 16: Router, Sidebar, Layout, `LoginPage`, `ChatPage` placeholder
 
+**Status: done**
+
 **Files:**
 - Create: `src/classiflow/frontend/src/router.tsx`
 - Create: `src/classiflow/frontend/src/components/Sidebar.tsx`
@@ -2888,7 +2890,7 @@ git commit -m "feat: add AuthContext, popup OAuth flow, RequireAuth/RequireAdmin
 - Produces: the app's route tree and persistent sidebar shell — every subsequent page
   task (17-19) plugs into `router.tsx`.
 
-- [ ] **Step 1: Write `LoginPage.tsx`**
+- [x] **Step 1: Write `LoginPage.tsx`**
 
 ```typescript
 // src/pages/LoginPage.tsx
@@ -2917,7 +2919,7 @@ export default function LoginPage() {
 }
 ```
 
-- [ ] **Step 2: Write `ChatPage.tsx`**
+- [x] **Step 2: Write `ChatPage.tsx`**
 
 ```typescript
 // src/pages/ChatPage.tsx
@@ -2931,7 +2933,7 @@ export default function ChatPage() {
 }
 ```
 
-- [ ] **Step 3: Write `Sidebar.tsx`**
+- [x] **Step 3: Write `Sidebar.tsx`**
 
 ```typescript
 // src/components/Sidebar.tsx
@@ -2976,7 +2978,7 @@ export default function Sidebar() {
 }
 ```
 
-- [ ] **Step 4: Write `Layout.tsx`**
+- [x] **Step 4: Write `Layout.tsx`**
 
 ```typescript
 // src/components/Layout.tsx
@@ -2995,7 +2997,7 @@ export default function Layout() {
 }
 ```
 
-- [ ] **Step 5: Write `router.tsx`**
+- [x] **Step 5: Write `router.tsx`**
 
 ```typescript
 // src/router.tsx
@@ -3080,7 +3082,7 @@ export default function AuditLogPage() {
 }
 ```
 
-- [ ] **Step 6: Wire `App.tsx`**
+- [x] **Step 6: Wire `App.tsx`**
 
 ```typescript
 // src/App.tsx
@@ -3102,7 +3104,7 @@ export default function App() {
 }
 ```
 
-- [ ] **Step 7: Verify the app builds and runs**
+- [x] **Step 7: Verify the app builds and runs**
 
 Hand this to the user to run:
 `cd src/classiflow/frontend && npx tsc -b && npm run dev`
@@ -3111,7 +3113,7 @@ Expected: no type errors; dev server serves `/login`, and after a manual sign-in
 sidebar renders with Processing/Classification/Chat visible, Users/Audit Log hidden
 for a non-admin test user.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/
