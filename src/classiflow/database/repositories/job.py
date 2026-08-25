@@ -46,6 +46,9 @@ class SqlJobRepository:
         result = await self._session.execute(select(Job).order_by(Job.created_at))
         return list(result.scalars().all())
 
+    async def commit(self) -> None:
+        await self._session.commit()
+
 
 class InMemoryJobRepository:
     def __init__(self) -> None:
@@ -90,3 +93,7 @@ class InMemoryJobRepository:
 
     async def list_all(self) -> list[Job]:
         return list(self._jobs.values())
+
+    async def commit(self) -> None:
+        # No transaction/session to commit -- writes are already immediately visible.
+        pass

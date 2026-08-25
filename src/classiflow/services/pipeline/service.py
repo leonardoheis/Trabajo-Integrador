@@ -87,6 +87,17 @@ class PipelineService:
     async def _run(self, job_id: str, filename: str, file_bytes: bytes) -> None:
         async with self._job_semaphore:
             await self._job_repo.update_status(job_id, "processing")
+            # _run is a FastAPI BackgroundTask -- it keeps writing through this same
+            # DB session long after the request that resolved it has already returned
+            # its response. Every repo here only flush()es (see IJobRepository.commit's
+            # docstring); without an explicit commit, nothing becomes visible to any
+            # other request's session until get_session's teardown fires at the end of
+            # this whole background task -- i.e. the job silently vanishes from
+            # GET /pipeline/jobs?status=running for its entire multi-minute run instead
+            # of ever showing as "processing". Committing at each phase boundary below
+            # makes the job (and every audit record a node wrote via the same shared
+            # session) visible incrementally instead of all at once at the very end.
+            await self._job_repo.commit()
             await self._broadcaster.emit(
                 NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.PROCESSING)
             )
@@ -95,6 +106,7 @@ class PipelineService:
 
             failed_at_node = await self._persist_steps(job_id, final_state)
             await self._finalize_job(job_id, final_state, failed_at_node)
+            await self._job_repo.commit()
 
             # Gated on extraction (not final_status): jobs that later land in review
             # still need their bytes staged so Stage 4's Routing can move the real file
@@ -109,9 +121,11 @@ class PipelineService:
                 # make GET /pipeline/jobs?status=running drop the job from the Processing
                 # page while it's still mid-pipeline.
                 enriched_record = await self._run_enrichment(job_id, filename, final_state)
+                await self._job_repo.commit()
                 if enriched_record is not None:
                     await self._run_classification(job_id, filename, enriched_record)
                     await self._job_repo.update_status(job_id, "classified")
+                    await self._job_repo.commit()
 
             unload_slm()
 
