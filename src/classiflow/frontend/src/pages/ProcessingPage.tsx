@@ -7,6 +7,7 @@ import {
   type TimelineEntry,
 } from "../api/jobs";
 import StepTimeline from "../components/StepTimeline";
+import { getToken } from "../auth/tokenStorage";
 
 // ponytail: 2s polling misses very fast jobs less often than the original 10s, but a
 // job that completes in under 2s can still slip through entirely -- an SSE-driven
@@ -28,7 +29,13 @@ function JobCard({ job }: { job: JobSummary }) {
       })
       .catch(() => {});
 
-    const source = new EventSource(`/pipeline/${job.jobId}/events`);
+    // EventSource can't set an Authorization header (a browser limitation), so the
+    // token travels as a query param instead -- see get_current_user_from_query_token
+    // in api/dependencies.py for the matching backend side.
+    const token = getToken();
+    const source = new EventSource(
+      `/pipeline/${job.jobId}/events?token=${encodeURIComponent(token ?? "")}`,
+    );
     source.addEventListener("node_update", (event) => {
       const payload = JSON.parse((event as MessageEvent<string>).data) as {
         node: string;

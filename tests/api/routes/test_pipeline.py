@@ -52,22 +52,35 @@ class TestIngestEndpoint:
 
 
 class TestEventsEndpoint:
-    def test_unknown_job_returns_404(
-        self, client: TestClient, auth_headers: dict[str, str]
-    ) -> None:
-        response = client.get("/pipeline/no-such-job/events", headers=auth_headers)
+    # This route authenticates via a ?token= query param, not an Authorization header
+    # (EventSource, its real-world caller, can't set custom headers) -- see the
+    # auth_token fixture and get_current_user_from_query_token.
+    def test_unknown_job_returns_404(self, client: TestClient, auth_token: str) -> None:
+        response = client.get(f"/pipeline/no-such-job/events?token={auth_token}")
         assert response.status_code == HTTPStatus.NOT_FOUND
 
-    def test_requires_auth(self, client: TestClient) -> None:
+    def test_missing_token_query_param_is_rejected(self, client: TestClient) -> None:
+        # No ?token= at all -- request validation rejects this before auth even runs,
+        # since token is a required query param on this route (distinct from an
+        # invalid/expired token, which get_current_user_from_query_token itself rejects
+        # with a 401 via the same NotAllowedError path every other auth dependency uses).
         response = client.get("/pipeline/whatever/events")
+        assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+
+    def test_invalid_token_returns_unauthorized(self, client: TestClient) -> None:
+        response = client.get("/pipeline/whatever/events?token=not-a-real-token")
         assert response.status_code == HTTPStatus.UNAUTHORIZED
 
     def test_stream_ends_with_done_event(
-        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+        self,
+        client: TestClient,
+        auth_headers: dict[str, str],
+        auth_token: str,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         job_id = _ingest(client, auth_headers, monkeypatch, legitimate=True, filename="events.pdf")
 
-        response = client.get(f"/pipeline/{job_id}/events", headers=auth_headers)
+        response = client.get(f"/pipeline/{job_id}/events?token={auth_token}")
         assert response.status_code == HTTPStatus.OK
         min_blocks = 5  # 5 node events (started+passed pairs) + final pipeline_done
         blocks = [b for b in response.text.split("event: node_update") if b.strip()]

@@ -125,5 +125,13 @@ def auth_headers() -> dict[str, str]:
 
 
 @pytest.fixture
+def auth_token() -> str:
+    # Bare token (no "Bearer " prefix, no header dict) for the one route that can't
+    # use an Authorization header -- GET /pipeline/{job_id}/events, authenticated via
+    # a ?token= query param since EventSource can't set custom headers.
+    return encode_token(_TEST_EMAIL)
+
+
+@pytest.fixture
 def admin_auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {encode_token(_ADMIN_EMAIL)}"}

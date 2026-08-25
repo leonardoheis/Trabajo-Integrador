@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from classiflow.api.dependencies import (
     CurrentUser,
+    CurrentUserFromQueryToken,
     get_audit_repo,
     get_current_user,
     get_document_steps_repo,
@@ -33,6 +34,12 @@ from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"], dependencies=[Depends(get_current_user)])
+
+# Separate router, same prefix, deliberately WITHOUT the router-level
+# Depends(get_current_user) gate above -- EventSource can't send an Authorization
+# header, so its one route (pipeline_events) authenticates via CurrentUserFromQueryToken
+# instead, applied per-route rather than at the router level.
+sse_router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
 
 @router.post("/ingest", status_code=202)
@@ -139,13 +146,15 @@ async def job_timeline(
     return entries
 
 
-@router.get("/{job_id}/events")
+@sse_router.get("/{job_id}/events")
 @inject
 async def pipeline_events(
     job_id: str,
+    current_user: CurrentUserFromQueryToken,
     job_service: Annotated[JobService, Depends(get_job_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
 ) -> StreamingResponse:
+    del current_user  # only used to enforce authentication
     if await job_service.get_job(job_id) is None:
         raise JobNotFoundError(job_id)
 
