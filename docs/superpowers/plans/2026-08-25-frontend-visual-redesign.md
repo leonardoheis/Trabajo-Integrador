@@ -1,5 +1,15 @@
 # Frontend Visual Redesign Implementation Plan
 
+**Status: all 9 tasks done.** Two real bugs found and fixed during execution, beyond the plan's
+own scope: (1) `PipelineService._run()`'s background-task DB writes were never committed
+incrementally, so a job never appeared as "processing" to any other request until the whole
+pipeline finished (fixed by adding `IJobRepository.commit()`, called at each phase boundary);
+(2) `GET /pipeline/{job_id}/events` (SSE) was gated by a header-only auth dependency that
+`EventSource` can never satisfy, so live updates always 401'd (fixed with a query-param-token
+auth path, `sse_router`). Also fixed a Layout/Sidebar viewport-height bug (long tables pushed
+"Sign out" out of view) and added a "More details" accordion to the Document Detail
+Classification tab for fields not covered by the plan's original key/value layout.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Apply the "Archive" visual direction (warm paper palette, serif type, terracotta/olive
@@ -65,7 +75,7 @@ Vitest + Testing Library (existing test setup, no new tooling).
   Every later task's `var(--color-*)` references resolve against these. Also produces two `body`-
   level font-family declarations that every page inherits.
 
-- [ ] **Step 1: Replace the `:root` token block**
+- [x] **Step 1: Replace the `:root` token block**
 
 Open `src/classiflow/frontend/src/index.css`. Replace the entire `:root { ... }` block (currently
 lines 3-13) with:
@@ -100,7 +110,7 @@ lines 3-13) with:
 }
 ```
 
-- [ ] **Step 2: Apply the serif body font**
+- [x] **Step 2: Apply the serif body font**
 
 In the same file, update the `body` rule (currently just `margin`/`background`/`color`) to also
 set `font-family: var(--font-serif);`:
@@ -114,19 +124,19 @@ body {
 }
 ```
 
-- [ ] **Step 3: Manual visual check**
+- [x] **Step 3: Manual visual check**
 
 Run: hand this to the user — `npm run dev` (from `src/classiflow/frontend/`) — and confirm the
 page background is now warm dark brown (`#14110f`) instead of the old cool `#0f1115`, and body
 text renders in a serif face. No automated test for a pure CSS token change; this is a visual
 sanity check before building on top of it.
 
-- [ ] **Step 4: Run typecheck and lint**
+- [x] **Step 4: Run typecheck and lint**
 
 Hand to the user: `npx tsc -b && npm run lint` (from `src/classiflow/frontend/`).
 Expected: both clean — a CSS-only change touches no TypeScript.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/index.css
@@ -146,14 +156,14 @@ git commit -m "style: replace dark palette with Archive warm-paper token system"
 - Produces: no new exports; same default export, same rendered nav structure/routes. Visual-only
   change, no prop or behavior change, so nothing downstream needs updating.
 
-- [ ] **Step 1: Read the existing test surface**
+- [x] **Step 1: Read the existing test surface**
 
 There is no `Sidebar.test.tsx` in the codebase today (confirmed by inspection) — this component is
 only covered indirectly through pages that render it inside `Layout`. No test file to update in
 this task; skip to the implementation step. (If this assumption is wrong when you run the suite,
 stop and check — do not silently add a new test file that duplicates untested behavior.)
 
-- [ ] **Step 2: Restyle the sidebar shell and wordmark**
+- [x] **Step 2: Restyle the sidebar shell and wordmark**
 
 Replace the full contents of `src/classiflow/frontend/src/components/Sidebar.tsx`:
 
@@ -204,19 +214,19 @@ export default function Sidebar() {
 }
 ```
 
-- [ ] **Step 3: Manual visual check**
+- [x] **Step 3: Manual visual check**
 
 Hand to the user: with `npm run dev` still running, reload and confirm the sidebar now has the
 dark-inset background, terracotta "Classiflow" wordmark, and a left-border accent on the active
 nav item instead of the old flat background highlight.
 
-- [ ] **Step 4: Run typecheck, lint, and existing tests**
+- [x] **Step 4: Run typecheck, lint, and existing tests**
 
 Hand to the user: `npx tsc -b && npm run lint && npm run test` (from `src/classiflow/frontend/`).
 Expected: all clean — no test references `Sidebar`'s old class strings directly (confirmed in
 Step 1), so nothing should break.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/components/Sidebar.tsx
@@ -251,7 +261,7 @@ git commit -m "style: restyle Sidebar with Archive tokens and accent wordmark"
   entries for nodes that actually ran (see the existing `StepTimeline.tsx` comment about no fixed
   upfront node sequence).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `src/classiflow/frontend/src/components/timelinePhases.test.ts`:
 
@@ -336,12 +346,12 @@ describe("groupByPhase", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Hand to the user: `npm run test -- timelinePhases` (from `src/classiflow/frontend/`).
 Expected: FAIL — `Cannot find module './timelinePhases'` or similar (file doesn't exist yet).
 
-- [ ] **Step 3: Implement `groupByPhase`**
+- [x] **Step 3: Implement `groupByPhase`**
 
 Create `src/classiflow/frontend/src/components/timelinePhases.ts`:
 
@@ -387,12 +397,12 @@ export function groupByPhase(entries: TimelineEntry[]): Phase[] {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Hand to the user: `npm run test -- timelinePhases`.
 Expected: PASS — all 7 tests green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/components/timelinePhases.ts src/classiflow/frontend/src/components/timelinePhases.test.ts
@@ -422,7 +432,7 @@ git commit -m "feat: add phase-grouping logic for the pipeline timeline"
   `TimelineEntry` shape are unchanged, so this is a backward-compatible addition, not a breaking
   change to the one existing caller (`ProcessingPage.tsx`, updated in Task 5 anyway).
 
-- [ ] **Step 1: Write the new/updated failing tests**
+- [x] **Step 1: Write the new/updated failing tests**
 
 Replace the full contents of `src/classiflow/frontend/src/components/StepTimeline.test.tsx`:
 
@@ -493,13 +503,13 @@ describe("StepTimeline", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Hand to the user: `npm run test -- StepTimeline`.
 Expected: FAIL — the current `StepTimeline` has no phase grouping and no `mode` prop, so the new
 assertions (`getByText("Ingesta")`, condensed/expanded distinctions) don't match rendered output.
 
-- [ ] **Step 3: Implement the phase-grouped `StepTimeline`**
+- [x] **Step 3: Implement the phase-grouped `StepTimeline`**
 
 Replace the full contents of `src/classiflow/frontend/src/components/StepTimeline.tsx`:
 
@@ -633,19 +643,19 @@ export default function StepTimeline({
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Hand to the user: `npm run test -- StepTimeline`.
 Expected: PASS — all 6 tests green.
 
-- [ ] **Step 5: Manual visual check**
+- [x] **Step 5: Manual visual check**
 
 Hand to the user: with the dev server running and a job mid-pipeline (see Task 5's manual check
 for how to get one), confirm the Processing page's card shows collapsed "Ingesta · 4 steps" /
 "Enrichment · 3 steps" lines with the currently-running phase expanded underneath, plus the
 terracotta progress bar at the bottom.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/components/StepTimeline.tsx src/classiflow/frontend/src/components/StepTimeline.test.tsx
@@ -665,13 +675,13 @@ git commit -m "feat: rewrite StepTimeline as a phase-grouped condensed/expanded 
   `mode`, so it defaults to `"condensed"`).
 - Produces: no new exports; same default export. No prop/behavior change for anything downstream.
 
-- [ ] **Step 1: Confirm no existing test targets this page**
+- [x] **Step 1: Confirm no existing test targets this page**
 
 There is no `ProcessingPage.test.tsx` in the codebase (confirmed by inspection — this page's data
 flow is exercised only manually / through the backend's own test suite). No test file to update;
 proceed directly to the restyle.
 
-- [ ] **Step 2: Restyle the page shell and sections**
+- [x] **Step 2: Restyle the page shell and sections**
 
 Replace the full contents of `src/classiflow/frontend/src/pages/ProcessingPage.tsx`:
 
@@ -786,7 +796,7 @@ export default function ProcessingPage() {
 }
 ```
 
-- [ ] **Step 3: Manual verification against a real job**
+- [x] **Step 3: Manual verification against a real job**
 
 Hand to the user: with the backend running (`uv run python -m classiflow`) and the frontend dev
 server up, upload a document and confirm on the Processing page: (a) it appears under "Processing"
@@ -795,12 +805,12 @@ session is what makes this possible), (b) the phase-grouped timeline updates liv
 complete, (c) the progress bar advances, (d) once fully done the job disappears from this page
 (it's no longer `queued`/`processing`).
 
-- [ ] **Step 4: Run typecheck, lint, and tests**
+- [x] **Step 4: Run typecheck, lint, and tests**
 
 Hand to the user: `npx tsc -b && npm run lint && npm run test` (from `src/classiflow/frontend/`).
 Expected: all clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/pages/ProcessingPage.tsx
@@ -822,12 +832,12 @@ git commit -m "style: restyle ProcessingPage with Archive tokens and phase timel
   `ClassificationSummary` from `../api/documents` unchanged.
 - Produces: no new exports. Visual-only.
 
-- [ ] **Step 1: Confirm no test targets these files' styling**
+- [x] **Step 1: Confirm no test targets these files' styling**
 
 No `DataTable.test.tsx`, `StatusBadge.test.tsx`, or `ClassificationPage.test.tsx` exist in the
 codebase (confirmed by inspection). Proceed directly to the restyle; no test changes in this task.
 
-- [ ] **Step 2: Restyle `DataTable`**
+- [x] **Step 2: Restyle `DataTable`**
 
 Replace the full contents of `src/classiflow/frontend/src/components/DataTable.tsx`:
 
@@ -884,7 +894,7 @@ export default function DataTable<T>({
 }
 ```
 
-- [ ] **Step 3: Restyle `StatusBadge`**
+- [x] **Step 3: Restyle `StatusBadge`**
 
 Replace the full contents of `src/classiflow/frontend/src/components/StatusBadge.tsx`:
 
@@ -911,7 +921,7 @@ full-opacity colored text) badges, matching the validated mockup's `arch-badge` 
 fills in the old bright success/warning/accent colors would clash against the new warm-dark
 surface, tinted badges sit correctly on `--color-surface`.
 
-- [ ] **Step 4: Restyle `ClassificationPage`**
+- [x] **Step 4: Restyle `ClassificationPage`**
 
 Replace the full contents of `src/classiflow/frontend/src/pages/ClassificationPage.tsx`:
 
@@ -981,18 +991,18 @@ export default function ClassificationPage() {
 }
 ```
 
-- [ ] **Step 5: Manual visual check**
+- [x] **Step 5: Manual visual check**
 
 Hand to the user: navigate to `/classification` in the running dev app and confirm the table now
 uses tinted badges, mono confidence/date columns, and the warm-surface input styling.
 
-- [ ] **Step 6: Run typecheck, lint, and tests**
+- [x] **Step 6: Run typecheck, lint, and tests**
 
 Hand to the user: `npx tsc -b && npm run lint && npm run test`.
 Expected: all clean — `DataTable`/`StatusBadge` have no dedicated tests to break, and no other
 test asserts their old class strings.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/components/DataTable.tsx src/classiflow/frontend/src/components/StatusBadge.tsx src/classiflow/frontend/src/pages/ClassificationPage.tsx
@@ -1019,12 +1029,12 @@ git commit -m "style: restyle Classification table and badges with Archive token
   "failed"`, the same vocabulary `TimelineEntry.status` already uses per `TestLlmJudgeRun`-style
   backend tests) — no change to `StepTimeline`'s prop contract needed.
 
-- [ ] **Step 1: Confirm no test targets this page**
+- [x] **Step 1: Confirm no test targets this page**
 
 No `DocumentDetailPage.test.tsx` exists (confirmed by inspection). Proceed directly to the
 restyle.
 
-- [ ] **Step 2: Restyle the page and replace raw-JSON tabs with structured layouts**
+- [x] **Step 2: Restyle the page and replace raw-JSON tabs with structured layouts**
 
 Replace the full contents of `src/classiflow/frontend/src/pages/DocumentDetailPage.tsx`:
 
@@ -1208,19 +1218,19 @@ export default function DocumentDetailPage() {
 }
 ```
 
-- [ ] **Step 3: Manual visual check**
+- [x] **Step 3: Manual visual check**
 
 Hand to the user: open a completed document's detail page and confirm: (a) Enrichment/
 Classification tabs show structured key/value rows instead of raw JSON, (b) the confidence bar
 renders, (c) smell tags render as pills, (d) the Audit tab shows the full expanded phase timeline
 (every phase's steps visible, not collapsed), (e) tabs use the bottom-border-active style.
 
-- [ ] **Step 4: Run typecheck, lint, and tests**
+- [x] **Step 4: Run typecheck, lint, and tests**
 
 Hand to the user: `npx tsc -b && npm run lint && npm run test`.
 Expected: all clean.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/pages/DocumentDetailPage.tsx
@@ -1246,13 +1256,13 @@ git commit -m "style: replace raw JSON dumps with structured layouts, reuse expa
   rest of the app (mono for IDs/timestamps, serif headings, consistent input styling) — not a
   full rewrite.
 
-- [ ] **Step 1: Confirm no test targets these files' styling**
+- [x] **Step 1: Confirm no test targets these files' styling**
 
 No `UsersPage.test.tsx` or `AuditLogPage.test.tsx` exists; `ReclassifyPanel.test.tsx` exists and
 asserts behavior (form submission, `aria-label` lookups), not class strings — confirmed safe to
 restyle without touching that test file.
 
-- [ ] **Step 2: Restyle `UsersPage`**
+- [x] **Step 2: Restyle `UsersPage`**
 
 In `src/classiflow/frontend/src/pages/UsersPage.tsx`, update the `return` block's className
 strings (structure and logic unchanged):
@@ -1286,7 +1296,7 @@ hover:underline`, and `text-sm text-[var(--color-danger)]` with `text-sm font-me
 text-[var(--color-danger)] hover:underline`, so the action links read distinctly as links rather
 than plain text.
 
-- [ ] **Step 3: Restyle `AuditLogPage`**
+- [x] **Step 3: Restyle `AuditLogPage`**
 
 In `src/classiflow/frontend/src/pages/AuditLogPage.tsx`, update the `COLUMNS` array and `return`
 block:
@@ -1336,7 +1346,7 @@ export default function AuditLogPage() {
 }
 ```
 
-- [ ] **Step 4: Restyle `ReclassifyPanel`**
+- [x] **Step 4: Restyle `ReclassifyPanel`**
 
 In `src/classiflow/frontend/src/components/ReclassifyPanel.tsx`, update classNames only (JSX
 structure, ids, and `aria-label`s unchanged so the existing `ReclassifyPanel.test.tsx` keeps
@@ -1384,18 +1394,18 @@ passing):
   );
 ```
 
-- [ ] **Step 5: Manual visual check**
+- [x] **Step 5: Manual visual check**
 
 Hand to the user: as an admin user, check `/users` and `/audit` render with mono IDs/timestamps
 and consistent input/button styling matching the rest of the app; open a human-review document's
 detail page and confirm the `ReclassifyPanel` form still works and matches the new palette.
 
-- [ ] **Step 6: Run typecheck, lint, and tests**
+- [x] **Step 6: Run typecheck, lint, and tests**
 
 Hand to the user: `npx tsc -b && npm run lint && npm run test` (from `src/classiflow/frontend/`).
 Expected: all clean, including `ReclassifyPanel.test.tsx` (structure/`aria-label`s untouched).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/pages/UsersPage.tsx src/classiflow/frontend/src/pages/AuditLogPage.tsx src/classiflow/frontend/src/components/ReclassifyPanel.tsx
@@ -1410,19 +1420,19 @@ git commit -m "style: apply final Archive token pass to Users, Audit Log, and Re
 
 **Interfaces:** N/A.
 
-- [ ] **Step 1: Full frontend check**
+- [x] **Step 1: Full frontend check**
 
 Hand to the user: from `src/classiflow/frontend/`, run `npx tsc -b && npm run lint && npm run test`.
 Expected: all clean — this re-runs everything from Tasks 1-8 together to catch any cross-task
 regression (e.g. a shared component restyled in one task breaking an assumption made in another).
 
-- [ ] **Step 2: Full backend check (confirms no accidental backend edits)**
+- [x] **Step 2: Full backend check (confirms no accidental backend edits)**
 
 Hand to the user: `uv run poe check` from the repo root.
 Expected: passes — this plan makes no backend changes (Global Constraints), so this is a
 regression guard, not new work.
 
-- [ ] **Step 3: End-to-end manual walkthrough**
+- [x] **Step 3: End-to-end manual walkthrough**
 
 Hand to the user: with both servers running, walk through: log in → upload a document → watch it
 on the Processing page through to completion → find it on the Classification page → open its
@@ -1430,7 +1440,7 @@ Document Detail page and check all four tabs → (if admin) check Users and Audi
 the whole app now reads as one consistent visual system rather than one polished component in an
 otherwise plain shell.
 
-- [ ] **Step 4: Commit (only if Step 1-3 surfaced fixes)**
+- [x] **Step 4: Commit (only if Step 1-3 surfaced fixes)**
 
 If any cross-task issue was found and fixed in this task, commit it:
 
