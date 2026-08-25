@@ -20,12 +20,10 @@ from classiflow.ingesta.nodes import (
     ExtractionStep,
     FileReceptionNode,
     FormatValidationNode,
-    KnowledgeIndexingNode,
 )
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.ingesta.prompts import LegitimacyDecisionOutput, build_content_chain
 from classiflow.services.audit.service import AuditService
-from tests.fakes import make_indexing_node
 
 if TYPE_CHECKING:
     from classiflow.ingesta.domain import JobState
@@ -60,7 +58,6 @@ _CoordinatorNodes = tuple[
     ExtractionStep,
     ContentValidationNode,
     DuplicateControlNode,
-    KnowledgeIndexingNode,
 ]
 
 
@@ -94,16 +91,15 @@ def _make_nodes(
         broadcaster=broadcaster,
         embedding_store=EmbeddingStore(dim=_DIM, embed_fn=_stub_embed),
     )
-    n5 = make_indexing_node(audit, broadcaster)
-    return n1, n2, extraction_step, n3, n4, n5
+    return n1, n2, extraction_step, n3, n4
 
 
 def _build_graph(
     text_extractor: TextExtractFn,
     content_chain: Runnable[dict[str, str], LegitimacyDecisionOutput] | None = None,
 ) -> CompiledStateGraph:
-    n1, n2, extraction_step, n3, n4, n5 = _make_nodes(text_extractor, content_chain)
-    return build_coordinator(n1, n2, n3, n4, n5, extraction_step=extraction_step)
+    n1, n2, extraction_step, n3, n4 = _make_nodes(text_extractor, content_chain)
+    return build_coordinator(n1, n2, n3, n4, extraction_step=extraction_step)
 
 
 class TestCoordinatorHappyPath:

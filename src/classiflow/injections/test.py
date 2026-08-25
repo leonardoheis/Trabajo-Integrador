@@ -28,7 +28,7 @@ from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.classification_record import (
     InMemoryClassificationRecordRepository,
 )
-from classiflow.database.repositories.document import InMemoryDocumentRepository
+from classiflow.database.repositories.document_kb import InMemoryDocumentKbRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
@@ -52,7 +52,6 @@ from classiflow.ingesta.nodes import (
     ExtractionStep,
     FileReceptionNode,
     FormatValidationNode,
-    KnowledgeIndexingNode,
 )
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.knowledge.chat.service import ChatService
@@ -217,7 +216,7 @@ class TestContainer(containers.DeclarativeContainer):
         hash_repo=hash_repo,
         embedding_store=providers.Factory(EmbeddingStore, dim=4, embed_fn=_test_embed),
     )
-    document_repo = providers.Singleton(InMemoryDocumentRepository)
+    document_kb_repo = providers.Singleton(InMemoryDocumentKbRepository)
     vector_store = providers.Singleton(InMemoryVectorStore)
     embedder = providers.Singleton(_StubEmbedder)
     chat_llm = providers.Singleton(_StubChatLlm)
@@ -240,14 +239,6 @@ class TestContainer(containers.DeclarativeContainer):
         retriever=retriever,
         chat_llm=chat_llm,
     )
-    node5 = providers.Factory(
-        KnowledgeIndexingNode,
-        audit=audit_service,
-        broadcaster=broadcaster,
-        indexer=indexer,
-        document_repo=document_repo,
-    )
-
     enrichment_text_cleaner = providers.Factory(
         TextCleanerNode, audit=audit_service, broadcaster=broadcaster
     )
@@ -323,7 +314,6 @@ class TestContainer(containers.DeclarativeContainer):
         node2=node2,
         node3=node3,
         node4=node4,
-        node5=node5,
         extraction_step=extraction_step,
     )
     pipeline_service = providers.Factory(
@@ -337,4 +327,6 @@ class TestContainer(containers.DeclarativeContainer):
         document_storage=document_storage,
         classification_coordinator=classification_coordinator,
         job_semaphore=job_semaphore,
+        indexer=indexer,
+        document_kb_repo=document_kb_repo,
     )

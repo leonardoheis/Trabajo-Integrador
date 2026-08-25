@@ -27,14 +27,14 @@ from classiflow.database.repositories.audit import SqlAuditRepository
 from classiflow.database.repositories.classification_record import (
     SqlClassificationRecordRepository,
 )
-from classiflow.database.repositories.document import SqlDocumentRepository
+from classiflow.database.repositories.document_kb import SqlDocumentKbRepository
 from classiflow.database.repositories.document_steps import SqlDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import SqlEnrichedRecordRepository
 from classiflow.database.repositories.hash import IHashRepository, SqlHashRepository
 from classiflow.database.repositories.human_decision import SqlHumanDecisionRepository
 from classiflow.database.repositories.job import SqlJobRepository
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
-from classiflow.domain.repositories.document import IDocumentRepository
+from classiflow.domain.repositories.document_kb import IDocumentKbRepository
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
 from classiflow.domain.repositories.human_decision import IHumanDecisionRepository
@@ -55,7 +55,6 @@ from classiflow.ingesta.nodes import (
     ExtractionStep,
     FileReceptionNode,
     FormatValidationNode,
-    KnowledgeIndexingNode,
 )
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.ingesta.prompts import (
@@ -130,8 +129,8 @@ def get_hash_repo(session: DbSession) -> IHashRepository:
     return SqlHashRepository(session)
 
 
-def get_document_repo(session: DbSession) -> IDocumentRepository:
-    return SqlDocumentRepository(session)
+def get_document_kb_repo(session: DbSession) -> IDocumentKbRepository:
+    return SqlDocumentKbRepository(session)
 
 
 def get_audit_service(session: DbSession) -> AuditService:
@@ -375,21 +374,6 @@ def get_classification_coordinator(
 
 
 @inject
-def get_node5(
-    audit_service: Annotated[AuditService, Depends(get_audit_service)],
-    broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
-    indexer: Annotated[IndexerService, Depends(get_indexer)],
-    document_repo: Annotated[IDocumentRepository, Depends(get_document_repo)],
-) -> KnowledgeIndexingNode:
-    return KnowledgeIndexingNode(
-        audit=audit_service,
-        broadcaster=broadcaster,
-        indexer=indexer,
-        document_repo=document_repo,
-    )
-
-
-@inject
 def get_extraction_step(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
@@ -412,10 +396,9 @@ def get_coordinator(
     node2: Annotated[FormatValidationNode, Depends(get_node2)],
     node3: Annotated[ContentValidationNode, Depends(get_node3)],
     node4: Annotated[DuplicateControlNode, Depends(get_node4)],
-    node5: Annotated[KnowledgeIndexingNode, Depends(get_node5)],
     extraction_step: Annotated[ExtractionStep, Depends(get_extraction_step)],
 ) -> CompiledStateGraph:  # type: ignore[type-arg]
-    return build_coordinator(node1, node2, node3, node4, node5, extraction_step=extraction_step)
+    return build_coordinator(node1, node2, node3, node4, extraction_step=extraction_step)
 
 
 @inject
@@ -433,6 +416,8 @@ def get_pipeline_service(
         CompiledStateGraph, Depends(get_classification_coordinator)
     ],
     job_semaphore: Annotated[asyncio.Semaphore, Depends(Provide[Container.job_semaphore])],
+    indexer: Annotated[IndexerService, Depends(get_indexer)],
+    document_kb_repo: Annotated[IDocumentKbRepository, Depends(get_document_kb_repo)],
 ) -> PipelineService:
     return PipelineService(
         job_repo=job_repo,
@@ -444,4 +429,6 @@ def get_pipeline_service(
         document_storage=document_storage,
         classification_coordinator=classification_coordinator,
         job_semaphore=job_semaphore,
+        indexer=indexer,
+        document_kb_repo=document_kb_repo,
     )

@@ -23,6 +23,7 @@ from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.classification_record import (
     InMemoryClassificationRecordRepository,
 )
+from classiflow.database.repositories.document_kb import InMemoryDocumentKbRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
@@ -46,7 +47,7 @@ from classiflow.ingesta.prompts import build_content_chain
 from classiflow.services.audit.service import AuditService
 from classiflow.services.pipeline.service import PipelineService
 from classiflow.storage.document_storage import LocalDiskStorage
-from tests.fakes import make_indexing_node
+from tests.fakes import make_indexer
 
 _SPANISH_TEXT = (
     "El Concejo Municipal de Rosario sanciona la siguiente ordenanza: "
@@ -126,8 +127,7 @@ def _build_service(tmp_path: Path) -> _ServiceUnderTest:
         broadcaster=broadcaster,
         embedding_store=EmbeddingStore(dim=4, embed_fn=_stub_embed),
     )
-    n5 = make_indexing_node(audit, broadcaster)
-    coordinator = build_coordinator(n1, n2, n3, n4, n5, extraction_step=extraction_step)
+    coordinator = build_coordinator(n1, n2, n3, n4, extraction_step=extraction_step)
 
     text_cleaner = TextCleanerNode(audit=audit, broadcaster=broadcaster)
     entity_extractor = EntityExtractorNode(
@@ -192,6 +192,8 @@ def _build_service(tmp_path: Path) -> _ServiceUnderTest:
         document_storage=storage,
         classification_coordinator=classification_coordinator,
         job_semaphore=asyncio.Semaphore(10),
+        indexer=make_indexer(),
+        document_kb_repo=InMemoryDocumentKbRepository(),
     )
     return _ServiceUnderTest(
         service=service, job_repo=job_repo, classification_record_repo=classification_record_repo

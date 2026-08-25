@@ -17,6 +17,7 @@ from classiflow.api.routes.pipeline.schemas import (
     DocumentStepSchema,
     IngestResponse,
     ReviewQueueItem,
+    SynchronizeKbResponse,
 )
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.injections.production import Container
@@ -51,6 +52,14 @@ async def ingest_bulk(
         file_bytes = await file.read()
         job_ids.append(await pipeline.start(background_tasks, filename, file_bytes))
     return BulkIngestResponse(job_ids=job_ids)
+
+
+@router.post("/synchronize-kb", status_code=200)
+async def synchronize_kb(
+    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+) -> SynchronizeKbResponse:
+    indexed_job_ids, skipped_count = await pipeline.synchronize_kb()
+    return SynchronizeKbResponse(indexed_job_ids=indexed_job_ids, skipped_count=skipped_count)
 
 
 @router.get("/review-queue")

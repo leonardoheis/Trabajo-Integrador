@@ -10,6 +10,7 @@ import pytest
 from langgraph.graph.state import CompiledStateGraph
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.database.repositories.document_kb import InMemoryDocumentKbRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
@@ -29,7 +30,7 @@ from classiflow.ingesta.nodes import (
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.pipeline.service import PipelineService
-from tests.fakes import make_indexing_node
+from tests.fakes import make_indexer
 
 if TYPE_CHECKING:
     from classiflow.database.models import DocumentStep
@@ -121,8 +122,7 @@ def _build_graph(
         broadcaster=broadcaster,
         embedding_store=EmbeddingStore(dim=_DIM, embed_fn=_stub_embed),
     )
-    n5 = make_indexing_node(audit, broadcaster)
-    return build_coordinator(n1, n2, n3, n4, n5, extraction_step=extraction_step)
+    return build_coordinator(n1, n2, n3, n4, extraction_step=extraction_step)
 
 
 async def test_extraction_events_appear_between_node2_and_node3(
@@ -174,6 +174,8 @@ async def test_extractor_used_is_queryable_from_document_step() -> None:
             "CompiledStateGraph", None
         ),
         job_semaphore=asyncio.Semaphore(1),  # unused: only _persist_steps runs
+        indexer=make_indexer(),  # unused: only _persist_steps runs
+        document_kb_repo=InMemoryDocumentKbRepository(),  # unused: only _persist_steps runs
     )
     job_id = "persisted-job"
     final_state: JobState = {

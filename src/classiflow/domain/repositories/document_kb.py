@@ -1,0 +1,9 @@
+from typing import Protocol
+
+from classiflow.database.models import DocumentKb
+
+
+class IDocumentKbRepository(Protocol):
+    async def save(self, document: DocumentKb) -> None: ...
+    async def find_by_sha256(self, sha256: str) -> DocumentKb | None: ...
+    async def list_all(self) -> list[DocumentKb]: ...

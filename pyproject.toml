@@ -123,10 +123,10 @@ ignore = [
 # Mirrors [tool.pylint.design] max-args below -- FastAPI's Depends()-per-dependency
 # style, and PipelineService's own growing set of injected collaborators (job_repo,
 # document_steps_repo, enriched_record_repo, broadcaster, coordinator,
-# enrichment_coordinator, document_storage, classification_coordinator,
-# job_semaphore), mean DI-composing functions/classes legitimately grow one param per
-# wired collaborator.
-max-args = 9
+# enrichment_coordinator, document_storage, classification_coordinator, job_semaphore,
+# indexer, document_kb_repo), mean DI-composing functions/classes legitimately grow one
+# param per wired collaborator.
+max-args = 11
 # Mirrors [tool.pylint.design] max-public-methods below -- _Settings (settings.py)
 # gets one read-only property per config field by design; each new Settings.* value
 # legitimately adds one property, not unrelated behavior accumulating on one class.
@@ -266,7 +266,7 @@ valid-metaclass-classmethod-first-arg = ["mcs"]
 bad-functions = ["map", "filter"]
 
 [tool.pylint.design]
-max-args = 9
+max-args = 11
 max-attributes = 7
 max-bool-expr = 5
 max-branches = 12

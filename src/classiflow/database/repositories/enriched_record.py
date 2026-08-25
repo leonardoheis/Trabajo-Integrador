@@ -1,7 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from classiflow.database.models import EnrichedRecord
+from classiflow.database.models import DocumentKb, EnrichedRecord
 
 
 class SqlEnrichedRecordRepository:
@@ -17,6 +17,13 @@ class SqlEnrichedRecordRepository:
             select(EnrichedRecord).where(EnrichedRecord.job_id == job_id)
         )
         return result.scalar_one_or_none()
+
+    async def find_unindexed(self) -> list[EnrichedRecord]:
+        stmt = select(EnrichedRecord).where(
+            ~exists(select(DocumentKb.id).where(DocumentKb.enriched_record_id == EnrichedRecord.id))
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
 
 
 class InMemoryEnrichedRecordRepository:
@@ -36,3 +43,10 @@ class InMemoryEnrichedRecordRepository:
 
     async def find_by_job_id(self, job_id: str) -> EnrichedRecord | None:
         return self._records.get(job_id)
+
+    async def find_unindexed(self) -> list[EnrichedRecord]:
+        # This double has no visibility into document_kb rows, so it cannot model the
+        # NOT EXISTS join the SQL implementation does -- it simply returns every saved
+        # record. Real "already indexed" exclusion is covered by a SQLite-backed test
+        # against SqlEnrichedRecordRepository instead.
+        return list(self._records.values())

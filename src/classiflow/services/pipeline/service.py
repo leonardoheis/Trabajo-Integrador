@@ -5,10 +5,16 @@ from uuid import uuid4
 
 from fastapi import BackgroundTasks
 from langgraph.graph.state import CompiledStateGraph
+from loguru import logger
 
-from classiflow.database.models import DocumentStep, EnrichedRecord, Job
+from classiflow.database.models import DocumentKb, DocumentStep, EnrichedRecord, Job
 from classiflow.domain.job import JobStatus, NodeEvent
-from classiflow.domain.repositories import UNSET, IJobRepository, UnsetType
+from classiflow.domain.repositories import (
+    UNSET,
+    IDocumentKbRepository,
+    IJobRepository,
+    UnsetType,
+)
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
 from classiflow.enrichment.config_enrichment import get_enrichment_config
@@ -21,9 +27,10 @@ from classiflow.ingesta.domain import (
     FileReceptionResult,
     FormatValidationResult,
     JobState,
-    KnowledgeIndexingResult,
 )
 from classiflow.ingesta.llm_provider import unload_slm
+from classiflow.knowledge.exceptions import KnowledgeError
+from classiflow.knowledge.indexing.indexer import IndexerService, IndexResult
 from classiflow.storage.document_storage import IDocumentStorage
 
 if TYPE_CHECKING:
@@ -37,7 +44,6 @@ _NODE_NAMES = {
     "extraction": "extraction",
     "content_validation": "node3_content_validation",
     "duplicate_control": "node4_duplicate_control",
-    "knowledge_indexing": "node5_knowledge_indexing",
 }
 _StepResult = (
     FileReceptionResult
@@ -45,8 +51,31 @@ _StepResult = (
     | ExtractionResult
     | ContentValidationResult
     | DuplicateControlResult
-    | KnowledgeIndexingResult
 )
+
+
+def _build_document_kb(indexed: IndexResult, record: EnrichedRecord, sha256: str) -> DocumentKb:
+    """Build a DocumentKb row from an indexed EnrichedRecord.
+
+    Returns:
+        Database DocumentKb model with all fields populated.
+    """
+    metadata = indexed.metadata.for_storage()
+    return DocumentKb(
+        job_id=record.job_id,
+        sha256=sha256,
+        filename=record.filename or "",
+        doc_type=metadata.doc_type,
+        number=metadata.number,
+        year=metadata.year,
+        subject=metadata.subject,
+        sanction_date=metadata.sanction_date,
+        publication_date=metadata.publication_date,
+        bulletin_number=metadata.bulletin_number,
+        download_url=metadata.download_url,
+        chunk_count=indexed.chunk_count,
+        enriched_record_id=record.id,
+    )
 
 
 class PipelineService:
@@ -61,6 +90,8 @@ class PipelineService:
         document_storage: IDocumentStorage,
         classification_coordinator: CompiledStateGraph,  # type: ignore[type-arg]
         job_semaphore: asyncio.Semaphore,
+        indexer: IndexerService,
+        document_kb_repo: IDocumentKbRepository,
     ) -> None:
         self._job_repo = job_repo
         self._document_steps_repo = document_steps_repo
@@ -71,6 +102,8 @@ class PipelineService:
         self._document_storage = document_storage
         self._classification_coordinator = classification_coordinator
         self._job_semaphore = job_semaphore
+        self._indexer = indexer
+        self._document_kb_repo = document_kb_repo
 
     async def start(
         self, background_tasks: BackgroundTasks, filename: str, file_bytes: bytes
@@ -182,10 +215,13 @@ class PipelineService:
                     job_id=job_id,
                     cleaned_text=result["cleaned_text"],
                     raw_text=final_state["text"],
+                    filename=filename,
+                    sha256=reception.sha256,
                     entities=result["entities"].model_dump(),
                     metadata_=result["metadata"].model_dump(),
                 )
                 await self._enriched_record_repo.save(record)
+                await self.index_enriched_record(record, filename, reception.sha256)
             except EnrichmentError as exc:
                 last_error = exc
                 continue
@@ -214,3 +250,45 @@ class PipelineService:
             "enriched_id": enriched_record.id,
         }
         await self._classification_coordinator.ainvoke(initial)
+
+    async def index_enriched_record(
+        self, record: EnrichedRecord, filename: str, sha256: str
+    ) -> bool:
+        """Index one enriched record's cleaned text into the knowledge base.
+
+        Non-fatal by design: a KnowledgeError here must never fail the job or the
+        caller (the automatic post-enrichment hook, or the synchronize-kb endpoint).
+
+        Returns:
+            Whether a DocumentKb row was written.
+        """
+        try:
+            indexed = await self._indexer.index(
+                record.job_id, filename, sha256, record.cleaned_text
+            )
+        except KnowledgeError as exc:
+            logger.warning("Knowledge indexing failed for job {}: {}", record.job_id, exc)
+            return False
+        if indexed.chunk_count == 0:
+            return False
+        await self._document_kb_repo.save(_build_document_kb(indexed, record, sha256))
+        return True
+
+    async def synchronize_kb(self) -> tuple[list[str], int]:
+        """Index every EnrichedRecord that has no DocumentKb row yet.
+
+        Returns:
+            Tuple of (job_ids successfully indexed, count skipped or failed).
+        """
+        unindexed = await self._enriched_record_repo.find_unindexed()
+        indexed_job_ids: list[str] = []
+        skipped = 0
+        for record in unindexed:
+            was_indexed = await self.index_enriched_record(
+                record, record.filename or "", record.sha256 or ""
+            )
+            if was_indexed:
+                indexed_job_ids.append(record.job_id)
+            else:
+                skipped += 1
+        return indexed_job_ids, skipped

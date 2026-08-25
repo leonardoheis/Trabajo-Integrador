@@ -8,7 +8,6 @@ from .results import (
     FileReceptionResult,
     FormatDecision,
     FormatValidationResult,
-    KnowledgeIndexingResult,
 )
 from .state import JobState, NodeUpdate
 
@@ -22,6 +21,5 @@ __all__ = [
     "FormatValidationResult",
     "JobContext",
     "JobState",
-    "KnowledgeIndexingResult",
     "NodeUpdate",
 ]

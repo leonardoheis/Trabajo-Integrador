@@ -9,6 +9,7 @@ from classiflow.database.base import Base
 from classiflow.database.models import (
     AllowedUser,
     ClassificationRecord,
+    DocumentKb,
     DocumentStep,
     EnrichedRecord,
     HumanDecision,
@@ -22,6 +23,10 @@ from classiflow.database.repositories.audit import (
 from classiflow.database.repositories.classification_record import (
     InMemoryClassificationRecordRepository,
     SqlClassificationRecordRepository,
+)
+from classiflow.database.repositories.document_kb import (
+    InMemoryDocumentKbRepository,
+    SqlDocumentKbRepository,
 )
 from classiflow.database.repositories.document_steps import (
     InMemoryDocumentStepsRepository,
@@ -46,6 +51,8 @@ _JOB = "job-001"
 _EMAIL = "test@example.com"
 _ROWS_1 = 1
 _ROWS_2 = 2
+_CHUNK_COUNT = 3
+_UPDATED_CHUNK_COUNT = 9
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -437,6 +444,39 @@ class TestInMemoryEnrichedRecordRepository:
         assert await repo.find_by_job_id("no-such-job") is None
 
 
+class TestSqlEnrichedRecordRepositoryFindUnindexed:
+    # The in-memory double can't model the document_kb join (see its find_unindexed
+    # docstring), so exclusion of already-indexed records is only verified here.
+    async def test_excludes_records_with_a_document_kb_row(self, session: AsyncSession) -> None:
+        repo = SqlEnrichedRecordRepository(session)
+        indexed = _enriched_record(job_id=_JOB)
+        await repo.save(indexed)
+        unindexed = _enriched_record(job_id="other-job")
+        await repo.save(unindexed)
+        session.add(
+            DocumentKb(
+                job_id=indexed.job_id,
+                sha256=_SHA,
+                filename="doc.pdf",
+                chunk_count=1,
+                enriched_record_id=indexed.id,
+            )
+        )
+        await session.flush()
+
+        pending = await repo.find_unindexed()
+
+        assert [r.job_id for r in pending] == [unindexed.job_id]
+
+    async def test_all_pending_when_none_indexed(self, session: AsyncSession) -> None:
+        repo = SqlEnrichedRecordRepository(session)
+        await repo.save(_enriched_record())
+
+        pending = await repo.find_unindexed()
+
+        assert [r.job_id for r in pending] == [_JOB]
+
+
 # ---------------------------------------------------------------------------
 # IClassificationRecordRepository
 # ---------------------------------------------------------------------------
@@ -513,3 +553,62 @@ class TestInMemoryClassificationRecordRepository:
         await repo.save(_classification_record(job_id="job-002", review_route="accept"))
         pending = await repo.list_needing_human_review()
         assert [r.job_id for r in pending] == [_JOB]
+
+
+# ---------------------------------------------------------------------------
+# IDocumentKbRepository
+# ---------------------------------------------------------------------------
+
+
+def _document_kb(sha256: str = _SHA, job_id: str = _JOB) -> DocumentKb:
+    return DocumentKb(job_id=job_id, sha256=sha256, filename="doc.pdf", chunk_count=3)
+
+
+class TestSqlDocumentKbRepository:
+    async def test_save_and_find_by_sha256(self, session: AsyncSession) -> None:
+        repo = SqlDocumentKbRepository(session)
+        await repo.save(_document_kb())
+        found = await repo.find_by_sha256(_SHA)
+        assert found is not None
+        assert found.filename == "doc.pdf"
+        assert found.chunk_count == _CHUNK_COUNT
+
+    async def test_find_missing_returns_none(self, session: AsyncSession) -> None:
+        repo = SqlDocumentKbRepository(session)
+        assert await repo.find_by_sha256("b" * 64) is None
+
+    async def test_save_upserts_by_sha256(self, session: AsyncSession) -> None:
+        repo = SqlDocumentKbRepository(session)
+        await repo.save(_document_kb())
+        updated = _document_kb()
+        updated.chunk_count = _UPDATED_CHUNK_COUNT
+        await repo.save(updated)
+        rows = await repo.list_all()
+        assert len(rows) == _ROWS_1
+        assert rows[0].chunk_count == _UPDATED_CHUNK_COUNT
+
+    async def test_list_all(self, session: AsyncSession) -> None:
+        repo = SqlDocumentKbRepository(session)
+        await repo.save(_document_kb(sha256="a" * 64))
+        await repo.save(_document_kb(sha256="c" * 64, job_id="other-job"))
+        rows = await repo.list_all()
+        assert len(rows) == _ROWS_2
+
+
+class TestInMemoryDocumentKbRepository:
+    async def test_save_and_find_by_sha256(self) -> None:
+        repo = InMemoryDocumentKbRepository()
+        await repo.save(_document_kb())
+        found = await repo.find_by_sha256(_SHA)
+        assert found is not None
+        assert found.filename == "doc.pdf"
+
+    async def test_find_missing_returns_none(self) -> None:
+        repo = InMemoryDocumentKbRepository()
+        assert await repo.find_by_sha256("b" * 64) is None
+
+    async def test_list_all(self) -> None:
+        repo = InMemoryDocumentKbRepository()
+        await repo.save(_document_kb(sha256="a" * 64))
+        await repo.save(_document_kb(sha256="c" * 64))
+        assert len(await repo.list_all()) == _ROWS_2

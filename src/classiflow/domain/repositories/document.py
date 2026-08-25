@@ -1,9 +1,0 @@
-from typing import Protocol
-
-from classiflow.database.models import Document
-
-
-class IDocumentRepository(Protocol):
-    async def save(self, document: Document) -> None: ...
-    async def find_by_sha256(self, sha256: str) -> Document | None: ...
-    async def list_all(self) -> list[Document]: ...

@@ -8,7 +8,6 @@ from .results import (
     ExtractionResult,
     FileReceptionResult,
     FormatValidationResult,
-    KnowledgeIndexingResult,
 )
 
 
@@ -25,7 +24,6 @@ class JobState(_JobStateRequired, total=False):
     extraction: ExtractionResult
     content_validation: ContentValidationResult
     duplicate_control: DuplicateControlResult
-    knowledge_indexing: KnowledgeIndexingResult
     final_status: str
     rejection_reason: str
 
@@ -43,6 +41,5 @@ class NodeUpdate(BaseEntity):
     extraction: ExtractionResult | None = None
     content_validation: ContentValidationResult | None = None
     duplicate_control: DuplicateControlResult | None = None
-    knowledge_indexing: KnowledgeIndexingResult | None = None
     final_status: str | None = None
     rejection_reason: str | None = None
