@@ -23,8 +23,11 @@ export default function ReclassifyPanel({
   }
 
   return (
-    <div className="rounded-md border border-[var(--color-border)] p-4">
-      <label className="mb-1 block text-sm" htmlFor="reclassify-label">
+    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      <label
+        className="mb-1 block font-mono text-[11px] uppercase tracking-wide text-[var(--color-text-faint)]"
+        htmlFor="reclassify-label"
+      >
         Label
       </label>
       <select
@@ -32,7 +35,7 @@ export default function ReclassifyPanel({
         aria-label="Label"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
-        className="mb-3 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2"
+        className="mb-3 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2 text-[var(--color-text)]"
       >
         {DOCUMENT_CATEGORIES.map((category) => (
           <option key={category} value={category}>
@@ -41,7 +44,10 @@ export default function ReclassifyPanel({
         ))}
       </select>
 
-      <label className="mb-1 block text-sm" htmlFor="reclassify-notes">
+      <label
+        className="mb-1 block font-mono text-[11px] uppercase tracking-wide text-[var(--color-text-faint)]"
+        htmlFor="reclassify-notes"
+      >
         Notes
       </label>
       <textarea
@@ -49,13 +55,13 @@ export default function ReclassifyPanel({
         aria-label="Notes"
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        className="mb-3 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2"
+        className="mb-3 w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-2 text-[var(--color-text)]"
       />
 
       <button
         onClick={handleSubmit}
         disabled={submitting}
-        className="rounded-md bg-[var(--color-accent)] px-4 py-2 text-white disabled:opacity-50"
+        className="rounded-md bg-[var(--color-accent)] px-4 py-2 font-semibold text-[var(--color-bg)] disabled:opacity-50"
       >
         Submit
       </button>
