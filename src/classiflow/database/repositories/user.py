@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,6 +70,11 @@ class InMemoryUserRepository:
         return list(self._users.values())
 
     async def create(self, user: AllowedUser) -> None:
+        # created_at's server_default only applies on a real SQL INSERT -- a bare,
+        # unflushed instance never round-trips through one here, so it needs its own
+        # Python-side value, matching what every real DB row always has.
+        if user.created_at is None:
+            user.created_at = datetime.now(timezone.utc)
         self._users[user.email] = user
 
     async def update(

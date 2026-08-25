@@ -33,11 +33,13 @@ from classiflow.database.repositories.enriched_record import SqlEnrichedRecordRe
 from classiflow.database.repositories.hash import IHashRepository, SqlHashRepository
 from classiflow.database.repositories.human_decision import SqlHumanDecisionRepository
 from classiflow.database.repositories.job import SqlJobRepository
+from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
 from classiflow.domain.repositories.human_decision import IHumanDecisionRepository
 from classiflow.domain.repositories.job import IJobRepository
+from classiflow.domain.repositories.user import IUserRepository
 from classiflow.domain.user import User
 from classiflow.enrichment.coordinator import build_enrichment_coordinator
 from classiflow.enrichment.nodes import EntityExtractorNode, MetadataEnricherNode, TextCleanerNode
@@ -105,6 +107,10 @@ DbSession = Annotated[AsyncSession, Depends(get_session)]
 
 def get_job_repo(session: DbSession) -> IJobRepository:
     return SqlJobRepository(session)
+
+
+def get_user_repo(session: DbSession) -> IUserRepository:
+    return SqlUserRepository(session)
 
 
 def get_document_steps_repo(session: DbSession) -> IDocumentStepsRepository:
