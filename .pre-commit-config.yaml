@@ -59,4 +59,4 @@ repos:
     hooks:
       - id: codespell
         stages: [pre-commit]
-        exclude: ^(src/classiflow/playground/|documents/|\.claude/|models/)
+        exclude: ^(src/classiflow/playground/|documents/|\.claude/|models/|src/classiflow/frontend/package-lock\.json)
