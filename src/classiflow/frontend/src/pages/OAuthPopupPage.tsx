@@ -1,7 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export default function OAuthPopupPage() {
+  // Google's authorization code is single-use -- React 19 StrictMode's dev-only
+  // double-invocation of useEffect would otherwise fire this exchange twice with the
+  // same code, and the second call fails server-side (the code was already
+  // consumed). This guard makes the effect body idempotent regardless of how many
+  // times it's invoked.
+  const hasExchanged = useRef(false);
+
   useEffect(() => {
+    if (hasExchanged.current) {
+      return;
+    }
+    hasExchanged.current = true;
+
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
