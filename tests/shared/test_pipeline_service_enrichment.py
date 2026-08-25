@@ -207,7 +207,7 @@ class TestPipelineServiceEnrichmentHappyPath:
 
         job = await under_test.job_repo.find_by_job_id(job_id)
         assert job is not None
-        assert job.status == "accepted"
+        assert job.status == "classified"
 
         record = await under_test.enriched_record_repo.find_by_job_id(job_id)
         assert record is not None

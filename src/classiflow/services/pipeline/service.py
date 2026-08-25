@@ -103,9 +103,15 @@ class PipelineService:
                 await self._document_storage.save_staged(job_id, filename, file_bytes)
 
             if final_state.get("final_status") == "accepted":
+                # Stage 1 passing doesn't mean the job is done -- enrichment and
+                # classification still run. _finalize_job left status at "processing"
+                # (not "accepted") for exactly this reason: a terminal status here would
+                # make GET /pipeline/jobs?status=running drop the job from the Processing
+                # page while it's still mid-pipeline.
                 enriched_record = await self._run_enrichment(job_id, filename, final_state)
                 if enriched_record is not None:
                     await self._run_classification(job_id, filename, enriched_record)
+                    await self._job_repo.update_status(job_id, "classified")
 
             unload_slm()
 
@@ -149,9 +155,15 @@ class PipelineService:
         extracted_text: str | UnsetType | None = UNSET
         if final_status != "accepted":
             extracted_text = final_state.get("text") or None
+        # "accepted" is a Stage 1 outcome, not a terminal job status -- enrichment and
+        # classification still run afterward (see _run above). Writing "accepted" here
+        # would make the job vanish from GET /pipeline/jobs?status=running mid-pipeline;
+        # staying at "processing" keeps it visible until _run reaches a real terminal
+        # status ("classified") or enrichment fails it into "review".
+        job_status = "processing" if final_status == "accepted" else final_status
         await self._job_repo.update_status(
             job_id,
-            final_status,
+            job_status,
             rejection_reason=final_state.get("rejection_reason") or None,
             failed_at_node=failed_at_node,
             review_action_needed="pending" if final_status == "review" else None,
