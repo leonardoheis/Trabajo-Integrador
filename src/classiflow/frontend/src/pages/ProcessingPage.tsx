@@ -55,9 +55,9 @@ function JobCard({ job }: { job: JobSummary }) {
   }, [job.jobId]);
 
   return (
-    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <p className="font-semibold">{job.filename}</p>
-      <p className="mb-3 text-xs text-[var(--color-text-muted)]">{job.jobId}</p>
+    <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-all duration-150">
+      <p className="font-semibold text-[var(--color-text)]">{job.filename}</p>
+      <p className="mb-4 font-mono text-xs text-[var(--color-text-faint)]">{job.jobId}</p>
       <StepTimeline entries={entries} />
     </div>
   );
@@ -75,22 +75,27 @@ export default function ProcessingPage() {
 
   return (
     <div className="p-6">
-      <h1 className="mb-4 text-xl font-semibold">Processing</h1>
+      <h1 className="mb-6 text-xl font-bold text-[var(--color-text)]">Processing</h1>
 
-      <h2 className="mb-2 text-sm uppercase text-[var(--color-text-muted)]">Queued</h2>
-      <div className="mb-6 flex flex-col gap-2">
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-wider text-[var(--color-text-faint)]">
+        Queued — {queued.length}
+      </p>
+      <div className="mb-8 flex flex-col gap-2">
         {queued.map((job) => (
           <div
             key={job.jobId}
-            className="rounded-md border border-[var(--color-border)] p-2 text-sm"
+            className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
           >
-            {job.filename}
+            <span className="text-[var(--color-text)]">{job.filename}</span>
+            <span className="text-[var(--color-text-faint)]">waiting for a worker</span>
           </div>
         ))}
         {queued.length === 0 && <p className="text-sm text-[var(--color-text-muted)]">None</p>}
       </div>
 
-      <h2 className="mb-2 text-sm uppercase text-[var(--color-text-muted)]">Processing</h2>
+      <p className="mb-2 font-mono text-[11px] uppercase tracking-wider text-[var(--color-text-faint)]">
+        Processing — {processing.length}
+      </p>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {processing.map((job) => (
           <JobCard key={job.jobId} job={job} />
