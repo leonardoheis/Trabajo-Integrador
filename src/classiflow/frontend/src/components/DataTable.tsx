@@ -19,9 +19,12 @@ export default function DataTable<T>({
   return (
     <table className="w-full border-collapse text-sm">
       <thead>
-        <tr className="border-b border-[var(--color-border)] text-left text-[var(--color-text-muted)]">
+        <tr className="border-b border-[var(--color-border)] text-left">
           {columns.map((col) => (
-            <th key={col.header} className="p-2">
+            <th
+              key={col.header}
+              className="p-3 font-mono text-[10.5px] uppercase tracking-wider text-[var(--color-text-faint)]"
+            >
               {col.header}
             </th>
           ))}
@@ -32,10 +35,10 @@ export default function DataTable<T>({
           <tr
             key={rowKey(row)}
             onClick={() => onRowClick?.(row)}
-            className={`border-b border-[var(--color-border)] ${onRowClick ? "cursor-pointer hover:bg-[var(--color-surface)]" : ""}`}
+            className={`border-b border-[var(--color-border-subtle)] text-[var(--color-text)] transition-colors duration-150 ${onRowClick ? "cursor-pointer hover:bg-[var(--color-surface)]" : ""}`}
           >
             {columns.map((col) => (
-              <td key={col.header} className="p-2">
+              <td key={col.header} className="p-3">
                 {col.render(row)}
               </td>
             ))}
