@@ -8,7 +8,11 @@ import {
 } from "../api/jobs";
 import StepTimeline from "../components/StepTimeline";
 
-const REFETCH_INTERVAL_MS = 10_000;
+// ponytail: 2s polling misses very fast jobs less often than the original 10s, but a
+// job that completes in under 2s can still slip through entirely -- an SSE-driven
+// "job appeared" signal (independent of polling) would close that gap fully if it
+// ever matters; not built here since there's no upload UI yet to make it observable.
+const REFETCH_INTERVAL_MS = 2_000;
 
 function JobCard({ job }: { job: JobSummary }) {
   const [entries, setEntries] = useState<TimelineEntry[]>([]);

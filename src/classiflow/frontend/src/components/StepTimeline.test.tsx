@@ -20,8 +20,8 @@ describe("StepTimeline", () => {
     expect(screen.getByText("node1_file_reception")).toBeInTheDocument();
   });
 
-  it("renders both a backfilled entry and a separately-provided live entry", () => {
-    const live: TimelineEntry = {
+  it("renders both a backfilled entry and a separately-provided completed entry", () => {
+    const completed: TimelineEntry = {
       node: "node2_format_validation",
       status: "passed",
       passed: true,
@@ -29,8 +29,28 @@ describe("StepTimeline", () => {
       timestamp: "2026-08-24T10:00:05Z",
       durationMs: 30,
     };
-    render(<StepTimeline entries={[...BACKFILLED, live]} />);
+    render(<StepTimeline entries={[...BACKFILLED, completed]} />);
     expect(screen.getByText("node1_file_reception")).toBeInTheDocument();
     expect(screen.getByText("node2_format_validation")).toBeInTheDocument();
+  });
+
+  it("expands the most recent step with its live status when it hasn't reached a terminal state", () => {
+    const inProgress: TimelineEntry = {
+      node: "classification_llm_judge",
+      status: "started",
+      passed: null,
+      detail: null,
+      timestamp: "2026-08-24T10:00:10Z",
+      durationMs: null,
+    };
+    render(<StepTimeline entries={[...BACKFILLED, inProgress]} />);
+    expect(screen.getByText("node1_file_reception")).toBeInTheDocument();
+    expect(screen.getByText("classification_llm_judge")).toBeInTheDocument();
+    expect(screen.getByText("started…")).toBeInTheDocument();
+  });
+
+  it("shows a waiting message when there are no entries yet", () => {
+    render(<StepTimeline entries={[]} />);
+    expect(screen.getByText("Waiting for the first step…")).toBeInTheDocument();
   });
 });
