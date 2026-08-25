@@ -39,13 +39,7 @@ function StepRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
   );
 }
 
-function PhaseGroup({
-  phase,
-  expanded,
-}: {
-  phase: Phase;
-  expanded: boolean;
-}) {
+function PhaseGroup({ phase, expanded }: { phase: Phase; expanded: boolean }) {
   const live = isPhaseLive(phase);
   const dotClass = live
     ? "animate-pulse bg-[var(--color-accent)]"

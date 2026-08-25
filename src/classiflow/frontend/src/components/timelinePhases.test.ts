@@ -67,7 +67,10 @@ describe("groupByPhase", () => {
   });
 
   it("omits a phase entirely when no entry maps to it", () => {
-    const phases = groupByPhase([entry("node1_file_reception"), entry("node2_format_validation", "failed")]);
+    const phases = groupByPhase([
+      entry("node1_file_reception"),
+      entry("node2_format_validation", "failed"),
+    ]);
     expect(phases).toHaveLength(1);
     expect(phases[0].name).toBe("Ingesta");
   });

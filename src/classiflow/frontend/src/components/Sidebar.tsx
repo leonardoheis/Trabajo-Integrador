@@ -2,7 +2,8 @@ import { NavLink } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 
 const LINK_CLASS = "block rounded-md px-3 py-2 text-sm border-l-2 border-transparent";
-const ACTIVE_CLASS = "border-[var(--color-accent)] bg-[var(--color-surface)] text-[var(--color-text)]";
+const ACTIVE_CLASS =
+  "border-[var(--color-accent)] bg-[var(--color-surface)] text-[var(--color-text)]";
 const INACTIVE_CLASS = "text-[var(--color-text-muted)] hover:text-[var(--color-text)]";
 
 function linkClass({ isActive }: { isActive: boolean }): string {
