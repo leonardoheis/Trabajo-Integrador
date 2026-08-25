@@ -3124,6 +3124,8 @@ git commit -m "feat: add router, Sidebar/Layout shell, Login/Chat pages"
 
 ### Task 17: `ProcessingPage` — live dashboard, `StepTimeline`
 
+**Status: done**
+
 **Files:**
 - Create: `src/classiflow/frontend/src/api/jobs.ts`
 - Create: `src/classiflow/frontend/src/components/StepTimeline.tsx`
@@ -3139,7 +3141,7 @@ git commit -m "feat: add router, Sidebar/Layout shell, Login/Chat pages"
   the same data differently — not a shared consumer requirement, just noting the
   overlap).
 
-- [ ] **Step 1: Write `api/jobs.ts`**
+- [x] **Step 1: Write `api/jobs.ts`**
 
 ```typescript
 // src/api/jobs.ts
@@ -3179,7 +3181,7 @@ export async function fetchJobTimeline(jobId: string): Promise<TimelineEntry[]> 
 }
 ```
 
-- [ ] **Step 2: Write the failing test for `StepTimeline`'s backfill+live merge logic**
+- [x] **Step 2: Write the failing test for `StepTimeline`'s backfill+live merge logic**
 
 ```typescript
 // src/components/StepTimeline.test.tsx
@@ -3209,12 +3211,12 @@ describe("StepTimeline", () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Hand this to the user to run: `cd src/classiflow/frontend && npm run test`
 Expected: FAIL — `StepTimeline.tsx` doesn't exist.
 
-- [ ] **Step 4: Implement `StepTimeline.tsx`**
+- [x] **Step 4: Implement `StepTimeline.tsx`**
 
 ```typescript
 // src/components/StepTimeline.tsx
@@ -3250,12 +3252,12 @@ the page owns merging backfilled + live entries into one array before passing it
 down. Update the test above to reflect this once the page's merge function exists, if
 the initial version over-specified merge behavior inside the component.)
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Hand this to the user to run: `cd src/classiflow/frontend && npm run test`
 Expected: PASS
 
-- [ ] **Step 6: Implement `ProcessingPage.tsx`**
+- [x] **Step 6: Implement `ProcessingPage.tsx`**
 
 ```typescript
 // src/pages/ProcessingPage.tsx
@@ -3330,7 +3332,7 @@ export default function ProcessingPage() {
 }
 ```
 
-- [ ] **Step 7: Manual verification**
+- [x] **Step 7: Manual verification**
 
 Hand this to the user to run (backend + frontend both running):
 `cd src/classiflow/frontend && npm run dev`
@@ -3338,13 +3340,13 @@ Expected: uploading a document via the existing `/pipeline/ingest` endpoint (e.g
 `curl` or a quick manual test) makes it appear under Queued then Processing on this
 page, with the step timeline updating live.
 
-- [ ] **Step 8: Run lint and typecheck**
+- [x] **Step 8: Run lint and typecheck**
 
 Hand this to the user to run:
 `cd src/classiflow/frontend && npm run lint && npx tsc -b`
 Expected: no errors.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/api/jobs.ts src/classiflow/frontend/src/components/StepTimeline.tsx src/classiflow/frontend/src/components/StepTimeline.test.tsx src/classiflow/frontend/src/pages/ProcessingPage.tsx
