@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from classiflow.api.dependencies import (
@@ -41,9 +41,9 @@ async def list_completed_jobs(
         IClassificationRecordRepository, Depends(get_classification_record_repo)
     ],
     label: str | None = None,
-    review_route: str | None = None,
+    review_route: Annotated[str | None, Query(alias="reviewRoute")] = None,
     page: int = 1,
-    page_size: int = 25,
+    page_size: Annotated[int, Query(alias="pageSize")] = 25,
 ) -> JobsPage:
     all_jobs = await job_repo.list_all()
     completed = [j for j in all_jobs if j.status not in {"queued", "processing"}]

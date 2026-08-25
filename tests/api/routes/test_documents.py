@@ -100,6 +100,23 @@ class TestJobsListEndpoint:
         items = response.json()["items"]
         assert all(i["label"] == "decretos" for i in items)
 
+    async def test_filters_by_review_route_camel_case_alias(
+        self,
+        client: TestClient,
+        auth_headers: dict[str, str],
+        test_container: TestContainer,
+    ) -> None:
+        await _seed_classified_job(
+            test_container, "job-filter-2", "human-review-me.pdf", review_route="human_review"
+        )
+
+        response = client.get("/jobs?reviewRoute=human_review", headers=auth_headers)
+
+        assert response.status_code == HTTPStatus.OK
+        items = response.json()["items"]
+        assert any(i["filename"] == "human-review-me.pdf" for i in items)
+        assert all(i["reviewRoute"] == "human_review" for i in items)
+
 
 class TestJobDetailEndpoint:
     def test_requires_auth(self, client: TestClient) -> None:
