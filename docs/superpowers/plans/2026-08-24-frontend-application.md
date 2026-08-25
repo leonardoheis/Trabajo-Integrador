@@ -2467,6 +2467,8 @@ git commit -m "feat: scaffold the React frontend (Vite, TS, ESLint, Prettier, Ta
 
 ### Task 15: `AuthContext` + popup OAuth flow + `RequireAuth`/`RequireAdmin`
 
+**Status: done**
+
 **Files:**
 - Create: `src/classiflow/frontend/src/auth/AuthContext.tsx`
 - Create: `src/classiflow/frontend/src/auth/oauthPopup.ts`
@@ -2482,7 +2484,7 @@ git commit -m "feat: scaffold the React frontend (Vite, TS, ESLint, Prettier, Ta
 - Produces: `useAuth()` hook returning `{ user, isAdmin, login, logout, isLoading }`;
   `<RequireAuth>`, `<RequireAdmin>` wrapper components — consumed by Task 17's router.
 
-- [ ] **Step 1: Add Vitest + React Testing Library**
+- [x] **Step 1: Add Vitest + React Testing Library**
 
 ```json
 // package.json devDependencies, add:
@@ -2515,7 +2517,7 @@ export default defineConfig({
 import "@testing-library/jest-dom/vitest";
 ```
 
-- [ ] **Step 2: Write the failing test for `tokenStorage`**
+- [x] **Step 2: Write the failing test for `tokenStorage`**
 
 ```typescript
 // src/auth/tokenStorage.test.ts
@@ -2542,12 +2544,12 @@ describe("tokenStorage", () => {
 });
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 Hand this to the user to run: `cd src/classiflow/frontend && npm run test`
 Expected: FAIL — `tokenStorage.ts` doesn't exist.
 
-- [ ] **Step 4: Implement `tokenStorage.ts`**
+- [x] **Step 4: Implement `tokenStorage.ts`**
 
 ```typescript
 // src/auth/tokenStorage.ts
@@ -2566,12 +2568,12 @@ export function clearToken(): void {
 }
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Hand this to the user to run: `cd src/classiflow/frontend && npm run test`
 Expected: PASS
 
-- [ ] **Step 6: Write `api/auth.ts` (the typed fetch wrapper)**
+- [x] **Step 6: Write `api/auth.ts` (the typed fetch wrapper)**
 
 ```typescript
 // src/api/auth.ts
@@ -2605,7 +2607,7 @@ export async function fetchCurrentUser(): Promise<CurrentUser> {
 }
 ```
 
-- [ ] **Step 7: Write `oauthPopup.ts`**
+- [x] **Step 7: Write `oauthPopup.ts`**
 
 ```typescript
 // src/auth/oauthPopup.ts
@@ -2657,7 +2659,7 @@ export function openOAuthPopup(): Promise<string> {
 }
 ```
 
-- [ ] **Step 8: Write the `OAuthPopupPage` (the frontend route Google redirects to)**
+- [x] **Step 8: Write the `OAuthPopupPage` (the frontend route Google redirects to)**
 
 ```typescript
 // src/pages/OAuthPopupPage.tsx
@@ -2696,7 +2698,7 @@ actually has `accessToken`/`tokenType` keys. Verify this by checking whether
 `to_camel`, this step's `body.accessToken` must be `body.access_token` instead. Check
 `domain/user.py`'s `AuthToken` definition before writing this file for real.)
 
-- [ ] **Step 9: Write `AuthContext.tsx`**
+- [x] **Step 9: Write `AuthContext.tsx`**
 
 ```typescript
 // src/auth/AuthContext.tsx
@@ -2760,7 +2762,7 @@ export function useAuth(): AuthContextValue {
 }
 ```
 
-- [ ] **Step 10: Write `RequireAuth.tsx` and `RequireAdmin.tsx`**
+- [x] **Step 10: Write `RequireAuth.tsx` and `RequireAdmin.tsx`**
 
 ```typescript
 // src/components/RequireAuth.tsx
@@ -2793,7 +2795,7 @@ export default function RequireAdmin() {
 }
 ```
 
-- [ ] **Step 11: Write a component test for `RequireAdmin`**
+- [x] **Step 11: Write a component test for `RequireAdmin`**
 
 ```typescript
 // src/components/RequireAdmin.test.tsx
@@ -2857,12 +2859,12 @@ describe("RequireAdmin", () => {
 });
 ```
 
-- [ ] **Step 12: Run tests to verify they pass**
+- [x] **Step 12: Run tests to verify they pass**
 
 Hand this to the user to run: `cd src/classiflow/frontend && npm run test`
 Expected: PASS
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/auth/ src/classiflow/frontend/src/api/auth.ts src/classiflow/frontend/src/components/RequireAuth.tsx src/classiflow/frontend/src/components/RequireAdmin.tsx src/classiflow/frontend/src/pages/OAuthPopupPage.tsx src/classiflow/frontend/src/setupTests.ts src/classiflow/frontend/package.json src/classiflow/frontend/vite.config.ts
