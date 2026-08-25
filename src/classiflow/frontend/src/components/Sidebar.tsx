@@ -14,7 +14,7 @@ export default function Sidebar() {
   const { isAdmin, logout } = useAuth();
 
   return (
-    <nav className="flex h-screen w-56 flex-col justify-between border-r border-[var(--color-border)] bg-[var(--color-bg-inset)] p-4">
+    <nav className="flex h-full w-56 flex-col justify-between border-r border-[var(--color-border)] bg-[var(--color-bg-inset)] p-4">
       <div className="flex flex-col gap-1">
         <p className="mb-4 px-3 text-lg font-bold text-[var(--color-accent)]">Classiflow</p>
         <NavLink to="/" end className={linkClass}>
