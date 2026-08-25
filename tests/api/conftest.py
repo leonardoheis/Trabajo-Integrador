@@ -8,6 +8,7 @@ from classiflow.api.dependencies import (
     get_audit_repo,
     get_classification_record_repo,
     get_document_steps_repo,
+    get_enriched_record_repo,
     get_human_decision_repo,
     get_job_repo,
     get_job_service,
@@ -18,6 +19,7 @@ from classiflow.database.models import AllowedUser
 from classiflow.domain.repositories import (
     IClassificationRecordRepository,
     IDocumentStepsRepository,
+    IEnrichedRecordRepository,
     IHumanDecisionRepository,
     IJobRepository,
     IUserRepository,
@@ -100,6 +102,9 @@ def client(test_container: TestContainer) -> TestClient:
     def _user_repo_override() -> IUserRepository:
         return test_container.user_repo()
 
+    def _enriched_record_repo_override() -> IEnrichedRecordRepository:
+        return test_container.enriched_record_repo()
+
     app = create_app()
     app.dependency_overrides[get_job_repo] = _job_repo_override
     app.dependency_overrides[get_document_steps_repo] = _document_steps_repo_override
@@ -109,6 +114,7 @@ def client(test_container: TestContainer) -> TestClient:
     app.dependency_overrides[get_job_service] = _job_service_override
     app.dependency_overrides[get_audit_repo] = _audit_repo_override
     app.dependency_overrides[get_user_repo] = _user_repo_override
+    app.dependency_overrides[get_enriched_record_repo] = _enriched_record_repo_override
 
     return TestClient(app)
 

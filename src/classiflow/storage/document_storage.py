@@ -9,6 +9,7 @@ from classiflow.settings import Settings
 class IDocumentStorage(Protocol):
     async def save_staged(self, job_id: str, filename: str, file_bytes: bytes) -> str: ...
     async def move_to_final(self, job_id: str, filename: str, subdirectory: str) -> str: ...
+    async def find_current_path(self, job_id: str) -> str | None: ...
 
 
 class LocalDiskStorage:
@@ -45,3 +46,10 @@ class LocalDiskStorage:
         final_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(source_path), str(final_path))
         return str(final_path)
+
+    async def find_current_path(self, job_id: str) -> str | None:
+        return await asyncio.to_thread(self._find_current_path_sync, job_id)
+
+    def _find_current_path_sync(self, job_id: str) -> str | None:
+        matches = list(self._root.glob(f"**/{job_id}_*"))
+        return str(matches[0]) if matches else None

@@ -67,3 +67,27 @@ class TestLocalDiskStorageMoveToFinal:
         assert final_path == str(expected)
         assert expected.read_bytes() == b"content"
         assert not (tmp_path / "review" / "human_review" / "job-6_doc.pdf").exists()
+
+
+class TestLocalDiskStorageFindCurrentPath:
+    async def test_finds_staged_file(self, tmp_path: Path) -> None:
+        storage = LocalDiskStorage(root=str(tmp_path))
+        staged_path = await storage.save_staged("job-7", "doc.pdf", b"content")
+
+        found = await storage.find_current_path("job-7")
+
+        assert found == staged_path
+
+    async def test_finds_file_after_move_to_final(self, tmp_path: Path) -> None:
+        storage = LocalDiskStorage(root=str(tmp_path))
+        await storage.save_staged("job-8", "doc.pdf", b"content")
+        final_path = await storage.move_to_final("job-8", "doc.pdf", "classified/ordenanzas")
+
+        found = await storage.find_current_path("job-8")
+
+        assert found == final_path
+
+    async def test_returns_none_for_unknown_job(self, tmp_path: Path) -> None:
+        storage = LocalDiskStorage(root=str(tmp_path))
+
+        assert await storage.find_current_path("no-such-job") is None
