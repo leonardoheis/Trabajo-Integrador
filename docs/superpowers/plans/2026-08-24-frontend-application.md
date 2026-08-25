@@ -2131,6 +2131,8 @@ git commit -m "feat: serve the built frontend SPA from FastAPI when present"
 
 ### Task 14: Vite + React + TypeScript scaffold, lint/format/tsconfig, DI exclusions
 
+**Status: done**
+
 **Files:**
 - Create: `src/classiflow/frontend/package.json`
 - Create: `src/classiflow/frontend/vite.config.ts`
@@ -2152,7 +2154,7 @@ git commit -m "feat: serve the built frontend SPA from FastAPI when present"
 - Produces: a running `npm run dev` dev server, `npm run build`, `npm run lint` — every
   later frontend task builds inside this scaffold.
 
-- [ ] **Step 1: Create the directory and initialize `package.json`**
+- [x] **Step 1: Create the directory and initialize `package.json`**
 
 ```json
 {
@@ -2197,7 +2199,7 @@ git commit -m "feat: serve the built frontend SPA from FastAPI when present"
 (No `husky`/`lint-staged`/`prepare` script — per the spec's deliberate deviation, git
 hooks go through the existing `pre-commit` framework, not this file.)
 
-- [ ] **Step 2: Add `vite.config.ts` with the dev proxy**
+- [x] **Step 2: Add `vite.config.ts` with the dev proxy**
 
 ```typescript
 import { defineConfig } from "vite";
@@ -2220,7 +2222,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 3: Add the tsconfig files (verbatim, per spec Decision 1)**
+- [x] **Step 3: Add the tsconfig files (verbatim, per spec Decision 1)**
 
 ```json
 // tsconfig.json
@@ -2279,7 +2281,7 @@ export default defineConfig({
 }
 ```
 
-- [ ] **Step 4: Add `eslint.config.js` and `.prettierrc` (verbatim, per spec Decision 1)**
+- [x] **Step 4: Add `eslint.config.js` and `.prettierrc` (verbatim, per spec Decision 1)**
 
 ```javascript
 // eslint.config.js
@@ -2314,7 +2316,7 @@ export default tseslint.config(
 }
 ```
 
-- [ ] **Step 5: Add `index.html`, `main.tsx`, minimal `App.tsx`, `index.css`**
+- [x] **Step 5: Add `index.html`, `main.tsx`, minimal `App.tsx`, `index.css`**
 
 ```html
 <!-- index.html -->
@@ -2375,24 +2377,24 @@ body {
 }
 ```
 
-- [ ] **Step 6: Install dependencies**
+- [x] **Step 6: Install dependencies**
 
 Hand this to the user to run: `cd src/classiflow/frontend && npm install`
 Expected: `node_modules/` created, `package-lock.json` created, no errors.
 
-- [ ] **Step 7: Verify the dev server starts**
+- [x] **Step 7: Verify the dev server starts**
 
 Hand this to the user to run: `cd src/classiflow/frontend && npm run dev`
 Expected: Vite starts on `http://localhost:5173`, page loads showing "Classiflow" on a
 dark background.
 
-- [ ] **Step 8: Verify lint and typecheck pass on the scaffold**
+- [x] **Step 8: Verify lint and typecheck pass on the scaffold**
 
 Hand this to the user to run:
 `cd src/classiflow/frontend && npm run lint && npx tsc -b`
 Expected: no errors.
 
-- [ ] **Step 9: Exclude `frontend/` from Python tooling**
+- [x] **Step 9: Exclude `frontend/` from Python tooling**
 
 ```toml
 # pyproject.toml, [tool.ruff] section (line 96)
@@ -2415,7 +2417,7 @@ exclude = ["src/classiflow/frontend"]
 — check hatchling's docs or `uv run python -c "import hatchling"` version if uncertain;
 the spec flagged this as needing confirmation rather than being guessed.)
 
-- [ ] **Step 10: Update `.gitignore`**
+- [x] **Step 10: Update `.gitignore`**
 
 ```
 # .gitignore -- add
@@ -2423,7 +2425,7 @@ src/classiflow/frontend/node_modules/
 src/classiflow/frontend/dist/
 ```
 
-- [ ] **Step 11: Add the frontend lint hook to `.pre-commit-config.yaml`**
+- [x] **Step 11: Add the frontend lint hook to `.pre-commit-config.yaml`**
 
 ```yaml
 # .pre-commit-config.yaml -- add a new repo: local entry
@@ -2443,18 +2445,18 @@ src/classiflow/frontend/dist/
         files: ^src/classiflow/frontend/.*\.(ts|tsx|css)$
 ```
 
-- [ ] **Step 12: Verify `uv run poe check` still passes with the exclusions**
+- [x] **Step 12: Verify `uv run poe check` still passes with the exclusions**
 
 Hand this to the user to run: `uv run poe check`
 Expected: passes — ruff/mypy no longer walk `src/classiflow/frontend/`.
 
-- [ ] **Step 13: Verify pre-commit picks up the new hooks**
+- [x] **Step 13: Verify pre-commit picks up the new hooks**
 
 Hand this to the user to run: `uv run --all-groups pre-commit run --all-files`
 Expected: `frontend-lint`/`frontend-format` run and pass (or are skipped if no matching
 files changed, depending on pre-commit's file-filter behavior on a full-repo run).
 
-- [ ] **Step 14: Commit**
+- [x] **Step 14: Commit**
 
 ```bash
 git add src/classiflow/frontend/ pyproject.toml .gitignore .pre-commit-config.yaml
