@@ -3357,6 +3357,8 @@ git commit -m "feat: add ProcessingPage with live job dashboard and StepTimeline
 
 ### Task 18: `ClassificationPage`, `DocumentDetailPage`, `PdfViewer`, Reclassify
 
+**Status: done**
+
 **Files:**
 - Create: `src/classiflow/frontend/src/api/documents.ts`
 - Create: `src/classiflow/frontend/src/api/classification.ts`
@@ -3373,7 +3375,7 @@ git commit -m "feat: add ProcessingPage with live job dashboard and StepTimeline
   `GET /documents/{job_id}/file` (Task 12), `POST /classification/{job_id}/decision`
   (existing).
 
-- [ ] **Step 1: Write `api/documents.ts`**
+- [x] **Step 1: Write `api/documents.ts`**
 
 ```typescript
 // src/api/documents.ts
@@ -3453,7 +3455,7 @@ export function documentFileUrl(jobId: string): string {
 }
 ```
 
-- [ ] **Step 2: Write `api/classification.ts`**
+- [x] **Step 2: Write `api/classification.ts`**
 
 ```typescript
 // src/api/classification.ts
@@ -3482,7 +3484,7 @@ export const DOCUMENT_CATEGORIES = [
 ] as const;
 ```
 
-- [ ] **Step 3: Write the failing test for `ReclassifyPanel`**
+- [x] **Step 3: Write the failing test for `ReclassifyPanel`**
 
 ```typescript
 // src/components/ReclassifyPanel.test.tsx
@@ -3508,12 +3510,12 @@ describe("ReclassifyPanel", () => {
 });
 ```
 
-- [ ] **Step 4: Run test to verify it fails**
+- [x] **Step 4: Run test to verify it fails**
 
 Hand this to the user to run: `cd src/classiflow/frontend && npm run test`
 Expected: FAIL — `ReclassifyPanel.tsx` doesn't exist.
 
-- [ ] **Step 5: Implement `ReclassifyPanel.tsx`**
+- [x] **Step 5: Implement `ReclassifyPanel.tsx`**
 
 ```typescript
 // src/components/ReclassifyPanel.tsx
@@ -3583,12 +3585,12 @@ export default function ReclassifyPanel({
 }
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Hand this to the user to run: `cd src/classiflow/frontend && npm run test`
 Expected: PASS
 
-- [ ] **Step 7: Implement `StatusBadge.tsx` and `DataTable.tsx`**
+- [x] **Step 7: Implement `StatusBadge.tsx` and `DataTable.tsx`**
 
 ```typescript
 // src/components/StatusBadge.tsx
@@ -3656,7 +3658,7 @@ export default function DataTable<T>({
 }
 ```
 
-- [ ] **Step 8: Implement `ClassificationPage.tsx`**
+- [x] **Step 8: Implement `ClassificationPage.tsx`**
 
 ```typescript
 // src/pages/ClassificationPage.tsx
@@ -3714,7 +3716,7 @@ export default function ClassificationPage() {
 }
 ```
 
-- [ ] **Step 9: Implement `PdfViewer.tsx`**
+- [x] **Step 9: Implement `PdfViewer.tsx`**
 
 ```typescript
 // src/components/PdfViewer.tsx
@@ -3745,7 +3747,7 @@ import { pdfjs } from "react-pdf";
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 ```
 
-- [ ] **Step 10: Implement `DocumentDetailPage.tsx`**
+- [x] **Step 10: Implement `DocumentDetailPage.tsx`**
 
 ```typescript
 // src/pages/DocumentDetailPage.tsx
@@ -3829,13 +3831,13 @@ export default function DocumentDetailPage() {
 }
 ```
 
-- [ ] **Step 11: Run lint and typecheck**
+- [x] **Step 11: Run lint and typecheck**
 
 Hand this to the user to run:
 `cd src/classiflow/frontend && npm run lint && npx tsc -b`
 Expected: no errors.
 
-- [ ] **Step 12: Commit**
+- [x] **Step 12: Commit**
 
 ```bash
 git add src/classiflow/frontend/src/api/documents.ts src/classiflow/frontend/src/api/classification.ts src/classiflow/frontend/src/components/DataTable.tsx src/classiflow/frontend/src/components/StatusBadge.tsx src/classiflow/frontend/src/components/PdfViewer.tsx src/classiflow/frontend/src/components/ReclassifyPanel.tsx src/classiflow/frontend/src/components/ReclassifyPanel.test.tsx src/classiflow/frontend/src/pages/ClassificationPage.tsx src/classiflow/frontend/src/pages/DocumentDetailPage.tsx src/classiflow/frontend/src/main.tsx
