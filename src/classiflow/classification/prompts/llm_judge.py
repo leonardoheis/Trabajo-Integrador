@@ -13,7 +13,12 @@ from classiflow.domain.base import BaseEntity
 
 
 class JudgeInput(BaseEntity):
-    cleaned_text: str  # full, untruncated -- unlike PrimaryClassificationInput
+    # Truncated to ClassificationConfig.judge_max_input_chars by LlmJudgeNode.run()
+    # before this reaches the chain -- much more generous than
+    # PrimaryClassificationInput's excerpt (the judge needs fuller context to
+    # arbitrate disagreements), but not literally unbounded: a long document can
+    # still overflow the shared SLM context window otherwise.
+    cleaned_text: str
     primary_label: str
     primary_confidence: float
     second_opinion_label: str | None = None

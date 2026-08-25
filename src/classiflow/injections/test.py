@@ -221,7 +221,11 @@ class TestContainer(containers.DeclarativeContainer):
         config=_TEST_CLASSIFICATION_CONFIG,
     )
     classification_llm_judge = providers.Factory(
-        LlmJudgeNode, audit=audit_service, broadcaster=broadcaster, judge_chain=judge_chain
+        LlmJudgeNode,
+        audit=audit_service,
+        broadcaster=broadcaster,
+        judge_chain=judge_chain,
+        config=_TEST_CLASSIFICATION_CONFIG,
     )
     classification_routing = providers.Factory(
         RoutingNode,
