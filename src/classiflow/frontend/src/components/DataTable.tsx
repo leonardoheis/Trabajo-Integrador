@@ -39,7 +39,9 @@ export default function DataTable<T>({
                 key={col.header}
                 onClick={() => col.sortKey && onSortChange?.(col.sortKey)}
                 className={`p-3 font-mono text-[10.5px] uppercase tracking-wider text-[var(--color-text-faint)] ${
-                  col.sortKey ? "cursor-pointer select-none hover:text-[var(--color-text-muted)]" : ""
+                  col.sortKey
+                    ? "cursor-pointer select-none hover:text-[var(--color-text-muted)]"
+                    : ""
                 }`}
               >
                 {col.header}

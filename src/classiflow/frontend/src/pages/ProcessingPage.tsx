@@ -47,7 +47,9 @@ function UploadForm() {
         disabled={selected.length === 0 || upload.isPending}
         className="rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-[var(--color-bg)] disabled:opacity-50"
       >
-        {upload.isPending ? "Uploading…" : `Upload${selected.length > 1 ? ` (${selected.length})` : ""}`}
+        {upload.isPending
+          ? "Uploading…"
+          : `Upload${selected.length > 1 ? ` (${selected.length})` : ""}`}
       </button>
       {upload.isError && (
         <span className="text-sm text-[var(--color-danger)]">Upload failed. Try again.</span>

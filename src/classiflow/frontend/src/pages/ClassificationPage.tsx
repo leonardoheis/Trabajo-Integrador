@@ -13,9 +13,7 @@ const COLUMNS: Column<ClassificationSummary>[] = [
     header: "Confidence",
     sortKey: "confidence",
     render: (row) => (
-      <span className="font-mono text-[var(--color-text-muted)]">
-        {row.confidence.toFixed(2)}
-      </span>
+      <span className="font-mono text-[var(--color-text-muted)]">{row.confidence.toFixed(2)}</span>
     ),
   },
   { header: "Judged", render: (row) => (row.judgedByLlm ? "Yes" : "No") },

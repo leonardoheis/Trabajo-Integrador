@@ -185,10 +185,7 @@ export default function DocumentDetailPage() {
                   </span>,
                 ],
                 ["Risk score", String(data.classification.riskScore)],
-                [
-                  "Smell review suggested",
-                  data.classification.smellReviewSuggested ? "Yes" : "No",
-                ],
+                ["Smell review suggested", data.classification.smellReviewSuggested ? "Yes" : "No"],
                 ["Judged by LLM", data.classification.judgedByLlm ? "Yes" : "No"],
                 ["Judge final label", data.classification.judgeFinalLabel ?? "—"],
                 ["Foreign municipality", data.classification.foreignMunicipality ?? "—"],
