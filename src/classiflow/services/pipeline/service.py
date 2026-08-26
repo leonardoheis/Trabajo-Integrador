@@ -314,8 +314,12 @@ class PipelineService:
         indexed_job_ids: list[str] = []
         skipped = 0
         for record in unindexed:
+            # record.job_id is a unique UUID: falling back to "" here instead would
+            # collide every no-identity record onto the same sha256, overwriting both
+            # their document_kb row and their Chroma chunk ids (Chunk.make_id keys off
+            # sha256) in place of each other.
             was_indexed = await self.index_enriched_record(
-                record, record.filename or "", record.sha256 or ""
+                record, record.filename or "", record.sha256 or record.job_id
             )
             if was_indexed:
                 indexed_job_ids.append(record.job_id)
