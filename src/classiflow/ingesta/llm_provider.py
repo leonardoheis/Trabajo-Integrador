@@ -104,6 +104,9 @@ def unload_slm() -> None:
     # Drops the lru_cache's reference to the loaded LlamaCpp instance so gc can
     # collect it -- its __del__ frees the GGUF's CUDA context directly (ctypes-owned
     # memory, not PyTorch's caching allocator), releasing VRAM back to the driver.
+    # Only actually frees anything if nothing else still references the model, which is
+    # why api/dependencies.py builds the *_chain nodes lazily rather than injecting
+    # container-held chains.
     # ponytail: runs synchronously on the event loop (called once per finished job, not
     # a hot path) -- move to asyncio.to_thread if it ever shows up as request latency.
     get_llm_langchain.cache_clear()
@@ -113,17 +116,22 @@ def unload_slm() -> None:
 
 
 class PatchedWeaveTracer(WeaveTracer):
-    # weave 0.53.6's _extract_usage_data does generation.get("generation_info", {}).get(...),
-    # which raises when generation_info is explicitly None (llama.cpp never sets it) --
-    # the default only covers a missing key. That aborts _finish_run before finish_call,
-    # so traces are left unfinished with no outputs or token usage. Substituting an empty
-    # dict lets the call complete. Drop once weave handles a None generation_info.
+    # weave 0.53.6's usage extraction does generation.get("generation_info", {}).get(...)
+    # and output.get("extra", {}).get(...), which raise when langchain sets those fields
+    # to an explicit None (llama.cpp never populates them) -- the default only covers a
+    # missing key. It runs inside _finish_run after the call is popped but before
+    # finish_call, so a raise leaves the trace unfinished: no outputs, no token usage.
+    # Filling in the empty dicts up front lets the call complete. Drop once weave
+    # tolerates these Nones.
     @override
     def on_llm_end(self, response: LLMResult, *, run_id: UUID, **kwargs: object) -> Run:
         for batch in response.generations:
             for generation in batch:
                 if generation.generation_info is None:
                     generation.generation_info = {}
+        run = self.run_map.get(str(run_id))
+        if run is not None and getattr(run, "extra", None) is None:
+            run.extra = {}
         return super().on_llm_end(response, run_id=run_id, **kwargs)
 
 

@@ -1,6 +1,9 @@
 import asyncio
+import gc
 from functools import lru_cache
 from typing import Protocol, cast, runtime_checkable
+
+import torch
 
 from classiflow.classification.bert.classifier import BertClassifier
 from classiflow.classification.config_classification import (
@@ -27,6 +30,17 @@ def _load_bert_classifier(model_path: str) -> BertClassifier:
     # get_sentence_model() -- the BETO weights + OOD/SVM artifacts are expensive to load
     # (~425MB) and are read fresh from config only on the first call.
     return BertClassifier(model_path, get_classification_config())
+
+
+def unload_bert() -> None:
+    # BETO moves itself onto CUDA and would otherwise stay resident for the process
+    # lifetime. On an 8GB card that permanently shrinks the budget below what the next
+    # job's ~4.8GB GGUF needs, so job 1 succeeds and job 2 fails to load its model.
+    # Mirrors unload_slm(): drop the cache's reference, collect, release to the driver.
+    _load_bert_classifier.cache_clear()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 class SecondOpinionNode(BaseNode):
