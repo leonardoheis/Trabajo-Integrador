@@ -2,7 +2,7 @@ import mimetypes
 from collections.abc import Iterator
 from http import HTTPStatus
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -33,6 +33,25 @@ from classiflow.storage.document_storage import IDocumentStorage
 
 router = APIRouter(tags=["documents"], dependencies=[Depends(get_current_user)])
 
+SortField = Literal["filename", "label", "confidence", "createdAt"]
+
+
+def _sort_summaries(
+    summaries: list[ClassificationSummary], sort: SortField, *, descending: bool
+) -> None:
+    # Each branch's key function returns a single, internally-comparable type (str,
+    # float, or datetime) -- a single shared dict of key functions would need a
+    # str | float | datetime return type that isn't safely comparable across branches,
+    # which is exactly the kind of untyped escape hatch this project avoids.
+    if sort == "filename":
+        summaries.sort(key=lambda s: s.filename.lower(), reverse=descending)
+    elif sort == "label":
+        summaries.sort(key=lambda s: (s.label or "").lower(), reverse=descending)
+    elif sort == "confidence":
+        summaries.sort(key=lambda s: s.confidence, reverse=descending)
+    else:
+        summaries.sort(key=lambda s: s.created_at, reverse=descending)
+
 
 @router.get("/jobs")
 async def list_completed_jobs(
@@ -44,6 +63,8 @@ async def list_completed_jobs(
     review_route: Annotated[str | None, Query(alias="reviewRoute")] = None,
     page: int = 1,
     page_size: Annotated[int, Query(alias="pageSize")] = 25,
+    sort: SortField | None = None,
+    sort_dir: Annotated[Literal["asc", "desc"], Query(alias="sortDir")] = "asc",
 ) -> JobsPage:
     all_jobs = await job_repo.list_all()
     completed = [j for j in all_jobs if j.status not in {"queued", "processing"}]
@@ -66,6 +87,9 @@ async def list_completed_jobs(
                 created_at=job.created_at,
             )
         )
+
+    if sort is not None:
+        _sort_summaries(summaries, sort, descending=sort_dir == "desc")
 
     total = len(summaries)
     start = (page - 1) * page_size

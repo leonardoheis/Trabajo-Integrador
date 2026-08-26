@@ -32,3 +32,16 @@ export async function fetchJobTimeline(jobId: string): Promise<TimelineEntry[]> 
   }
   return response.json();
 }
+
+export async function uploadDocuments(files: File[]): Promise<string[]> {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("files", file);
+  }
+  const response = await apiFetch("/pipeline/ingest-bulk", { method: "POST", body: formData });
+  if (!response.ok) {
+    throw new Error(`POST /pipeline/ingest-bulk failed: ${response.status}`);
+  }
+  const body = (await response.json()) as { jobIds: string[] };
+  return body.jobIds;
+}

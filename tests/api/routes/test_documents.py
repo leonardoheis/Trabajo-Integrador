@@ -16,6 +16,7 @@ async def _seed_classified_job(
     *,
     label: str = "ordenanzas",
     review_route: str = "accept",
+    confidence: float = 0.95,
 ) -> None:
     await test_container.job_repo().create(Job(job_id=job_id, filename=filename, status="accepted"))
     enriched = EnrichedRecord(
@@ -31,8 +32,8 @@ async def _seed_classified_job(
             job_id=job_id,
             enriched_id=enriched.id,
             label=label,
-            confidence=0.95,
-            all_scores={label: 0.95},
+            confidence=confidence,
+            all_scores={label: confidence},
             second_opinion_label=None,
             second_opinion_confidence=0.0,
             classifier_disagreement=False,
@@ -116,6 +117,44 @@ class TestJobsListEndpoint:
         items = response.json()["items"]
         assert any(i["filename"] == "human-review-me.pdf" for i in items)
         assert all(i["reviewRoute"] == "human_review" for i in items)
+
+    async def test_sorts_by_filename_ascending(
+        self,
+        client: TestClient,
+        auth_headers: dict[str, str],
+        test_container: TestContainer,
+    ) -> None:
+        await _seed_classified_job(test_container, "job-sort-1", "zebra.pdf", label="sort_test")
+        await _seed_classified_job(test_container, "job-sort-2", "apple.pdf", label="sort_test")
+
+        response = client.get(
+            "/jobs?label=sort_test&sort=filename&sortDir=asc", headers=auth_headers
+        )
+
+        assert response.status_code == HTTPStatus.OK
+        filenames = [i["filename"] for i in response.json()["items"]]
+        assert filenames == ["apple.pdf", "zebra.pdf"]
+
+    async def test_sorts_by_confidence_descending(
+        self,
+        client: TestClient,
+        auth_headers: dict[str, str],
+        test_container: TestContainer,
+    ) -> None:
+        await _seed_classified_job(
+            test_container, "job-sort-3", "low.pdf", label="sort_test_2", confidence=0.4
+        )
+        await _seed_classified_job(
+            test_container, "job-sort-4", "high.pdf", label="sort_test_2", confidence=0.9
+        )
+
+        response = client.get(
+            "/jobs?label=sort_test_2&sort=confidence&sortDir=desc", headers=auth_headers
+        )
+
+        assert response.status_code == HTTPStatus.OK
+        filenames = [i["filename"] for i in response.json()["items"]]
+        assert filenames == ["high.pdf", "low.pdf"]
 
 
 class TestJobDetailEndpoint:

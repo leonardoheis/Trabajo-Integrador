@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchRunningJobs,
   fetchJobTimeline,
+  uploadDocuments,
   type JobSummary,
   type TimelineEntry,
 } from "../api/jobs";
@@ -12,8 +13,48 @@ import { getToken } from "../auth/tokenStorage";
 // ponytail: 2s polling misses very fast jobs less often than the original 10s, but a
 // job that completes in under 2s can still slip through entirely -- an SSE-driven
 // "job appeared" signal (independent of polling) would close that gap fully if it
-// ever matters; not built here since there's no upload UI yet to make it observable.
+// ever matters.
 const REFETCH_INTERVAL_MS = 2_000;
+
+function UploadForm() {
+  const queryClient = useQueryClient();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [selected, setSelected] = useState<File[]>([]);
+
+  const upload = useMutation({
+    mutationFn: uploadDocuments,
+    onSuccess: () => {
+      setSelected([]);
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      }
+      queryClient.invalidateQueries({ queryKey: ["running-jobs"] });
+    },
+  });
+
+  return (
+    <div className="mb-8 flex items-center gap-3 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept=".pdf,.docx,image/*"
+        onChange={(e) => setSelected(Array.from(e.target.files ?? []))}
+        className="flex-1 text-sm text-[var(--color-text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--color-border-subtle)] file:px-3 file:py-1.5 file:font-mono file:text-xs file:text-[var(--color-text)]"
+      />
+      <button
+        onClick={() => upload.mutate(selected)}
+        disabled={selected.length === 0 || upload.isPending}
+        className="rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-[var(--color-bg)] disabled:opacity-50"
+      >
+        {upload.isPending ? "Uploading…" : `Upload${selected.length > 1 ? ` (${selected.length})` : ""}`}
+      </button>
+      {upload.isError && (
+        <span className="text-sm text-[var(--color-danger)]">Upload failed. Try again.</span>
+      )}
+    </div>
+  );
+}
 
 function JobCard({ job }: { job: JobSummary }) {
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
@@ -83,6 +124,8 @@ export default function ProcessingPage() {
   return (
     <div className="p-6">
       <h1 className="mb-6 text-xl font-bold text-[var(--color-text)]">Processing</h1>
+
+      <UploadForm />
 
       <p className="mb-2 font-mono text-[11px] uppercase tracking-wider text-[var(--color-text-faint)]">
         Queued — {queued.length}

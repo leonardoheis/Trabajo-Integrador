@@ -7,6 +7,7 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable, RunnableLambda
 
 from classiflow.domain.base import BaseEntity
+from classiflow.llm_json import strip_trailing_commas
 
 
 class ContentChainInput(BaseEntity):
@@ -60,7 +61,8 @@ class LegitimacyDecisionOutput(BaseEntity):
 def _extract(text: str) -> LegitimacyDecisionOutput:
     for m in _JSON_RE.finditer(text):
         with contextlib.suppress(json.JSONDecodeError, ValueError):
-            return LegitimacyDecisionOutput.model_validate(json.loads(m.group()))
+            cleaned = strip_trailing_commas(m.group())
+            return LegitimacyDecisionOutput.model_validate(json.loads(cleaned))
     is_legitimate_match = _IS_LEGITIMATE_RE.search(text)
     confidence_match = _CONFIDENCE_RE.search(text)
     if is_legitimate_match is None or confidence_match is None:

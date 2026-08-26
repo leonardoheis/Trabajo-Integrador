@@ -56,15 +56,24 @@ export interface JobDetailResponse {
   }[];
 }
 
+export type SortField = "filename" | "label" | "confidence" | "createdAt";
+export type SortDir = "asc" | "desc";
+
 export async function fetchJobsPage(params: {
   label?: string;
   reviewRoute?: string;
   page?: number;
+  pageSize?: number;
+  sort?: SortField;
+  sortDir?: SortDir;
 }): Promise<JobsPage> {
   const query = new URLSearchParams();
   if (params.label) query.set("label", params.label);
   if (params.reviewRoute) query.set("reviewRoute", params.reviewRoute);
   if (params.page) query.set("page", String(params.page));
+  if (params.pageSize) query.set("pageSize", String(params.pageSize));
+  if (params.sort) query.set("sort", params.sort);
+  if (params.sortDir) query.set("sortDir", params.sortDir);
 
   const response = await apiFetch(`/jobs?${query.toString()}`);
   if (!response.ok) {
