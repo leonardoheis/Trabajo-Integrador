@@ -86,6 +86,12 @@ class _Settings(BaseSettings):
     # redirect lands, not what /auth/callback returns.
     GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5173/oauth-popup")
 
+    # Empty by default -- get_llm_langchain() only attaches WandbCallbackHandler when
+    # this is set, so a clone with no .env (including every test run) never imports
+    # wandb or makes network calls.
+    WANDB_API_KEY: str = os.getenv("WANDB_API_KEY", "")
+    WANDB_PROJECT: str = os.getenv("WANDB_PROJECT", "classiflow")
+
     @property
     def database_url(self) -> str:
         return self.DATABASE_URL
@@ -169,6 +175,14 @@ class _Settings(BaseSettings):
     @property
     def slm_n_ctx(self) -> int:
         return self.SLM_N_CTX
+
+    @property
+    def wandb_api_key(self) -> str:
+        return self.WANDB_API_KEY
+
+    @property
+    def wandb_project(self) -> str:
+        return self.WANDB_PROJECT
 
 
 Settings = _Settings()

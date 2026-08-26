@@ -41,6 +41,14 @@ dependencies = [
     "scipy>=1.14",
     "scikit-learn>=1.5",
     "transformers>=4.44",
+    # Observability -- Weave is W&B's current LLM-tracing product and the only one of
+    # their LangChain integrations that works with langchain>=0.3 (wandb's own
+    # WandbTracer imports langchain.callbacks.tracers, a path removed in 0.3, and
+    # langchain_community's WandbCallbackHandler is deprecated and needs pandas).
+    # Traces still land in a W&B account -- wandb is declared explicitly rather than
+    # relying on weave's optional [wandb] extra.
+    "weave>=0.51",
+    "wandb>=0.17",
 ]
 
 [dependency-groups]

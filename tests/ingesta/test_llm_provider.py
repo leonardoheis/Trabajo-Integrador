@@ -2,7 +2,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from classiflow.ingesta.llm_provider import ChatTemplatedLlamaCpp, MockLlm, get_llm_langchain
+from classiflow.ingesta.llm_provider import (
+    ChatTemplatedLlamaCpp,
+    MockLlm,
+    PatchedWeaveTracer,
+    get_llm_langchain,
+    wandb_callbacks,
+)
 
 
 class TestMockLlm:
@@ -43,6 +49,56 @@ class TestGetLlmLangchain:
             assert mock_llamacpp.call_count == 1
         finally:
             get_llm_langchain.cache_clear()
+
+
+class TestWandbCallbacks:
+    def test_returns_empty_list_when_no_api_key_is_configured(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("classiflow.ingesta.llm_provider.Settings.WANDB_API_KEY", "")
+        assert wandb_callbacks() == []
+
+    def test_initializes_weave_and_returns_a_tracer_when_a_key_is_set(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("classiflow.ingesta.llm_provider.Settings.WANDB_API_KEY", "fake-key")
+        monkeypatch.setattr(
+            "classiflow.ingesta.llm_provider.Settings.WANDB_PROJECT", "test-project"
+        )
+        tracer_cls = MagicMock()
+        weave_init = MagicMock()
+        monkeypatch.setattr("classiflow.ingesta.llm_provider.PatchedWeaveTracer", tracer_cls)
+        monkeypatch.setattr("classiflow.ingesta.llm_provider.weave.init", weave_init)
+
+        callbacks = wandb_callbacks()
+
+        assert callbacks == [tracer_cls.return_value]
+        weave_init.assert_called_once_with("test-project")
+
+    def test_patched_tracer_finishes_the_call_despite_a_none_generation_info(self) -> None:
+        # Unpatched, weave's _extract_usage_data raises on generation_info=None and
+        # finish_call is never reached, leaving the trace unfinished.
+        tracer = PatchedWeaveTracer()
+        tracer.wc = MagicMock()
+        tracer.wc.create_call.return_value = "call"
+
+        MockLlm(response="hi").invoke("prompt", config={"callbacks": [tracer]})
+
+        tracer.wc.finish_call.assert_called_once()
+
+    def test_llm_is_built_without_callbacks_when_wandb_is_disabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("classiflow.ingesta.llm_provider.Settings.WANDB_API_KEY", "")
+        mock_llamacpp = MagicMock()
+        monkeypatch.setattr("classiflow.ingesta.llm_provider.ChatTemplatedLlamaCpp", mock_llamacpp)
+        get_llm_langchain.cache_clear()
+        try:
+            get_llm_langchain("fake/model.gguf")
+        finally:
+            get_llm_langchain.cache_clear()
+
+        assert mock_llamacpp.call_args.kwargs["callbacks"] is None
 
 
 def _fake_chat_client(template: str) -> MagicMock:
