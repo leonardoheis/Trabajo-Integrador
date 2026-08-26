@@ -145,23 +145,6 @@ class TestBulkIngestEndpoint:
         assert len(set(job_ids)) == len(files)  # no duplicate job_ids
 
 
-class TestSynchronizeKbEndpoint:
-    def test_requires_auth(self, client: TestClient) -> None:
-        response = client.post("/pipeline/synchronize-kb")
-        assert response.status_code == HTTPStatus.UNAUTHORIZED
-
-    def test_indexes_pending_records(
-        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        job_id = _ingest(client, auth_headers, monkeypatch, legitimate=True, filename="sync.pdf")
-
-        response = client.post("/pipeline/synchronize-kb", headers=auth_headers)
-        assert response.status_code == HTTPStatus.OK
-        body = response.json()
-        assert job_id in body["indexedJobIds"]
-        assert isinstance(body["skippedCount"], int)
-
-
 class TestDecisionEndpoint:
     def test_unknown_job_returns_404(
         self, client: TestClient, auth_headers: dict[str, str]

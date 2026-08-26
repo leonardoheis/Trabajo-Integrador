@@ -5,12 +5,20 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
-from classiflow.api.dependencies import get_chat_service, get_current_user
-from classiflow.api.routes.chat.schemas import ChatRequest, ChatResponse, SourceSchema
+from classiflow.api.dependencies import get_chat_service, get_current_user, get_pipeline_service
+from classiflow.api.routes.knowledge.schemas import (
+    ChatRequest,
+    ChatResponse,
+    SourceSchema,
+    SynchronizeKbResponse,
+)
 from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.domain.chat import ChatQuery, SourceRef
+from classiflow.services.pipeline.service import PipelineService
 
-router = APIRouter(prefix="/chat", tags=["chat"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/knowledge", tags=["knowledge"], dependencies=[Depends(get_current_user)]
+)
 
 
 def _to_query(body: ChatRequest) -> ChatQuery:
@@ -25,7 +33,7 @@ def _sources_payload(sources: list[SourceRef]) -> list[dict[str, object]]:
     return [SourceSchema.from_domain(s).model_dump(by_alias=True) for s in sources]
 
 
-@router.post("")
+@router.post("/chat")
 async def chat(
     body: ChatRequest,
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
@@ -34,7 +42,7 @@ async def chat(
     return ChatResponse.from_domain(answer)
 
 
-@router.post("/stream")
+@router.post("/chat/stream")
 async def chat_stream(
     body: ChatRequest,
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
@@ -50,3 +58,11 @@ async def chat_stream(
         yield _sse("done", {})
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+@router.post("/synchronize-kb", status_code=200)
+async def synchronize_kb(
+    pipeline: Annotated[PipelineService, Depends(get_pipeline_service)],
+) -> SynchronizeKbResponse:
+    indexed_job_ids, skipped_count = await pipeline.synchronize_kb()
+    return SynchronizeKbResponse(indexed_job_ids=indexed_job_ids, skipped_count=skipped_count)

@@ -37,3 +37,8 @@ class ChatResponse(BaseSchema):
             answer=answer.answer,
             sources=[SourceSchema.from_domain(s) for s in answer.sources],
         )
+
+
+class SynchronizeKbResponse(BaseSchema):
+    indexed_job_ids: list[str]
+    skipped_count: int

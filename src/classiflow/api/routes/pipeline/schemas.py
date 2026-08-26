@@ -13,11 +13,6 @@ class BulkIngestResponse(BaseSchema):
     job_ids: list[str]
 
 
-class SynchronizeKbResponse(BaseSchema):
-    indexed_job_ids: list[str]
-    skipped_count: int
-
-
 class DocumentStepSchema(BaseSchema):
     step_order: int
     node: str
