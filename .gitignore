@@ -231,3 +231,7 @@ src/classiflow/playground/stage5/data/
 
 # ----- Ignore Memory.md (local only) ----
 MEMORY.md
+
+# ---- Frontend (Node/Vite) build artifacts ----
+src/classiflow/frontend/node_modules/
+src/classiflow/frontend/dist/

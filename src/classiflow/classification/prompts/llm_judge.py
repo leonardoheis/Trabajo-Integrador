@@ -1,6 +1,5 @@
 import contextlib
 import json
-import re
 
 from langchain_core.language_models import BaseLLM
 from langchain_core.output_parsers import StrOutputParser
@@ -10,10 +9,16 @@ from pydantic import Field
 from classiflow.classification.bert.ood_scorer import OodMetrics
 from classiflow.classification.domain.results import JudgeOutput
 from classiflow.domain.base import BaseEntity
+from classiflow.llm_json import JSON_OBJECT_RE, strip_trailing_commas
 
 
 class JudgeInput(BaseEntity):
-    cleaned_text: str  # full, untruncated -- unlike PrimaryClassificationInput
+    # Truncated to ClassificationConfig.judge_max_input_chars by LlmJudgeNode.run()
+    # before this reaches the chain -- much more generous than
+    # PrimaryClassificationInput's excerpt (the judge needs fuller context to
+    # arbitrate disagreements), but not literally unbounded: a long document can
+    # still overflow the shared SLM context window otherwise.
+    cleaned_text: str
     primary_label: str
     primary_confidence: float
     second_opinion_label: str | None = None
@@ -143,15 +148,11 @@ or {second_opinion_label}, never a third category", \
 "reasoning": "one short sentence citing the specific evidence -- textual or signal-based -- \
 behind your decision"}}"""
 
-# Matches a single non-nested JSON object -- same approach as
-# enrichment/prompts/entity_extraction.py's _JSON_RE.
-_JSON_RE = re.compile(r"\{[^{}]*\}", re.DOTALL)
-
 
 def _extract(text: str) -> JudgeOutput:
-    for m in _JSON_RE.finditer(text):
+    for m in JSON_OBJECT_RE.finditer(text):
         with contextlib.suppress(json.JSONDecodeError, ValueError):
-            return JudgeOutput.model_validate(json.loads(m.group()))
+            return JudgeOutput.model_validate(json.loads(strip_trailing_commas(m.group())))
     msg = f"No valid JSON object found in LLM output: {text!r}"
     raise ValueError(msg)
 

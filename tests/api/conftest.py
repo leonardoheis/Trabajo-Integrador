@@ -1,29 +1,38 @@
+from datetime import datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
 from classiflow.api.app import create_app
 from classiflow.api.dependencies import (
+    get_audit_repo,
     get_classification_record_repo,
     get_document_steps_repo,
+    get_enriched_record_repo,
     get_human_decision_repo,
     get_job_repo,
     get_job_service,
     get_pipeline_service,
+    get_user_repo,
 )
 from classiflow.database.models import AllowedUser
 from classiflow.domain.repositories import (
     IClassificationRecordRepository,
     IDocumentStepsRepository,
+    IEnrichedRecordRepository,
     IHumanDecisionRepository,
     IJobRepository,
+    IUserRepository,
 )
 from classiflow.injections.production import Container
 from classiflow.injections.test import TestContainer
+from classiflow.services.audit.repository import IAuditRepository
 from classiflow.services.auth import encode_token
 from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
 
 _TEST_EMAIL = "test@classiflow.dev"
+_ADMIN_EMAIL = "admin@classiflow.dev"
 
 
 @pytest.fixture(scope="module")
@@ -44,9 +53,19 @@ def client(test_container: TestContainer) -> TestClient:
     container.wire(packages=["classiflow"])
 
     # `auth_headers` issues a JWT for this email — whitelist it so CurrentUser-protected
-    # routes accept it, matching a real logged-in (allowed) user.
-    allowed = AllowedUser(email=_TEST_EMAIL, is_active=True, is_blocked=False)
+    # routes accept it, matching a real logged-in (allowed) user. created_at is set
+    # explicitly since seed() bypasses create()'s own now()-stamping (server_default
+    # only ever applies on a real SQL INSERT, which InMemoryUserRepository never does).
+    now = datetime.now(timezone.utc)
+    allowed = AllowedUser(
+        email=_TEST_EMAIL, is_active=True, is_blocked=False, is_admin=False, created_at=now
+    )
     test_container.user_repo().seed(allowed)
+
+    admin = AllowedUser(
+        email=_ADMIN_EMAIL, is_active=True, is_blocked=False, is_admin=True, created_at=now
+    )
+    test_container.user_repo().seed(admin)
 
     # job_repo/document_steps_repo/human_decision_repo/pipeline_service are built from
     # a native FastAPI Depends(get_session) in production (see api/dependencies.py),
@@ -77,6 +96,15 @@ def client(test_container: TestContainer) -> TestClient:
     def _job_service_override() -> JobService:
         return test_container.job_service()
 
+    def _audit_repo_override() -> IAuditRepository:
+        return test_container.audit_repo()
+
+    def _user_repo_override() -> IUserRepository:
+        return test_container.user_repo()
+
+    def _enriched_record_repo_override() -> IEnrichedRecordRepository:
+        return test_container.enriched_record_repo()
+
     app = create_app()
     app.dependency_overrides[get_job_repo] = _job_repo_override
     app.dependency_overrides[get_document_steps_repo] = _document_steps_repo_override
@@ -84,6 +112,9 @@ def client(test_container: TestContainer) -> TestClient:
     app.dependency_overrides[get_classification_record_repo] = _classification_record_repo_override
     app.dependency_overrides[get_pipeline_service] = _pipeline_service_override
     app.dependency_overrides[get_job_service] = _job_service_override
+    app.dependency_overrides[get_audit_repo] = _audit_repo_override
+    app.dependency_overrides[get_user_repo] = _user_repo_override
+    app.dependency_overrides[get_enriched_record_repo] = _enriched_record_repo_override
 
     return TestClient(app)
 
@@ -91,3 +122,16 @@ def client(test_container: TestContainer) -> TestClient:
 @pytest.fixture
 def auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {encode_token(_TEST_EMAIL)}"}
+
+
+@pytest.fixture
+def auth_token() -> str:
+    # Bare token (no "Bearer " prefix, no header dict) for the one route that can't
+    # use an Authorization header -- GET /pipeline/{job_id}/events, authenticated via
+    # a ?token= query param since EventSource can't set custom headers.
+    return encode_token(_TEST_EMAIL)
+
+
+@pytest.fixture
+def admin_auth_headers() -> dict[str, str]:
+    return {"Authorization": f"Bearer {encode_token(_ADMIN_EMAIL)}"}

@@ -5,6 +5,8 @@ from dependency_injector.wiring import Provide, inject
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from fastapi.responses import RedirectResponse
 
+from classiflow.api.dependencies import CurrentUser
+from classiflow.api.schemas import BaseSchema
 from classiflow.domain.repositories.user import IUserRepository
 from classiflow.domain.user import AuthToken
 from classiflow.injections.production import Container
@@ -13,6 +15,11 @@ from classiflow.services.auth.oauth import exchange_code, get_authorization_url
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _STATE_COOKIE = "oauth_state"
+
+
+class CurrentUserSchema(BaseSchema):
+    email: str
+    is_admin: bool
 
 
 @router.get("/login")
@@ -36,3 +43,8 @@ async def auth_callback(
         raise HTTPException(status_code=400, detail="Invalid or missing CSRF state")
     response.delete_cookie(_STATE_COOKIE)
     return await exchange_code(code, user_repo)
+
+
+@router.get("/me")
+async def auth_me(current_user: CurrentUser) -> CurrentUserSchema:
+    return CurrentUserSchema(email=current_user.email, is_admin=current_user.is_admin)

@@ -102,9 +102,12 @@ class _Settings(BaseSettings):  # noqa: PLR0904
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GOOGLE_REDIRECT_URI: str = os.getenv(
-        "GOOGLE_REDIRECT_URI", "http://localhost:8000/auth/callback"
-    )
+    # Points at the frontend's OAuth popup route, not this backend's own /auth/callback
+    # -- Google must redirect somewhere that can run JS to relay the token back to the
+    # opener window via postMessage. The popup route itself calls the unchanged
+    # /auth/callback JSON endpoint via fetch(); this only changes where Google's
+    # redirect lands, not what /auth/callback returns.
+    GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5173/oauth-popup")
 
     @property
     def database_url(self) -> str:

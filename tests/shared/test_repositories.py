@@ -1,6 +1,7 @@
 """Repository round-trip tests — all Sql* variants run against in-memory SQLite."""
 
 from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -8,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from classiflow.database.base import Base
 from classiflow.database.models import (
     AllowedUser,
+    AuditRecord,
     ClassificationRecord,
     DocumentKb,
     DocumentStep,
@@ -53,6 +55,8 @@ _ROWS_1 = 1
 _ROWS_2 = 2
 _CHUNK_COUNT = 3
 _UPDATED_CHUNK_COUNT = 9
+_ROWS_5 = 5
+_PAGE_SIZE_2 = 2
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -141,13 +145,171 @@ class TestInMemoryAuditRepository:
         assert await repo.list_for_job(_JOB) == [r1]
 
 
+class TestSqlAuditRepositoryListFiltered:
+    async def test_filters_by_job_id(self, session: AsyncSession) -> None:
+        repo = SqlAuditRepository(session)
+        await repo.save(make_audit_record("job-1", "node1", "started"))
+        await repo.save(make_audit_record("job-2", "node1", "started"))
+
+        records, total = await repo.list_filtered(
+            job_id="job-1",
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert [r.job_id for r in records] == ["job-1"]
+
+    async def test_filters_by_node_and_event(self, session: AsyncSession) -> None:
+        repo = SqlAuditRepository(session)
+        await repo.save(make_audit_record(_JOB, "node1", "started"))
+        await repo.save(make_audit_record(_JOB, "node2", "passed"))
+
+        records, total = await repo.list_filtered(
+            job_id=None,
+            node="node1",
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert records[0].node == "node1"
+
+    async def test_paginates(self, session: AsyncSession) -> None:
+        repo = SqlAuditRepository(session)
+        for i in range(_ROWS_5):
+            await repo.save(make_audit_record(f"job-{i}", "node1", "started"))
+
+        page_1, total = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=_PAGE_SIZE_2,
+        )
+        page_2, _ = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=2,
+            page_size=_PAGE_SIZE_2,
+        )
+
+        assert total == _ROWS_5
+        assert len(page_1) == _PAGE_SIZE_2
+        assert len(page_2) == _PAGE_SIZE_2
+        assert {r.job_id for r in page_1} != {r.job_id for r in page_2}
+
+    async def test_filters_by_date_range(self, session: AsyncSession) -> None:
+        repo = SqlAuditRepository(session)
+        now = datetime.now(timezone.utc)
+        old = AuditRecord(job_id="job-old", node="n", event="e", timestamp=now - timedelta(days=10))
+        recent = AuditRecord(job_id="job-recent", node="n", event="e", timestamp=now)
+        await repo.save(old)
+        await repo.save(recent)
+
+        records, total = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=now - timedelta(days=1),
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert records[0].job_id == "job-recent"
+
+
+class TestInMemoryAuditRepositoryListFiltered:
+    async def test_filters_by_job_id(self) -> None:
+        repo = InMemoryAuditRepository()
+        await repo.save(make_audit_record("job-1", "node1", "started"))
+        await repo.save(make_audit_record("job-2", "node1", "started"))
+
+        records, total = await repo.list_filtered(
+            job_id="job-1",
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert [r.job_id for r in records] == ["job-1"]
+
+    async def test_paginates(self) -> None:
+        repo = InMemoryAuditRepository()
+        for i in range(_ROWS_5):
+            await repo.save(make_audit_record(f"job-{i}", "node1", "started"))
+
+        page_1, total = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=1,
+            page_size=_PAGE_SIZE_2,
+        )
+        page_2, _ = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=None,
+            date_to=None,
+            page=2,
+            page_size=_PAGE_SIZE_2,
+        )
+
+        assert total == _ROWS_5
+        assert len(page_1) == _PAGE_SIZE_2
+        assert len(page_2) == _PAGE_SIZE_2
+        assert {r.job_id for r in page_1} != {r.job_id for r in page_2}
+
+    async def test_filters_by_date_range(self) -> None:
+        repo = InMemoryAuditRepository()
+        now = datetime.now(timezone.utc)
+        old = AuditRecord(job_id="job-old", node="n", event="e", timestamp=now - timedelta(days=10))
+        recent = AuditRecord(job_id="job-recent", node="n", event="e", timestamp=now)
+        await repo.save(old)
+        await repo.save(recent)
+
+        records, total = await repo.list_filtered(
+            job_id=None,
+            node=None,
+            event=None,
+            date_from=now - timedelta(days=1),
+            date_to=None,
+            page=1,
+            page_size=10,
+        )
+
+        assert total == _ROWS_1
+        assert records[0].job_id == "job-recent"
+
+
 # ---------------------------------------------------------------------------
 # IUserRepository
 # ---------------------------------------------------------------------------
 
 
 def _active_user(email: str = _EMAIL) -> AllowedUser:
-    return AllowedUser(email=email, is_active=True, is_blocked=False)
+    return AllowedUser(email=email, is_active=True, is_blocked=False, is_admin=False)
 
 
 class TestSqlUserRepository:
@@ -181,6 +343,22 @@ class TestSqlUserRepository:
         repo = SqlUserRepository(session)
         assert not await repo.is_allowed(_EMAIL)
 
+    async def test_is_admin_persists(self, session: AsyncSession) -> None:
+        session.add(AllowedUser(email=_EMAIL, is_active=True, is_blocked=False, is_admin=True))
+        await session.flush()
+        repo = SqlUserRepository(session)
+        user = await repo.find_by_email(_EMAIL)
+        assert user is not None
+        assert user.is_admin is True
+
+    async def test_is_admin_defaults_false(self, session: AsyncSession) -> None:
+        session.add(_active_user())
+        await session.flush()
+        repo = SqlUserRepository(session)
+        user = await repo.find_by_email(_EMAIL)
+        assert user is not None
+        assert user.is_admin is False
+
 
 class TestInMemoryUserRepository:
     async def test_find_and_allowed(self) -> None:
@@ -197,6 +375,79 @@ class TestInMemoryUserRepository:
     async def test_missing_not_allowed(self) -> None:
         repo = InMemoryUserRepository()
         assert not await repo.is_allowed(_EMAIL)
+
+    async def test_is_admin_persists(self) -> None:
+        repo = InMemoryUserRepository()
+        repo.seed(AllowedUser(email=_EMAIL, is_active=True, is_blocked=False, is_admin=True))
+        user = await repo.find_by_email(_EMAIL)
+        assert user is not None
+        assert user.is_admin is True
+
+
+class TestSqlUserRepositoryCrud:
+    async def test_list_all_returns_every_user(self, session: AsyncSession) -> None:
+        repo = SqlUserRepository(session)
+        await repo.create(_active_user("a@example.com"))
+        await repo.create(_active_user("b@example.com"))
+
+        users = await repo.list_all()
+
+        assert {u.email for u in users} == {"a@example.com", "b@example.com"}
+
+    async def test_update_changes_only_the_given_fields(self, session: AsyncSession) -> None:
+        repo = SqlUserRepository(session)
+        await repo.create(
+            AllowedUser(email=_EMAIL, is_active=True, is_admin=False, is_blocked=False)
+        )
+
+        await repo.update(_EMAIL, is_admin=True)
+
+        updated = await repo.find_by_email(_EMAIL)
+        assert updated is not None
+        assert updated.is_admin is True
+        assert updated.is_active is True
+        assert updated.is_blocked is False
+
+    async def test_delete_removes_the_user(self, session: AsyncSession) -> None:
+        repo = SqlUserRepository(session)
+        await repo.create(_active_user())
+
+        await repo.delete(_EMAIL)
+
+        assert await repo.find_by_email(_EMAIL) is None
+
+
+class TestInMemoryUserRepositoryCrud:
+    async def test_list_all_returns_every_user(self) -> None:
+        repo = InMemoryUserRepository()
+        await repo.create(_active_user("a@example.com"))
+        await repo.create(_active_user("b@example.com"))
+
+        users = await repo.list_all()
+
+        assert {u.email for u in users} == {"a@example.com", "b@example.com"}
+
+    async def test_update_changes_only_the_given_fields(self) -> None:
+        repo = InMemoryUserRepository()
+        await repo.create(
+            AllowedUser(email=_EMAIL, is_active=True, is_admin=False, is_blocked=False)
+        )
+
+        await repo.update(_EMAIL, is_admin=True)
+
+        updated = await repo.find_by_email(_EMAIL)
+        assert updated is not None
+        assert updated.is_admin is True
+        assert updated.is_active is True
+        assert updated.is_blocked is False
+
+    async def test_delete_removes_the_user(self) -> None:
+        repo = InMemoryUserRepository()
+        await repo.create(_active_user())
+
+        await repo.delete(_EMAIL)
+
+        assert await repo.find_by_email(_EMAIL) is None
 
 
 # ---------------------------------------------------------------------------

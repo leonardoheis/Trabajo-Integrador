@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,12 +46,24 @@ class SqlJobRepository:
         result = await self._session.execute(select(Job).order_by(Job.created_at))
         return list(result.scalars().all())
 
+    async def commit(self) -> None:
+        await self._session.commit()
+
 
 class InMemoryJobRepository:
     def __init__(self) -> None:
         self._jobs: dict[str, Job] = {}
 
     async def create(self, job: Job) -> None:
+        # created_at/updated_at's server_default only applies on a real SQL INSERT --
+        # a bare, unflushed instance never round-trips through one here, so it needs
+        # its own Python-side value, matching what every real DB row always has. Only
+        # stamped when the caller left it unset -- PipelineService.start() already
+        # sets both explicitly and must not be overridden.
+        if job.created_at is None:
+            job.created_at = datetime.now(timezone.utc)
+        if job.updated_at is None:
+            job.updated_at = job.created_at
         self._jobs[job.job_id] = job
 
     async def find_by_job_id(self, job_id: str) -> Job | None:
@@ -79,3 +93,7 @@ class InMemoryJobRepository:
 
     async def list_all(self) -> list[Job]:
         return list(self._jobs.values())
+
+    async def commit(self) -> None:
+        # No transaction/session to commit -- writes are already immediately visible.
+        pass

@@ -1,6 +1,5 @@
 import contextlib
 import json
-import re
 
 from langchain_core.language_models import BaseLLM
 from langchain_core.output_parsers import StrOutputParser
@@ -8,6 +7,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from pydantic import Field
 
 from classiflow.domain.base import BaseEntity
+from classiflow.llm_json import JSON_OBJECT_RE, strip_trailing_commas
 
 
 class EntityExtractionInput(BaseEntity):
@@ -32,13 +32,10 @@ JSON:
 "signatories": ["list of signatory names, empty array if none found"], \
 "article_count": "number of ARTÍCULO entries detected, or null"}}"""
 
+
 # Matches a single non-nested JSON object -- same approach as
 # ingesta/prompts/content_validation.py's _JSON_RE (the "signatories" array's own
 # brackets don't confuse this, since [] aren't excluded from the character class).
-# Uses * (zero or more) instead of + (one or more) to match empty objects like {}.
-_JSON_RE = re.compile(r"\{[^{}]*\}", re.DOTALL)
-
-
 class EntityExtractionOutput(BaseEntity):
     doc_type_hint: str | None = None
     number: str | None = None
@@ -49,9 +46,10 @@ class EntityExtractionOutput(BaseEntity):
 
 
 def _extract(text: str) -> EntityExtractionOutput:
-    for m in _JSON_RE.finditer(text):
+    for m in JSON_OBJECT_RE.finditer(text):
         with contextlib.suppress(json.JSONDecodeError, ValueError):
-            return EntityExtractionOutput.model_validate(json.loads(m.group()))
+            cleaned = strip_trailing_commas(m.group())
+            return EntityExtractionOutput.model_validate(json.loads(cleaned))
     msg = f"No valid JSON object found in LLM output: {text!r}"
     raise ValueError(msg)
 

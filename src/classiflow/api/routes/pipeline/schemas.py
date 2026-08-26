@@ -54,3 +54,20 @@ class ReviewQueueItem(BaseSchema):
 class DecisionRequest(BaseSchema):
     decision: Literal["accept", "reject", "escalate"]
     notes: str | None = None
+
+
+class JobSummary(BaseSchema):
+    job_id: str
+    filename: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class TimelineEntry(BaseSchema):
+    node: str
+    status: str
+    passed: bool | None
+    detail: dict[str, object] | None
+    timestamp: datetime
+    duration_ms: int | None

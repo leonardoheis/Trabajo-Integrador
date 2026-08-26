@@ -10,6 +10,7 @@ class AuthService:
 
     async def verify_token(self, token: str) -> User:
         payload = decode_token(token)
-        if not await self._user_repo.is_allowed(payload.sub):
+        allowed_user = await self._user_repo.find_by_email(payload.sub)
+        if allowed_user is None or not allowed_user.is_active or allowed_user.is_blocked:
             raise NotAllowedError(email=payload.sub)
-        return User(email=payload.sub)
+        return User(email=payload.sub, is_admin=allowed_user.is_admin)
