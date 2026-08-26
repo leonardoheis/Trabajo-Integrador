@@ -13,6 +13,7 @@ class AllowedUser(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
@@ -46,7 +47,7 @@ class Job(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="started")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False

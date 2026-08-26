@@ -79,18 +79,34 @@ class PipelineService:
         # server_default only fires on a real INSERT — InMemoryJobRepository never
         # round-trips through SQL, so created_at/updated_at must be set explicitly.
         await self._job_repo.create(
-            Job(job_id=job_id, filename=filename, status="started", created_at=now, updated_at=now)
+            Job(job_id=job_id, filename=filename, status="queued", created_at=now, updated_at=now)
         )
         background_tasks.add_task(self._run, job_id, filename, file_bytes)
         return job_id
 
     async def _run(self, job_id: str, filename: str, file_bytes: bytes) -> None:
         async with self._job_semaphore:
+            await self._job_repo.update_status(job_id, "processing")
+            # _run is a FastAPI BackgroundTask -- it keeps writing through this same
+            # DB session long after the request that resolved it has already returned
+            # its response. Every repo here only flush()es (see IJobRepository.commit's
+            # docstring); without an explicit commit, nothing becomes visible to any
+            # other request's session until get_session's teardown fires at the end of
+            # this whole background task -- i.e. the job silently vanishes from
+            # GET /pipeline/jobs?status=running for its entire multi-minute run instead
+            # of ever showing as "processing". Committing at each phase boundary below
+            # makes the job (and every audit record a node wrote via the same shared
+            # session) visible incrementally instead of all at once at the very end.
+            await self._job_repo.commit()
+            await self._broadcaster.emit(
+                NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.PROCESSING)
+            )
             initial: JobState = {"job_id": job_id, "filename": filename, "file_bytes": file_bytes}
             final_state = cast("JobState", await self._coordinator.ainvoke(initial))
 
             failed_at_node = await self._persist_steps(job_id, final_state)
             await self._finalize_job(job_id, final_state, failed_at_node)
+            await self._job_repo.commit()
 
             # Gated on extraction (not final_status): jobs that later land in review
             # still need their bytes staged so Stage 4's Routing can move the real file
@@ -99,9 +115,17 @@ class PipelineService:
                 await self._document_storage.save_staged(job_id, filename, file_bytes)
 
             if final_state.get("final_status") == "accepted":
+                # Stage 1 passing doesn't mean the job is done -- enrichment and
+                # classification still run. _finalize_job left status at "processing"
+                # (not "accepted") for exactly this reason: a terminal status here would
+                # make GET /pipeline/jobs?status=running drop the job from the Processing
+                # page while it's still mid-pipeline.
                 enriched_record = await self._run_enrichment(job_id, filename, final_state)
+                await self._job_repo.commit()
                 if enriched_record is not None:
                     await self._run_classification(job_id, filename, enriched_record)
+                    await self._job_repo.update_status(job_id, "classified")
+                    await self._job_repo.commit()
 
             unload_slm()
 
@@ -145,9 +169,15 @@ class PipelineService:
         extracted_text: str | UnsetType | None = UNSET
         if final_status != "accepted":
             extracted_text = final_state.get("text") or None
+        # "accepted" is a Stage 1 outcome, not a terminal job status -- enrichment and
+        # classification still run afterward (see _run above). Writing "accepted" here
+        # would make the job vanish from GET /pipeline/jobs?status=running mid-pipeline;
+        # staying at "processing" keeps it visible until _run reaches a real terminal
+        # status ("classified") or enrichment fails it into "review".
+        job_status = "processing" if final_status == "accepted" else final_status
         await self._job_repo.update_status(
             job_id,
-            final_status,
+            job_status,
             rejection_reason=final_state.get("rejection_reason") or None,
             failed_at_node=failed_at_node,
             review_action_needed="pending" if final_status == "review" else None,

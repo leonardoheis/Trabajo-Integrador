@@ -4,6 +4,7 @@ from pydantic import BaseModel
 class User(BaseModel):
     email: str
     is_active: bool = True
+    is_admin: bool = False
 
 
 class AuthToken(BaseModel):

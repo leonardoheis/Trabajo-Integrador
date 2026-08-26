@@ -1,6 +1,5 @@
 import contextlib
 import json
-import re
 
 from langchain_core.language_models import BaseLLM
 from langchain_core.output_parsers import StrOutputParser
@@ -9,6 +8,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from classiflow.classification.domain.categories import DocumentCategory
 from classiflow.classification.domain.results import PrimaryClassificationOutput
 from classiflow.domain.base import BaseEntity
+from classiflow.llm_json import JSON_OBJECT_RE, strip_trailing_commas
 
 # Canonical label set lives in classification/domain/categories.py (DocumentCategory) --
 # the single source of truth for "what are the 10 valid labels," shared with Task 8's
@@ -235,10 +235,6 @@ JSON:
 "confidence": "your confidence in this label, a float between 0 and 1", \
 "reasoning": "one short sentence justifying the label"}}"""
 
-# Matches a single non-nested JSON object -- same approach as
-# enrichment/prompts/entity_extraction.py's _JSON_RE.
-_JSON_RE = re.compile(r"\{[^{}]*\}", re.DOTALL)
-
 
 class _RawPrimaryOutput(BaseEntity):
     label: str
@@ -247,9 +243,9 @@ class _RawPrimaryOutput(BaseEntity):
 
 
 def _extract(text: str) -> PrimaryClassificationOutput:
-    for m in _JSON_RE.finditer(text):
+    for m in JSON_OBJECT_RE.finditer(text):
         with contextlib.suppress(json.JSONDecodeError, ValueError):
-            raw = _RawPrimaryOutput.model_validate(json.loads(m.group()))
+            raw = _RawPrimaryOutput.model_validate(json.loads(strip_trailing_commas(m.group())))
             # ponytail: all_scores is a single-point {label: confidence} map, not a
             # real per-class softmax distribution -- llama.cpp's plain text-completion
             # API used by get_llm_langchain() doesn't expose per-token logprobs across

@@ -1,8 +1,9 @@
 import asyncio
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Annotated, cast
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import Depends
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.runnables import Runnable
 from langgraph.graph.state import CompiledStateGraph
@@ -32,11 +33,13 @@ from classiflow.database.repositories.enriched_record import SqlEnrichedRecordRe
 from classiflow.database.repositories.hash import IHashRepository, SqlHashRepository
 from classiflow.database.repositories.human_decision import SqlHumanDecisionRepository
 from classiflow.database.repositories.job import SqlJobRepository
+from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
 from classiflow.domain.repositories.human_decision import IHumanDecisionRepository
 from classiflow.domain.repositories.job import IJobRepository
+from classiflow.domain.repositories.user import IUserRepository
 from classiflow.domain.user import User
 from classiflow.enrichment.coordinator import build_enrichment_coordinator
 from classiflow.enrichment.nodes import EntityExtractorNode, MetadataEnricherNode, TextCleanerNode
@@ -62,6 +65,7 @@ from classiflow.ingesta.prompts import (
     LegitimacyDecisionOutput,
 )
 from classiflow.injections.production import Container
+from classiflow.services.audit.repository import IAuditRepository
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.job.service import JobService
@@ -89,6 +93,28 @@ async def get_current_user(
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
+
+# EventSource (the browser API backing GET /pipeline/{job_id}/events) cannot set
+# custom request headers -- there is no way to attach Authorization: Bearer <token>
+# to it, so this is the standard SSE-specific fallback: accept the token from a query
+# param instead. Used only for that one streaming route; every other route keeps
+# requiring a real Authorization header via CurrentUser/get_current_user above.
+@inject
+async def get_current_user_from_query_token(
+    token: str,
+    auth_service: Annotated[AuthService, Depends(Provide[Container.auth_service])],
+) -> User:
+    return await auth_service.verify_token(token)
+
+
+CurrentUserFromQueryToken = Annotated[User, Depends(get_current_user_from_query_token)]
+
+
+def require_admin(current_user: CurrentUser) -> None:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Admin access required")
+
+
 # Session-scoped repos/services, built fresh per request from FastAPI's own native
 # yield-dependency (not dependency_injector's Resource, which has no per-request
 # teardown hook -- see injections/production.py's Container docstring comment for why).
@@ -97,6 +123,10 @@ DbSession = Annotated[AsyncSession, Depends(get_session)]
 
 def get_job_repo(session: DbSession) -> IJobRepository:
     return SqlJobRepository(session)
+
+
+def get_user_repo(session: DbSession) -> IUserRepository:
+    return SqlUserRepository(session)
 
 
 def get_document_steps_repo(session: DbSession) -> IDocumentStepsRepository:
@@ -117,6 +147,10 @@ def get_job_service(
 
 def get_hash_repo(session: DbSession) -> IHashRepository:
     return SqlHashRepository(session)
+
+
+def get_audit_repo(session: DbSession) -> IAuditRepository:
+    return SqlAuditRepository(session)
 
 
 def get_audit_service(session: DbSession) -> AuditService:

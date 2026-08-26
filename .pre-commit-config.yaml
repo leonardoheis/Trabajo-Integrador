@@ -35,6 +35,18 @@ repos:
         entry: uv run mypy src
         pass_filenames: false
         files: ^src/
+      - id: frontend-lint
+        name: frontend eslint
+        language: system
+        entry: bash -c 'cd src/classiflow/frontend && npm run lint'
+        pass_filenames: false
+        files: ^src/classiflow/frontend/.*\.(ts|tsx)$
+      - id: frontend-format
+        name: frontend prettier check
+        language: system
+        entry: bash -c 'cd src/classiflow/frontend && npx prettier --check src'
+        pass_filenames: false
+        files: ^src/classiflow/frontend/.*\.(ts|tsx|css)$
 
   - repo: https://gitlab.com/vojko.pribudic.foss/pre-commit-update
     rev: v0.9.0
@@ -47,4 +59,4 @@ repos:
     hooks:
       - id: codespell
         stages: [pre-commit]
-        exclude: ^(src/classiflow/playground/|documents/|\.claude/|models/)
+        exclude: ^(src/classiflow/playground/|documents/|\.claude/|models/|src/classiflow/frontend/package-lock\.json)

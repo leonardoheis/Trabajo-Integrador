@@ -25,8 +25,8 @@ _TEST_STATE = "test-csrf-state"
 @pytest.fixture
 def user_repo() -> InMemoryUserRepository:
     repo = InMemoryUserRepository()
-    repo.seed(AllowedUser(email=_ALLOWED_EMAIL, is_active=True, is_blocked=False))
-    repo.seed(AllowedUser(email=_BLOCKED_EMAIL, is_active=False, is_blocked=True))
+    repo.seed(AllowedUser(email=_ALLOWED_EMAIL, is_active=True, is_blocked=False, is_admin=False))
+    repo.seed(AllowedUser(email=_BLOCKED_EMAIL, is_active=False, is_blocked=True, is_admin=False))
     return repo
 
 
@@ -227,3 +227,23 @@ class TestAuthCallbackEndpoint:
             headers=self._state_header("different-state"),
         )
         assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+class TestAuthMeEndpoint:
+    def test_requires_auth(self, client: TestClient) -> None:
+        response = client.get("/auth/me")
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+    def test_returns_current_user(self, client: TestClient, auth_headers: dict[str, str]) -> None:
+        response = client.get("/auth/me", headers=auth_headers)
+        assert response.status_code == HTTPStatus.OK
+        body = response.json()
+        assert body["email"] == "test@classiflow.dev"
+        assert body["isAdmin"] is False
+
+    def test_returns_is_admin_true_for_admin(
+        self, client: TestClient, admin_auth_headers: dict[str, str]
+    ) -> None:
+        response = client.get("/auth/me", headers=admin_auth_headers)
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()["isAdmin"] is True

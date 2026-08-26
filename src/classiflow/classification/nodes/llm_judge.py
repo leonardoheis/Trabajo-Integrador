@@ -1,6 +1,10 @@
 import asyncio
 from typing import Protocol, cast, runtime_checkable
 
+from classiflow.classification.config_classification import (
+    ClassificationConfig,
+    get_classification_config,
+)
 from classiflow.classification.domain.results import JudgeOutput
 from classiflow.classification.exceptions import LlmJudgeFailedError
 from classiflow.classification.prompts.llm_judge import JudgeInput, build_judge_chain
@@ -30,12 +34,19 @@ class LlmJudgeNode(BaseNode):
         broadcaster: EventBroadcaster,
         *,
         judge_chain: _JudgeChain | None = None,
+        config: ClassificationConfig | None = None,
     ) -> None:
         super().__init__(audit, broadcaster)
         self.judge_chain: _JudgeChain | None = judge_chain
+        self.config: ClassificationConfig = (
+            config if config is not None else get_classification_config()
+        )
 
     async def run(self, ctx: JobContext, judge_input: JudgeInput) -> JudgeOutput:
         start = await self._emit_started(ctx)
+        truncated_text = judge_input.cleaned_text[: self.config.judge_max_input_chars]
+        if truncated_text != judge_input.cleaned_text:
+            judge_input = judge_input.model_copy(update={"cleaned_text": truncated_text})
         try:
             result = await asyncio.to_thread(self.judge, judge_input)
         except LlmJudgeFailedError as exc:

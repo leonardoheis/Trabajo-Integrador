@@ -36,3 +36,14 @@ class IJobRepository(Protocol):
         extracted_text: str | UnsetType | None = UNSET,
     ) -> None: ...
     async def list_all(self) -> list[Job]: ...
+
+    # PipelineService._run() is a FastAPI BackgroundTask that keeps writing long after
+    # its originating request has returned. Every write repo in this codebase only
+    # flush()es and relies on get_session's teardown to commit() once, atomically, at
+    # request end -- correct for normal short-lived requests, but that teardown fires
+    # once the background task itself finishes, so nothing _run() writes (Job.status,
+    # audit records, document steps -- all sharing this same session) is visible to any
+    # other request's session until the whole multi-minute pipeline is already done.
+    # Only PipelineService calls this, at each state transition, to make its own
+    # long-running writes durable and visible incrementally instead of all-at-once.
+    async def commit(self) -> None: ...
