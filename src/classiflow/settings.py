@@ -51,11 +51,11 @@ class _Settings(BaseSettings):
     CLASSIFICATION_MODEL_PATH: str = _DEFAULT_MODEL
     CLASSIFICATION_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "classification.yaml")
     JUDGE_MODEL_PATH: str = _JUDGE_MODEL
-    # Conservative starting point, not a measured capacity number -- each job runs
-    # local GGUF LLM inference (node2/node3/enrichment/classification/judge), OCR, and
-    # embedding, all genuinely expensive per-job work rather than lightweight I/O.
-    # Override via the env var once real load/hardware data justifies a higher value.
-    MAX_CONCURRENT_JOBS: int = int(os.getenv("MAX_CONCURRENT_JOBS", "2"))
+    # 1, not 2: unload_slm() clears the shared get_llm_langchain cache when a job
+    # finishes, so with parallel jobs the survivor reloads its ~4.9GB GGUF while the
+    # old one is still resident -- two copies exceed an 8GB card and the load fails.
+    # Raise only with VRAM headroom for one model per concurrent job.
+    MAX_CONCURRENT_JOBS: int = int(os.getenv("MAX_CONCURRENT_JOBS", "1"))
     SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.1"))
     SLM_TOP_P: float = float(os.getenv("SLM_TOP_P", "0.95"))
     SLM_SEED: int = int(os.getenv("SLM_SEED", "42"))
