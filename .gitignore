@@ -217,6 +217,7 @@ storage/reports/**
 # launched from its own directory writes the vector store here instead of the repo
 # root. The root-level "data/**" rule is anchored and does not cover it.
 src/classiflow/playground/stage1/data/
+src/classiflow/playground/stage5/data/
 
 # ---- Claude Code / tooling (local only) ----
 .claude/worktrees/
