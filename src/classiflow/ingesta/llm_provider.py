@@ -1,22 +1,17 @@
 import gc
 from functools import lru_cache
-from uuid import UUID
 
 import llama_cpp
 import torch
-import weave
 from langchain_community.llms.llamacpp import LlamaCpp
-from langchain_core.callbacks.base import BaseCallbackHandler
 from langchain_core.callbacks.manager import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseLLM
 from langchain_core.outputs import Generation, LLMResult
-from langchain_core.tracers.schemas import Run
 from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 from pydantic import Field
-from typing_extensions import override
-from weave.integrations.langchain import WeaveTracer
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
+from classiflow.observability import tracing_callbacks
 from classiflow.settings import Settings
 
 
@@ -115,35 +110,6 @@ def unload_slm() -> None:
         torch.cuda.empty_cache()
 
 
-class PatchedWeaveTracer(WeaveTracer):
-    # weave 0.53.6's usage extraction does generation.get("generation_info", {}).get(...)
-    # and output.get("extra", {}).get(...), which raise when langchain sets those fields
-    # to an explicit None (llama.cpp never populates them) -- the default only covers a
-    # missing key. It runs inside _finish_run after the call is popped but before
-    # finish_call, so a raise leaves the trace unfinished: no outputs, no token usage.
-    # Filling in the empty dicts up front lets the call complete. Drop once weave
-    # tolerates these Nones.
-    @override
-    def on_llm_end(self, response: LLMResult, *, run_id: UUID, **kwargs: object) -> Run:
-        for batch in response.generations:
-            for generation in batch:
-                if generation.generation_info is None:
-                    generation.generation_info = {}
-        run = self.run_map.get(str(run_id))
-        if run is not None and getattr(run, "extra", None) is None:
-            run.extra = {}
-        return super().on_llm_end(response, run_id=run_id, **kwargs)
-
-
-def wandb_callbacks() -> list[BaseCallbackHandler]:
-    # No key -> no tracer and no weave.init(), so tests and key-less clones never hit
-    # the network. weave.init() is idempotent, so calling it per resolution is fine.
-    if not Settings.wandb_api_key:
-        return []
-    weave.init(Settings.wandb_project)
-    return [PatchedWeaveTracer()]
-
-
 @lru_cache(maxsize=4)
 def get_llm_langchain(model_path: str) -> BaseLLM:
     # Callbacks are resolved here rather than taken as a parameter -- this function is
@@ -159,7 +125,7 @@ def get_llm_langchain(model_path: str) -> BaseLLM:
             temperature=Settings.slm_temperature,
             top_p=Settings.slm_top_p,
             seed=Settings.slm_seed,
-            callbacks=wandb_callbacks() or None,
+            callbacks=tracing_callbacks() or None,
             verbose=False,
         )
     except FileNotFoundError as exc:

@@ -3,6 +3,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
+from classiflow.observability import init_tracing
+
 from .error_handlers import EXCEPTION_HANDLERS
 from .routes import ROUTERS
 
@@ -10,6 +12,11 @@ _FRONTEND_DIST = Path(__file__).parents[1] / "frontend" / "dist"
 
 
 def create_app() -> FastAPI:
+    # Once per process, before any LLM is built -- weave decides whether to register its
+    # own global LangChain tracer during init(), so this has to precede the first model
+    # load rather than run lazily alongside it.
+    init_tracing()
+
     app = FastAPI(title="Classiflow")
 
     for router in ROUTERS:

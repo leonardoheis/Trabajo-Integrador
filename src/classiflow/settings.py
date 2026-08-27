@@ -86,11 +86,19 @@ class _Settings(BaseSettings):
     # redirect lands, not what /auth/callback returns.
     GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5173/oauth-popup")
 
-    # Empty by default -- get_llm_langchain() only attaches WandbCallbackHandler when
-    # this is set, so a clone with no .env (including every test run) never imports
-    # wandb or makes network calls.
-    WANDB_API_KEY: str = os.getenv("WANDB_API_KEY", "")
-    WANDB_PROJECT: str = os.getenv("WANDB_PROJECT", "classiflow")
+    # No os.getenv() wrapper on these three: pydantic-settings already fills every
+    # field from the process environment first and .env second, so wrapping the default
+    # would only re-read the environment and shadow what .env provides.
+    #
+    # Empty by default -- tracing stays off, so a clone with no .env (including every
+    # test run) never calls weave.init() or reaches the network.
+    WANDB_API_KEY: str = ""
+    WANDB_PROJECT: str = "classiflow"
+    # Consumed by weave, not by this app: weave.init() registers its own unpatched
+    # WeaveTracer globally unless this is already set in os.environ, and that tracer
+    # raises on llama.cpp's None metadata fields (see PatchedWeaveTracer). "false" opts
+    # out so only the patched tracer attaches. init_tracing() is what exports it.
+    WEAVE_TRACE_LANGCHAIN: str = "false"
 
     @property
     def database_url(self) -> str:
@@ -183,6 +191,12 @@ class _Settings(BaseSettings):
     @property
     def wandb_project(self) -> str:
         return self.WANDB_PROJECT
+
+    @property
+    def tracing_enabled(self) -> bool:
+        # A configured key is the single switch: without one there is nothing to
+        # authenticate against, so tracing stays off rather than failing at runtime.
+        return bool(self.WANDB_API_KEY)
 
 
 Settings = _Settings()
