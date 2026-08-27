@@ -141,6 +141,10 @@ class TestClassificationCoordinatorLlmJudgePath:
 
 class TestClassificationCoordinatorHumanReviewPath:
     async def test_foreign_municipality_routes_to_human_review(self, tmp_path: Path) -> None:
+        # Even though the judge accepts (judge_response defaults to accept), a
+        # foreign_municipality flag forces HUMAN_REVIEW as the final outcome -- the
+        # judge still runs (its verdict/reasoning is persisted as advisory signal),
+        # per confidence_gate.forces_human_review's non-negotiable list.
         graph, repo = _build_graph(_HIGH_CONFIDENCE_RESPONSE, tmp_path)
         job_id = "coord-human-001"
         filename = "ordenanza.pdf"
@@ -154,6 +158,7 @@ class TestClassificationCoordinatorHumanReviewPath:
         result = await graph.ainvoke(initial)
 
         assert result["review_route"] == "human_review"
+        assert result["judged_by_llm"] is True
         assert Path("review", "human_review").as_posix() in Path(result["stored_path"]).as_posix()
 
         record = await repo.find_by_job_id("coord-human-001")
@@ -167,9 +172,11 @@ _OTRO_HIGH_CONFIDENCE_RESPONSE = (
 
 
 class TestClassificationCoordinatorOtroPath:
-    async def test_primary_otro_routes_to_human_review_without_visiting_judge(
-        self, tmp_path: Path
-    ) -> None:
+    async def test_primary_otro_routes_to_human_review_via_judge(self, tmp_path: Path) -> None:
+        # "otro" also forces HUMAN_REVIEW as the final outcome regardless of the
+        # judge's verdict (judge_response defaults to accept), but per
+        # confidence_gate.forces_human_review the judge still runs and its
+        # verdict/reasoning is persisted as advisory signal.
         graph, repo = _build_graph(_OTRO_HIGH_CONFIDENCE_RESPONSE, tmp_path)
         job_id = "coord-otro-001"
         filename = "banco_central_circular.pdf"
@@ -183,18 +190,14 @@ class TestClassificationCoordinatorOtroPath:
         result = await graph.ainvoke(initial)
 
         assert result["review_route"] == "human_review"
-        # judged_by_llm is only ever set when the llm_judge branch actually ran
-        # (ClassificationState is total=False) -- absent here proves the otro
-        # override skipped the judge entirely, distinguishing this path from the
-        # disagreement path (which does visit the judge).
-        assert result.get("judged_by_llm", False) is False
+        assert result["judged_by_llm"] is True
         assert Path("review", "human_review").as_posix() in Path(result["stored_path"]).as_posix()
 
         record = await repo.find_by_job_id(job_id)
         assert record is not None
         assert record.review_route == "human_review"
         assert record.label == "otro"
-        assert record.judged_by_llm is False
+        assert record.judged_by_llm is True
 
 
 class _DisagreeingClassifier:

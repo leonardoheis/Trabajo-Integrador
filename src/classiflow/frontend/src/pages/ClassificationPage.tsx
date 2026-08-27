@@ -8,13 +8,25 @@ import StatusBadge from "../components/StatusBadge";
 const COLUMNS: Column<ClassificationSummary>[] = [
   { header: "Filename", sortKey: "filename", render: (row) => row.filename },
   { header: "Label", sortKey: "label", render: (row) => row.label ?? "—" },
-  { header: "Review Route", render: (row) => <StatusBadge status={row.reviewRoute} /> },
+  {
+    header: "Review Route",
+    // reviewRoute is "n/a" when the job produced no classification record
+    // (rejected duplicate, failed pipeline) -- show the job status instead.
+    render: (row) => (
+      <StatusBadge status={row.reviewRoute === "n/a" ? row.status : row.reviewRoute} />
+    ),
+  },
   {
     header: "Confidence",
     sortKey: "confidence",
-    render: (row) => (
-      <span className="font-mono text-[var(--color-text-muted)]">{row.confidence.toFixed(2)}</span>
-    ),
+    render: (row) =>
+      row.reviewRoute === "n/a" ? (
+        <span className="font-mono text-[var(--color-text-faint)]">—</span>
+      ) : (
+        <span className="font-mono text-[var(--color-text-muted)]">
+          {row.confidence.toFixed(2)}
+        </span>
+      ),
   },
   { header: "Judged", render: (row) => (row.judgedByLlm ? "Yes" : "No") },
   {

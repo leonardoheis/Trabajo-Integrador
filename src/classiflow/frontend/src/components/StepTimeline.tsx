@@ -18,6 +18,14 @@ function formatNodeName(node: string): string {
     .join(" ");
 }
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms} ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1000);
+  return `${minutes} m ${seconds} s`;
+}
+
 function isPhaseLive(phase: Phase): boolean {
   const last = phase.entries[phase.entries.length - 1];
   return !TERMINAL_STATUSES.has(last.status);
@@ -35,6 +43,11 @@ function StepRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
         {formatNodeName(entry.node)}
       </span>
       <span className="font-mono text-[11px] text-[var(--color-text-faint)]">{entry.node}</span>
+      {entry.durationMs != null && (
+        <span className="ml-auto font-mono text-[11px] text-[var(--color-text-muted)]">
+          {formatDuration(entry.durationMs)}
+        </span>
+      )}
     </div>
   );
 }

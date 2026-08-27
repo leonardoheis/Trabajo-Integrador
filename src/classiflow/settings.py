@@ -94,11 +94,12 @@ class _Settings(BaseSettings):
     # test run) never calls weave.init() or reaches the network.
     WANDB_API_KEY: str = ""
     WANDB_PROJECT: str = "classiflow"
-    # Consumed by weave, not by this app: weave.init() registers its own unpatched
-    # WeaveTracer globally unless this is already set in os.environ, and that tracer
-    # raises on llama.cpp's None metadata fields (see PatchedWeaveTracer). "false" opts
-    # out so only the patched tracer attaches. init_tracing() is what exports it.
-    WEAVE_TRACE_LANGCHAIN: str = "false"
+    # Consumed by weave, not by this app: weave.init() reads it from os.environ to
+    # decide whether to register its global LangChain tracer. That tracer is what traces
+    # the whole pipeline (chains and LangGraph nodes, not just direct LLM calls), so it
+    # stays ON -- init_tracing() patches the tracer class first to fix weave's crash on
+    # llama.cpp's None metadata. Set "false" only to disable LangChain tracing entirely.
+    WEAVE_TRACE_LANGCHAIN: str = "true"
 
     @property
     def database_url(self) -> str:

@@ -80,6 +80,7 @@ async def list_completed_jobs(
             ClassificationSummary(
                 job_id=job.job_id,
                 filename=job.filename,
+                status=job.status,
                 label=record.label if record else None,
                 review_route=record.review_route if record else "n/a",
                 confidence=record.confidence if record else 0.0,

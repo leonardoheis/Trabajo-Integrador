@@ -2,6 +2,8 @@ const COLORS: Record<string, string> = {
   accept: "bg-[var(--color-success)]/20 text-[var(--color-success)]",
   human_review: "bg-[var(--color-warning)]/20 text-[var(--color-warning)]",
   llm_judge: "bg-[var(--color-accent)]/20 text-[var(--color-accent)]",
+  rejected: "bg-[var(--color-danger)]/20 text-[var(--color-danger)]",
+  failed: "bg-[var(--color-danger)]/20 text-[var(--color-danger)]",
 };
 
 export default function StatusBadge({ status }: { status: string }) {

@@ -3,6 +3,7 @@ import { apiFetch } from "./auth";
 export interface ClassificationSummary {
   jobId: string;
   filename: string;
+  status: string;
   label: string | null;
   reviewRoute: string;
   confidence: number;

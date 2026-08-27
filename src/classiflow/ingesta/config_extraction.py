@@ -9,6 +9,7 @@ from classiflow.settings import Settings
 
 class ExtractionConfig(BaseModel):
     min_text_for_ocr: int = 50
+    ocr_page_min_chars: int = 25
     min_usable_text: int = 20
     max_concurrent_extractions: int = 2
 
