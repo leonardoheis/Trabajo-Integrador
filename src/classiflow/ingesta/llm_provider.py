@@ -11,6 +11,7 @@ from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 from pydantic import Field
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
+from classiflow.observability import tracing_callbacks
 from classiflow.settings import Settings
 
 
@@ -98,6 +99,9 @@ def unload_slm() -> None:
     # Drops the lru_cache's reference to the loaded LlamaCpp instance so gc can
     # collect it -- its __del__ frees the GGUF's CUDA context directly (ctypes-owned
     # memory, not PyTorch's caching allocator), releasing VRAM back to the driver.
+    # Only actually frees anything if nothing else still references the model, which is
+    # why api/dependencies.py builds the *_chain nodes lazily rather than injecting
+    # container-held chains.
     # ponytail: runs synchronously on the event loop (called once per finished job, not
     # a hot path) -- move to asyncio.to_thread if it ever shows up as request latency.
     get_llm_langchain.cache_clear()
@@ -108,6 +112,10 @@ def unload_slm() -> None:
 
 @lru_cache(maxsize=4)
 def get_llm_langchain(model_path: str) -> BaseLLM:
+    # Callbacks are resolved here rather than taken as a parameter -- this function is
+    # lru_cached on model_path alone, so a per-call callbacks argument would either be
+    # silently ignored on cache hits or force a separate cache entry (and a separate
+    # multi-GB GGUF load) per distinct callback list.
     try:
         return ChatTemplatedLlamaCpp(
             model_path=model_path,
@@ -117,6 +125,7 @@ def get_llm_langchain(model_path: str) -> BaseLLM:
             temperature=Settings.slm_temperature,
             top_p=Settings.slm_top_p,
             seed=Settings.slm_seed,
+            callbacks=tracing_callbacks() or None,
             verbose=False,
         )
     except FileNotFoundError as exc:

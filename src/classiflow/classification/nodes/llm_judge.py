@@ -69,24 +69,27 @@ class LlmJudgeNode(BaseNode):
         )
         return result
 
+    def _take_chain(self) -> "_JudgeChain":
+        # Hands over the injected chain and drops this node's reference (one call per
+        # job), same as the other chain-holding nodes; the judge's model is the largest,
+        # so pinning it past this call is the most expensive case.
+        if self.judge_chain is not None:
+            chain = self.judge_chain
+            self.judge_chain = None
+            return chain
+        # By the time a job reaches the judge tier, node2/node3/enrichment's and the
+        # primary classifier's chain-holding nodes have each already dropped their own
+        # reference to their GGUF model after their one use per job -- so the only thing
+        # still keeping those models resident in VRAM is get_llm_langchain's own
+        # lru_cache. Clearing it here, right before the judge's own (typically larger)
+        # model loads, actually frees that VRAM instead of stacking multiple GGUF models
+        # at once on a small/mid-range GPU.
+        unload_slm()
+        return cast("_JudgeChain", build_judge_chain(get_llm_langchain(Settings.judge_model_path)))
+
     def judge(self, judge_input: JudgeInput) -> JudgeOutput:
         try:
-            if self.judge_chain is not None:
-                chain: _JudgeChain = self.judge_chain
-            else:
-                # By the time a job reaches the judge tier, node2/node3/enrichment's
-                # and the primary classifier's chain-holding nodes have each already
-                # dropped their own reference to their GGUF model after their one use
-                # per job (see the matching comment in each of those nodes) -- so the
-                # only thing still keeping those models resident in VRAM is
-                # get_llm_langchain's own lru_cache. Clearing it here, right before the
-                # judge's own (typically larger) model loads, actually frees that VRAM
-                # instead of stacking multiple GGUF models at once on a small/mid-range
-                # GPU.
-                unload_slm()
-                chain = cast(
-                    "_JudgeChain", build_judge_chain(get_llm_langchain(Settings.judge_model_path))
-                )
+            chain = self._take_chain()
             return chain.invoke(judge_input)
         except (ValueError, LlmProviderError, OSError, RuntimeError) as exc:
             raise LlmJudgeFailedError(reason=str(exc)) from exc

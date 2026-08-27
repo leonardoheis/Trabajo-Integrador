@@ -1,17 +1,15 @@
 import asyncio
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Annotated, cast
+from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from langchain_core.runnables import Runnable
 from langgraph.graph.state import CompiledStateGraph
 from lingua import LanguageDetector
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from classiflow.classification.coordinator import build_classification_coordinator
-from classiflow.classification.domain.results import PrimaryClassificationOutput
 from classiflow.classification.nodes import (
     ConfidenceGateNode,
     ForeignMunicipalityNode,
@@ -21,8 +19,6 @@ from classiflow.classification.nodes import (
     SecondOpinionNode,
     SmellsRiskNode,
 )
-from classiflow.classification.prompts.llm_judge import JudgeInput
-from classiflow.classification.prompts.primary_classification import PrimaryClassificationInput
 from classiflow.database.base import get_session
 from classiflow.database.repositories.audit import SqlAuditRepository
 from classiflow.database.repositories.classification_record import (
@@ -43,10 +39,6 @@ from classiflow.domain.repositories.user import IUserRepository
 from classiflow.domain.user import User
 from classiflow.enrichment.coordinator import build_enrichment_coordinator
 from classiflow.enrichment.nodes import EntityExtractorNode, MetadataEnricherNode, TextCleanerNode
-from classiflow.enrichment.prompts.entity_extraction import (
-    EntityExtractionInput,
-    EntityExtractionOutput,
-)
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.coordinator import build_coordinator
 from classiflow.ingesta.extract import TextExtractFn
@@ -58,12 +50,6 @@ from classiflow.ingesta.nodes import (
     FormatValidationNode,
 )
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
-from classiflow.ingesta.prompts import (
-    ContentChainInput,
-    FormatChainInput,
-    FormatDecisionOutput,
-    LegitimacyDecisionOutput,
-)
 from classiflow.injections.production import Container
 from classiflow.services.audit.repository import IAuditRepository
 from classiflow.services.audit.service import AuditService
@@ -71,14 +57,6 @@ from classiflow.services.auth.service import AuthService
 from classiflow.services.job.service import JobService
 from classiflow.services.pipeline.service import PipelineService
 from classiflow.storage.document_storage import IDocumentStorage
-
-if TYPE_CHECKING:
-    from classiflow.classification.domain.results import JudgeOutput
-    from classiflow.classification.nodes.llm_judge import _JudgeChain
-    from classiflow.classification.nodes.primary_classifier import _ClassificationChain
-    from classiflow.enrichment.nodes.entity_extractor import EntityChain
-    from classiflow.ingesta.nodes.node2_format_validation import FormatChain
-    from classiflow.ingesta.nodes.node3_content_validation import ContentChain
 
 _bearer = HTTPBearer()
 
@@ -165,20 +143,19 @@ def get_node1(
     return FileReceptionNode(audit=audit_service, broadcaster=broadcaster)
 
 
+# The *_chain dependencies below are deliberately NOT injected. FastAPI resolves every
+# dependency of a route before the handler runs, so injecting them would build their
+# GGUF models at request time and keep them referenced by the container for the process
+# lifetime -- unload_slm() could then never free that VRAM, and each job would start
+# with whatever the previous one left behind (measured: 1.92GB free instead of 6.96GB,
+# forcing llama.cpp to offload most layers to CPU). Each node already builds its chain
+# on demand when left as None, so only one model is resident at a time.
 @inject
 def get_node2(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
-    format_chain: Annotated[
-        Runnable[FormatChainInput, FormatDecisionOutput],
-        Depends(Provide[Container.node2_format_chain]),
-    ],
 ) -> FormatValidationNode:
-    return FormatValidationNode(
-        audit=audit_service,
-        broadcaster=broadcaster,
-        format_chain=cast("FormatChain", format_chain),
-    )
+    return FormatValidationNode(audit=audit_service, broadcaster=broadcaster)
 
 
 @inject
@@ -186,16 +163,11 @@ def get_node3(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
     language_detector: Annotated[LanguageDetector, Depends(Provide[Container.language_detector])],
-    content_chain: Annotated[
-        Runnable[ContentChainInput, LegitimacyDecisionOutput],
-        Depends(Provide[Container.node3_content_chain]),
-    ],
 ) -> ContentValidationNode:
     return ContentValidationNode(
         audit=audit_service,
         broadcaster=broadcaster,
         language_detector=language_detector,
-        content_chain=cast("ContentChain", content_chain),
     )
 
 
@@ -230,16 +202,8 @@ def get_text_cleaner(
 def get_entity_extractor(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
-    entity_chain: Annotated[
-        Runnable[EntityExtractionInput, EntityExtractionOutput],
-        Depends(Provide[Container.entity_extraction_chain]),
-    ],
 ) -> EntityExtractorNode:
-    return EntityExtractorNode(
-        audit=audit_service,
-        broadcaster=broadcaster,
-        entity_chain=cast("EntityChain", entity_chain),
-    )
+    return EntityExtractorNode(audit=audit_service, broadcaster=broadcaster)
 
 
 @inject
@@ -266,16 +230,8 @@ def get_classification_record_repo(session: DbSession) -> IClassificationRecordR
 def get_primary_classifier(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
-    classification_chain: Annotated[
-        Runnable[PrimaryClassificationInput, PrimaryClassificationOutput],
-        Depends(Provide[Container.classification_chain]),
-    ],
 ) -> PrimaryClassifierNode:
-    return PrimaryClassifierNode(
-        audit=audit_service,
-        broadcaster=broadcaster,
-        classification_chain=cast("_ClassificationChain", classification_chain),
-    )
+    return PrimaryClassifierNode(audit=audit_service, broadcaster=broadcaster)
 
 
 @inject
@@ -314,13 +270,14 @@ def get_confidence_gate(
 def get_llm_judge(
     audit_service: Annotated[AuditService, Depends(get_audit_service)],
     broadcaster: Annotated[EventBroadcaster, Depends(Provide[Container.broadcaster])],
-    judge_chain: Annotated[
-        Runnable[JudgeInput, "JudgeOutput"], Depends(Provide[Container.judge_chain])
-    ],
 ) -> LlmJudgeNode:
-    return LlmJudgeNode(
-        audit=audit_service, broadcaster=broadcaster, judge_chain=cast("_JudgeChain", judge_chain)
-    )
+    # judge_chain is deliberately NOT injected. FastAPI resolves every dependency of a
+    # route before the handler runs, so injecting it would build the judge's GGUF at
+    # request time -- resident alongside the node2/node3/classification model and
+    # exhausting an 8GB card before any document is processed, which then makes the
+    # next job's model load fail. Left as None, LlmJudgeNode builds the chain on demand
+    # and calls unload_slm() first, so only one model is ever resident.
+    return LlmJudgeNode(audit=audit_service, broadcaster=broadcaster)
 
 
 @inject

@@ -51,11 +51,11 @@ class _Settings(BaseSettings):
     CLASSIFICATION_MODEL_PATH: str = _DEFAULT_MODEL
     CLASSIFICATION_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "classification.yaml")
     JUDGE_MODEL_PATH: str = _JUDGE_MODEL
-    # Conservative starting point, not a measured capacity number -- each job runs
-    # local GGUF LLM inference (node2/node3/enrichment/classification/judge), OCR, and
-    # embedding, all genuinely expensive per-job work rather than lightweight I/O.
-    # Override via the env var once real load/hardware data justifies a higher value.
-    MAX_CONCURRENT_JOBS: int = int(os.getenv("MAX_CONCURRENT_JOBS", "2"))
+    # 1, not 2: unload_slm() clears the shared get_llm_langchain cache when a job
+    # finishes, so with parallel jobs the survivor reloads its ~4.9GB GGUF while the
+    # old one is still resident -- two copies exceed an 8GB card and the load fails.
+    # Raise only with VRAM headroom for one model per concurrent job.
+    MAX_CONCURRENT_JOBS: int = int(os.getenv("MAX_CONCURRENT_JOBS", "1"))
     SLM_TEMPERATURE: float = float(os.getenv("SLM_TEMPERATURE", "0.1"))
     SLM_TOP_P: float = float(os.getenv("SLM_TOP_P", "0.95"))
     SLM_SEED: int = int(os.getenv("SLM_SEED", "42"))
@@ -85,6 +85,20 @@ class _Settings(BaseSettings):
     # /auth/callback JSON endpoint via fetch(); this only changes where Google's
     # redirect lands, not what /auth/callback returns.
     GOOGLE_REDIRECT_URI: str = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:5173/oauth-popup")
+
+    # No os.getenv() wrapper on these three: pydantic-settings already fills every
+    # field from the process environment first and .env second, so wrapping the default
+    # would only re-read the environment and shadow what .env provides.
+    #
+    # Empty by default -- tracing stays off, so a clone with no .env (including every
+    # test run) never calls weave.init() or reaches the network.
+    WANDB_API_KEY: str = ""
+    WANDB_PROJECT: str = "classiflow"
+    # Consumed by weave, not by this app: weave.init() registers its own unpatched
+    # WeaveTracer globally unless this is already set in os.environ, and that tracer
+    # raises on llama.cpp's None metadata fields (see PatchedWeaveTracer). "false" opts
+    # out so only the patched tracer attaches. init_tracing() is what exports it.
+    WEAVE_TRACE_LANGCHAIN: str = "false"
 
     @property
     def database_url(self) -> str:
@@ -169,6 +183,20 @@ class _Settings(BaseSettings):
     @property
     def slm_n_ctx(self) -> int:
         return self.SLM_N_CTX
+
+    @property
+    def wandb_api_key(self) -> str:
+        return self.WANDB_API_KEY
+
+    @property
+    def wandb_project(self) -> str:
+        return self.WANDB_PROJECT
+
+    @property
+    def tracing_enabled(self) -> bool:
+        # A configured key is the single switch: without one there is nothing to
+        # authenticate against, so tracing stays off rather than failing at runtime.
+        return bool(self.WANDB_API_KEY)
 
 
 Settings = _Settings()

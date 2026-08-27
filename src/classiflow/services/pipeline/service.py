@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import BackgroundTasks
 from langgraph.graph.state import CompiledStateGraph
 
+from classiflow.classification.nodes.second_opinion import unload_bert
 from classiflow.database.models import DocumentStep, EnrichedRecord, Job
 from classiflow.domain.job import JobStatus, NodeEvent
 from classiflow.domain.repositories import UNSET, IJobRepository, UnsetType
@@ -128,6 +129,9 @@ class PipelineService:
                     await self._job_repo.commit()
 
             unload_slm()
+            # BETO stays on CUDA for the process lifetime otherwise, shrinking the
+            # budget below what the next job's GGUF load needs on an 8GB card.
+            unload_bert()
 
             await self._broadcaster.emit(
                 NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.DONE)

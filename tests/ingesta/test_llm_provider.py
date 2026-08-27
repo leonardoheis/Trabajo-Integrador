@@ -2,7 +2,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from classiflow.ingesta.llm_provider import ChatTemplatedLlamaCpp, MockLlm, get_llm_langchain
+from classiflow.ingesta.llm_provider import (
+    ChatTemplatedLlamaCpp,
+    MockLlm,
+    get_llm_langchain,
+)
 
 
 class TestMockLlm:
@@ -43,6 +47,22 @@ class TestGetLlmLangchain:
             assert mock_llamacpp.call_count == 1
         finally:
             get_llm_langchain.cache_clear()
+
+
+class TestTracingIntegration:
+    def test_llm_is_built_without_callbacks_when_tracing_is_disabled(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("classiflow.observability.Settings.WANDB_API_KEY", "")
+        mock_llamacpp = MagicMock()
+        monkeypatch.setattr("classiflow.ingesta.llm_provider.ChatTemplatedLlamaCpp", mock_llamacpp)
+        get_llm_langchain.cache_clear()
+        try:
+            get_llm_langchain("fake/model.gguf")
+        finally:
+            get_llm_langchain.cache_clear()
+
+        assert mock_llamacpp.call_args.kwargs["callbacks"] is None
 
 
 def _fake_chat_client(template: str) -> MagicMock:

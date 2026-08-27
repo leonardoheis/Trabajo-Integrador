@@ -65,18 +65,23 @@ class EntityExtractorNode(BaseNode):
         )
         return result
 
+    def _resolve_chain(self) -> EntityChain:
+        # Deliberately does NOT drop self.entity_chain after use, unlike
+        # node2/node3/primary_classifier: PipelineService._run_enrichment retries the
+        # whole enrichment coordinator up to max_enrichment_retries times against this
+        # same node instance, so releasing the injected chain would silently swap in a
+        # freshly built one on retry 2.
+        if self.entity_chain is not None:
+            return self.entity_chain
+        return cast(
+            "EntityChain",
+            build_entity_extraction_chain(get_llm_langchain(Settings.enrichment_model_path)),
+        )
+
     def extract(self, cleaned_text: str) -> EntityExtractionResult:
         excerpt = cleaned_text[: self.config.entity_excerpt_len]
         try:
-            if self.entity_chain is not None:
-                chain: EntityChain = self.entity_chain
-            else:
-                chain = cast(
-                    "EntityChain",
-                    build_entity_extraction_chain(
-                        get_llm_langchain(Settings.enrichment_model_path)
-                    ),
-                )
+            chain = self._resolve_chain()
             output = chain.invoke(EntityExtractionInput(cleaned_text=excerpt))
         except (ValueError, LlmProviderError, OSError, RuntimeError) as exc:
             raise EntityExtractionFailedError(reason=str(exc)) from exc
