@@ -4,6 +4,7 @@ from sentence_transformers import SentenceTransformer
 
 from classiflow.knowledge.domain.chunk import Embedding
 from classiflow.knowledge.embeddings.exceptions import EmbeddingError
+from classiflow.model_cache import evict_lru_cache
 from classiflow.settings import Settings
 
 
@@ -15,6 +16,12 @@ def get_sentence_model(model_name: str) -> SentenceTransformer:
         return SentenceTransformer(model_name, local_files_only=True)  # type: ignore[no-any-return]
     except Exception as exc:
         raise EmbeddingError(model=model_name, cause=str(exc)) from exc
+
+
+def unload_kb_embedder() -> None:
+    # The sentence transformer is smaller than LLMs (~470MB) but stays resident
+    # for the process lifetime if not freed, shrinking available VRAM on multi-job runs.
+    evict_lru_cache(get_sentence_model)
 
 
 class SentenceTransformerEmbedder:

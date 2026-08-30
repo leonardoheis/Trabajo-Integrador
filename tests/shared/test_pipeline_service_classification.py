@@ -1,10 +1,13 @@
 import asyncio
 from dataclasses import dataclass
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import numpy as np
 import numpy.typing as npt
+import pytest
 from fastapi import BackgroundTasks
+from langgraph.graph.state import CompiledStateGraph
 
 from classiflow.classification.config_classification import ClassificationConfig
 from classiflow.classification.coordinator import build_classification_coordinator
@@ -45,7 +48,7 @@ from classiflow.ingesta.nodes import (
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.ingesta.prompts import build_content_chain
 from classiflow.services.audit.service import AuditService
-from classiflow.services.pipeline.service import PipelineService
+from classiflow.services.pipeline.service import PipelineService, is_pipeline_busy
 from classiflow.storage.document_storage import LocalDiskStorage
 from tests.fakes import make_indexer
 
@@ -96,6 +99,9 @@ class _ServiceUnderTest:
     service: PipelineService
     job_repo: InMemoryJobRepository
     classification_record_repo: InMemoryClassificationRecordRepository
+    # Exposes the same coordinator instance PipelineService holds internally, so
+    # tests can patch/spy its `ainvoke` without reaching into a private attribute.
+    coordinator: CompiledStateGraph  # type: ignore[type-arg]
 
 
 def _build_service(tmp_path: Path) -> _ServiceUnderTest:
@@ -196,8 +202,79 @@ def _build_service(tmp_path: Path) -> _ServiceUnderTest:
         document_kb_repo=InMemoryDocumentKbRepository(),
     )
     return _ServiceUnderTest(
-        service=service, job_repo=job_repo, classification_record_repo=classification_record_repo
+        service=service,
+        job_repo=job_repo,
+        classification_record_repo=classification_record_repo,
+        coordinator=coordinator,
     )
+
+
+class TestPipelineServiceGpuMemory:
+    async def test_gpu_models_are_released_even_when_a_node_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        EXPECTED_UNLOAD_CALL_COUNT = 2  # once at job start, once in `finally`
+
+        under_test = _build_service(tmp_path)
+
+        monkeypatch.setattr(
+            under_test.coordinator, "ainvoke", AsyncMock(side_effect=RuntimeError("node exploded"))
+        )
+
+        calls: list[str] = []
+        monkeypatch.setattr(
+            "classiflow.services.pipeline.service.unload_slm", lambda: calls.append("slm")
+        )
+        monkeypatch.setattr(
+            "classiflow.services.pipeline.service.unload_bert", lambda: calls.append("bert")
+        )
+        monkeypatch.setattr(
+            "classiflow.services.pipeline.service.unload_chat_llm", lambda: calls.append("chat")
+        )
+        monkeypatch.setattr(
+            "classiflow.services.pipeline.service.unload_kb_embedder",
+            lambda: calls.append("kb_embedder"),
+        )
+        monkeypatch.setattr(
+            "classiflow.services.pipeline.service.unload_duplicate_control_embedder",
+            lambda: calls.append("duplicate_control_embedder"),
+        )
+
+        background_tasks = BackgroundTasks()
+        await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
+        (run_task,) = background_tasks.tasks
+        with pytest.raises(RuntimeError):
+            await run_task()
+
+        # Called once at start (nothing to evict yet, still a real call) and once in `finally`.
+        assert calls.count("slm") == EXPECTED_UNLOAD_CALL_COUNT
+        assert calls.count("bert") == EXPECTED_UNLOAD_CALL_COUNT
+        assert calls.count("chat") == EXPECTED_UNLOAD_CALL_COUNT
+        assert calls.count("kb_embedder") == EXPECTED_UNLOAD_CALL_COUNT
+        assert calls.count("duplicate_control_embedder") == EXPECTED_UNLOAD_CALL_COUNT
+
+    async def test_is_pipeline_busy_is_true_only_while_a_job_runs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        under_test = _build_service(tmp_path)
+        assert is_pipeline_busy() is False
+
+        observed: list[bool] = []
+        original_ainvoke = under_test.coordinator.ainvoke
+
+        async def _spy_ainvoke(*args: object, **kwargs: object) -> object:
+            observed.append(is_pipeline_busy())
+            return await original_ainvoke(*args, **kwargs)
+
+        monkeypatch.setattr(under_test.coordinator, "ainvoke", _spy_ainvoke)
+
+        background_tasks = BackgroundTasks()
+        await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
+        for task in background_tasks.tasks:
+            await task()
+
+        assert observed == [True]
+        assert is_pipeline_busy() is False
 
 
 class TestPipelineServiceClassification:

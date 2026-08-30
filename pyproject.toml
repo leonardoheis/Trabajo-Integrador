@@ -210,6 +210,9 @@ ignore_missing_imports = true
 
 [tool.codespell]
 skip = "src/classiflow/playground"
+# Legitimate Spanish words that collide with codespell's English typo dictionary --
+# this codebase's user-facing prompts and copy are in Spanish.
+ignore-words-list = "varios,te"  # codespell:ignore
 
 #########################
 # Bandit

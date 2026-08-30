@@ -13,6 +13,7 @@ from classiflow.database.repositories.hash import IHashRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.config_duplicate import DuplicateControlConfig, get_duplicate_control_config
 from classiflow.ingesta.domain import DuplicateControlResult, JobContext
+from classiflow.model_cache import evict_lru_cache
 from classiflow.pipeline.base import BaseNode
 from classiflow.services.audit.service import AuditService
 from classiflow.settings import Settings
@@ -47,6 +48,12 @@ def get_sentence_model() -> SentenceTransformer:
     return SentenceTransformer(  # type: ignore[no-any-return]
         _MODEL_NAME, cache_folder=Settings.embedding_model_path, local_files_only=True
     )
+
+
+def unload_duplicate_control_embedder() -> None:
+    # The sentence transformer is smaller than LLMs (~90MB) but stays resident
+    # for the process lifetime if not freed, shrinking available VRAM on multi-job runs.
+    evict_lru_cache(get_sentence_model)
 
 
 def make_embed_fn(model: SentenceTransformer) -> EmbedFn:

@@ -8,6 +8,7 @@ from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
 from classiflow.ingesta.llm_provider import n_gpu_layers
 from classiflow.knowledge.llm.chat_llm import ChatLlm
 from classiflow.knowledge.llm.exceptions import ChatLlmError
+from classiflow.model_cache import evict_lru_cache
 from classiflow.settings import Settings
 
 _PROVIDER = "llama"
@@ -31,6 +32,12 @@ def get_chat_llm(model_path: str, n_ctx: int) -> Llama:
         raise ModelNotFoundError(path=model_path) from exc
     except Exception as exc:
         raise ModelLoadError(path=model_path, cause=str(exc)) from exc
+
+
+def unload_chat_llm() -> None:
+    # Same reasoning as ingesta.llm_provider.unload_slm(): drop the lru_cache's reference
+    # so gc can collect the Llama instance and its __del__ frees the GGUF's CUDA context.
+    evict_lru_cache(get_chat_llm)
 
 
 class LlamaCppChatLlm(ChatLlm):

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from http import HTTPStatus
@@ -32,7 +33,9 @@ from classiflow.domain.repositories.document_kb import IDocumentKbRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
 from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.domain.chat import ChatQuery, SourceRef
-from classiflow.services.pipeline.service import PipelineService
+from classiflow.knowledge.llm.llama import get_chat_llm
+from classiflow.services.pipeline.service import PipelineService, is_pipeline_busy
+from classiflow.settings import Settings
 
 router = APIRouter(
     prefix="/knowledge", tags=["knowledge"], dependencies=[Depends(get_current_user)]
@@ -76,6 +79,13 @@ async def chat_stream(
         yield _sse("done", {})
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+@router.post("/chat/warmup", status_code=HTTPStatus.NO_CONTENT)
+async def chat_warmup() -> None:
+    if is_pipeline_busy():
+        return
+    await asyncio.to_thread(get_chat_llm, Settings.chat_model_path, Settings.chat_model_n_ctx)
 
 
 @router.post("/synchronize-kb", status_code=HTTPStatus.OK)

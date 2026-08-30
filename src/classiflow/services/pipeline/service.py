@@ -30,8 +30,11 @@ from classiflow.ingesta.domain import (
     JobState,
 )
 from classiflow.ingesta.llm_provider import unload_slm
+from classiflow.ingesta.nodes.node4_duplicate_control import unload_duplicate_control_embedder
+from classiflow.knowledge.embeddings.embedder import unload_kb_embedder
 from classiflow.knowledge.exceptions import KnowledgeError
 from classiflow.knowledge.indexing.indexer import IndexerService, IndexResult
+from classiflow.knowledge.llm.llama import unload_chat_llm
 from classiflow.storage.document_storage import IDocumentStorage
 
 if TYPE_CHECKING:
@@ -53,6 +56,40 @@ _StepResult = (
     | ContentValidationResult
     | DuplicateControlResult
 )
+
+
+class _JobsInFlight:
+    """Mutable box around the running-job count.
+
+    A plain module-level int would need `global` to mutate (PLW0603); mutating an
+    attribute on a single shared instance instead avoids rebinding the module name.
+    """
+
+    def __init__(self) -> None:
+        self.count = 0
+
+
+_jobs_in_flight = _JobsInFlight()
+
+
+def _begin_job() -> None:
+    _jobs_in_flight.count += 1
+
+
+def _end_job() -> None:
+    _jobs_in_flight.count -= 1
+
+
+def is_pipeline_busy() -> bool:
+    return _jobs_in_flight.count > 0
+
+
+def _release_gpu_models() -> None:
+    unload_slm()
+    unload_bert()
+    unload_chat_llm()
+    unload_kb_embedder()
+    unload_duplicate_control_embedder()
 
 
 def _build_document_kb(indexed: IndexResult, record: EnrichedRecord, sha256: str) -> DocumentKb:
@@ -121,51 +158,66 @@ class PipelineService:
 
     async def _run(self, job_id: str, filename: str, file_bytes: bytes) -> None:
         async with self._job_semaphore:
-            await self._job_repo.update_status(job_id, "processing")
-            # _run is a FastAPI BackgroundTask -- it keeps writing through this same
-            # DB session long after the request that resolved it has already returned
-            # its response. Every repo here only flush()es (see IJobRepository.commit's
-            # docstring); without an explicit commit, nothing becomes visible to any
-            # other request's session until get_session's teardown fires at the end of
-            # this whole background task -- i.e. the job silently vanishes from
-            # GET /pipeline/jobs?status=running for its entire multi-minute run instead
-            # of ever showing as "processing". Committing at each phase boundary below
-            # makes the job (and every audit record a node wrote via the same shared
-            # session) visible incrementally instead of all at once at the very end.
-            await self._job_repo.commit()
-            await self._broadcaster.emit(
-                NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.PROCESSING)
-            )
-            initial: JobState = {"job_id": job_id, "filename": filename, "file_bytes": file_bytes}
-            final_state = cast("JobState", await self._coordinator.ainvoke(initial))
-
-            failed_at_node = await self._persist_steps(job_id, final_state)
-            await self._finalize_job(job_id, final_state, failed_at_node)
-            await self._job_repo.commit()
-
-            # Gated on extraction (not final_status): jobs that later land in review
-            # still need their bytes staged so Stage 4's Routing can move the real file
-            # later.
-            if final_state.get("extraction") is not None:
-                await self._document_storage.save_staged(job_id, filename, file_bytes)
-
-            if final_state.get("final_status") == "accepted":
-                # Stage 1 passing doesn't mean the job is done -- enrichment and
-                # classification still run. _finalize_job left status at "processing"
-                # (not "accepted") for exactly this reason: a terminal status here would
-                # make GET /pipeline/jobs?status=running drop the job from the Processing
-                # page while it's still mid-pipeline.
-                enriched_record = await self._run_enrichment(job_id, filename, final_state)
+            _begin_job()
+            try:
+                # Evicted here too (not just in `finally`): a chat warmup that ran
+                # just before this job started may have left its own GPU models
+                # resident, and this job's nodes need that VRAM back before they load
+                # theirs.
+                _release_gpu_models()
+                await self._job_repo.update_status(job_id, "processing")
+                # _run is a FastAPI BackgroundTask -- it keeps writing through this same
+                # DB session long after the request that resolved it has already returned
+                # its response. Every repo here only flush()es (see IJobRepository.commit's
+                # docstring); without an explicit commit, nothing becomes visible to any
+                # other request's session until get_session's teardown fires at the end of
+                # this whole background task -- i.e. the job silently vanishes from
+                # GET /pipeline/jobs?status=running for its entire multi-minute run instead
+                # of ever showing as "processing". Committing at each phase boundary below
+                # makes the job (and every audit record a node wrote via the same shared
+                # session) visible incrementally instead of all at once at the very end.
                 await self._job_repo.commit()
-                if enriched_record is not None:
-                    await self._run_classification(job_id, filename, enriched_record)
-                    await self._job_repo.update_status(job_id, "classified")
-                    await self._job_repo.commit()
+                await self._broadcaster.emit(
+                    NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.PROCESSING)
+                )
+                initial: JobState = {
+                    "job_id": job_id,
+                    "filename": filename,
+                    "file_bytes": file_bytes,
+                }
+                final_state = cast("JobState", await self._coordinator.ainvoke(initial))
 
-            unload_slm()
-            # BETO stays on CUDA for the process lifetime otherwise, shrinking the
-            # budget below what the next job's GGUF load needs on an 8GB card.
-            unload_bert()
+                failed_at_node = await self._persist_steps(job_id, final_state)
+                await self._finalize_job(job_id, final_state, failed_at_node)
+                await self._job_repo.commit()
+
+                # Gated on extraction (not final_status): jobs that later land in review
+                # still need their bytes staged so Stage 4's Routing can move the real file
+                # later.
+                if final_state.get("extraction") is not None:
+                    await self._document_storage.save_staged(job_id, filename, file_bytes)
+
+                if final_state.get("final_status") == "accepted":
+                    # Stage 1 passing doesn't mean the job is done -- enrichment and
+                    # classification still run. _finalize_job left status at "processing"
+                    # (not "accepted") for exactly this reason: a terminal status here would
+                    # make GET /pipeline/jobs?status=running drop the job from the Processing
+                    # page while it's still mid-pipeline.
+                    enriched_record = await self._run_enrichment(job_id, filename, final_state)
+                    await self._job_repo.commit()
+                    if enriched_record is not None:
+                        await self._run_classification(job_id, filename, enriched_record)
+                        await self._job_repo.update_status(job_id, "classified")
+                        await self._job_repo.commit()
+            finally:
+                # Guaranteed even when a node raises mid-pipeline -- without this,
+                # a crashed job would leave its GPU models resident, denying VRAM
+                # to every job (and chat warmup) that runs afterward.
+                # _end_job() runs first: it's a simple counter decrement that cannot
+                # raise, so the in-flight counter is always released even if one of
+                # the unload calls inside _release_gpu_models() raises.
+                _end_job()
+                _release_gpu_models()
 
             await self._broadcaster.emit(
                 NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.DONE)

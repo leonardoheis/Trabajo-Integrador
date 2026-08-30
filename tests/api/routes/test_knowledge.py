@@ -11,6 +11,7 @@ pytestmark = pytest.mark.usefixtures("_jwt_secret")
 
 _OK = 200
 _UNAUTHORIZED = 401
+_NO_CONTENT = 204
 
 _MINIMAL_PDF = (
     b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n"
@@ -197,3 +198,41 @@ class TestDocumentKbEndpoint:
         assert body is not None
         assert body["filename"] == "kb-detail.pdf"
         assert isinstance(body["chunkCount"], int)
+
+
+class TestChatWarmupEndpoint:
+    def test_requires_authentication(self, client: TestClient) -> None:
+        response = client.post("/knowledge/chat/warmup")
+
+        assert response.status_code == _UNAUTHORIZED
+
+    def test_loads_the_chat_model_when_idle(
+        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[tuple[str, int]] = []
+        monkeypatch.setattr(
+            "classiflow.api.routes.knowledge.endpoints.get_chat_llm",
+            lambda model_path, n_ctx: calls.append((model_path, n_ctx)),
+        )
+
+        response = client.post("/knowledge/chat/warmup", headers=auth_headers)
+
+        assert response.status_code == _NO_CONTENT
+        assert len(calls) == 1
+
+    def test_skips_silently_when_a_job_is_running(
+        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[tuple[str, int]] = []
+        monkeypatch.setattr(
+            "classiflow.api.routes.knowledge.endpoints.get_chat_llm",
+            lambda model_path, n_ctx: calls.append((model_path, n_ctx)),
+        )
+        monkeypatch.setattr(
+            "classiflow.api.routes.knowledge.endpoints.is_pipeline_busy", lambda: True
+        )
+
+        response = client.post("/knowledge/chat/warmup", headers=auth_headers)
+
+        assert response.status_code == _NO_CONTENT
+        assert calls == []
