@@ -30,6 +30,7 @@ const COLUMNS: Column<ClassificationSummary>[] = [
       ),
   },
   { header: "Judged", render: (row) => (row.judgedByLlm ? "Yes" : "No") },
+  { header: "Indexed", render: (row) => (row.indexed ? "Yes" : "No") },
   {
     header: "Created",
     sortKey: "createdAt",
