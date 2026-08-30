@@ -1,13 +1,13 @@
 import asyncio
 from logging.config import fileConfig
 
-import classiflow.database.models  # registers all ORM models
-from classiflow.database.base import Base
-from classiflow.settings import Settings
 from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+import classiflow.database.models  # registers all ORM models
 from alembic import context
+from classiflow.database.base import Base
+from classiflow.settings import Settings
 
 config = context.config
 if config.config_file_name is not None:

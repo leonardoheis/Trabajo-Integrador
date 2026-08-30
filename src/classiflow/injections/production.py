@@ -21,6 +21,12 @@ from classiflow.ingesta.nodes.node4_duplicate_control import (
     make_embed_fn,
 )
 from classiflow.ingesta.prompts import build_content_chain, build_format_chain
+from classiflow.knowledge.chat.service import ChatService
+from classiflow.knowledge.chunking.chunker import ChunkerService
+from classiflow.knowledge.embeddings.embedder import SentenceTransformerEmbedder
+from classiflow.knowledge.llm.llama import LlamaCppChatLlm
+from classiflow.knowledge.retrieval.retriever import RetrieverService
+from classiflow.knowledge.vectordb.chroma_store import ChromaVectorStore
 from classiflow.services.auth.service import AuthService
 from classiflow.settings import Settings
 from classiflow.storage.document_storage import LocalDiskStorage
@@ -109,6 +115,29 @@ class Container(containers.DeclarativeContainer):
     classification_chain = providers.Callable(build_classification_chain, classification_llm)
     judge_llm = providers.Callable(get_llm_langchain, Settings.judge_model_path)
     judge_chain = providers.Callable(build_judge_chain, judge_llm)
+
+    # Knowledge base (stage 5). All Singletons: the embedder holds a loaded
+    # SentenceTransformer and the Chroma client owns an on-disk handle -- rebuilding
+    # either per request would be wasteful. ThreadSafeSingleton for the embedder
+    # specifically, since concurrent pipeline jobs can race on its first construction
+    # (same reasoning as ocr_reader).
+    embedder = providers.ThreadSafeSingleton(SentenceTransformerEmbedder)
+    vector_store = providers.Singleton(ChromaVectorStore)
+    chunker = providers.Factory(ChunkerService)
+
+    # Only one chat provider: local GGUF via llama.cpp.
+    chat_llm = providers.Singleton(LlamaCppChatLlm)
+
+    retriever = providers.Factory(
+        RetrieverService,
+        embedder=embedder,
+        vector_store=vector_store,
+    )
+    chat_service = providers.Factory(
+        ChatService,
+        retriever=retriever,
+        chat_llm=chat_llm,
+    )
 
 
 @cache

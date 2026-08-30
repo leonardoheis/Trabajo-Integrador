@@ -1,7 +1,8 @@
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from classiflow.database.models import EnrichedRecord
+from classiflow.classification.domain.review_route import ReviewRoute
+from classiflow.database.models import ClassificationRecord, DocumentKb, EnrichedRecord
 
 
 class SqlEnrichedRecordRepository:
@@ -17,6 +18,24 @@ class SqlEnrichedRecordRepository:
             select(EnrichedRecord).where(EnrichedRecord.job_id == job_id)
         )
         return result.scalar_one_or_none()
+
+    async def find_unindexed(self) -> list[EnrichedRecord]:
+        # Only documents whose classification has actually been accepted (either
+        # automatically or via a human decision) are eligible for the knowledge base --
+        # the inner join to ClassificationRecord also excludes records with no
+        # classification yet, since there's nothing to join against.
+        stmt = (
+            select(EnrichedRecord)
+            .join(ClassificationRecord, ClassificationRecord.enriched_id == EnrichedRecord.id)
+            .where(
+                ClassificationRecord.review_route == ReviewRoute.ACCEPT,
+                ~exists(
+                    select(DocumentKb.id).where(DocumentKb.enriched_record_id == EnrichedRecord.id)
+                ),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
 
 
 class InMemoryEnrichedRecordRepository:
@@ -36,3 +55,11 @@ class InMemoryEnrichedRecordRepository:
 
     async def find_by_job_id(self, job_id: str) -> EnrichedRecord | None:
         return self._records.get(job_id)
+
+    async def find_unindexed(self) -> list[EnrichedRecord]:
+        # This double has no visibility into document_kb or classification_records
+        # rows, so it cannot model either join the SQL implementation does -- it
+        # simply returns every saved record. Real "already indexed" and "not yet
+        # accepted" exclusion is covered by SQLite-backed tests against
+        # SqlEnrichedRecordRepository instead.
+        return list(self._records.values())

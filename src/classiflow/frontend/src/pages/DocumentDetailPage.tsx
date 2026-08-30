@@ -1,15 +1,16 @@
 import { Fragment, useState } from "react";
 import { useParams } from "react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchJobDetail, documentFileUrl } from "../api/documents";
+import { fetchDocumentKb, indexDocument } from "../api/knowledge";
 import type { TimelineEntry } from "../api/jobs";
 import PdfViewer from "../components/PdfViewer";
 import ReclassifyPanel from "../components/ReclassifyPanel";
 import StepTimeline from "../components/StepTimeline";
 
-type Tab = "extraction" | "enrichment" | "classification" | "audit";
+type Tab = "extraction" | "enrichment" | "classification" | "knowledge" | "audit";
 
-const TABS: Tab[] = ["extraction", "enrichment", "classification", "audit"];
+const TABS: Tab[] = ["extraction", "enrichment", "classification", "knowledge", "audit"];
 
 function ConfidenceBar({ value }: { value: number }) {
   return (
@@ -69,6 +70,17 @@ export default function DocumentDetailPage() {
     queryKey: ["job-detail", jobId],
     queryFn: () => fetchJobDetail(jobId!),
     enabled: !!jobId,
+  });
+
+  const { data: kbData } = useQuery({
+    queryKey: ["document-kb", jobId],
+    queryFn: () => fetchDocumentKb(jobId!),
+    enabled: !!jobId,
+  });
+
+  const indexMutation = useMutation({
+    mutationFn: () => indexDocument(jobId!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["document-kb", jobId] }),
   });
 
   if (!data) {
@@ -229,6 +241,51 @@ export default function DocumentDetailPage() {
         {tab === "classification" && !data.classification && (
           <p className="text-sm text-[var(--color-text-muted)]">No classification data</p>
         )}
+
+        {tab === "knowledge" && kbData?.documentKb && (
+          <KeyValueGrid
+            pairs={[
+              ["Filename", kbData.documentKb.filename],
+              [
+                "SHA-256",
+                <span key="sha" className="font-mono text-xs">
+                  {kbData.documentKb.sha256}
+                </span>,
+              ],
+              ["Doc type", kbData.documentKb.docType ?? "—"],
+              ["Number", kbData.documentKb.number ?? "—"],
+              ["Year", kbData.documentKb.year ?? "—"],
+              ["Chunk count", String(kbData.documentKb.chunkCount)],
+              ["Indexed at", new Date(kbData.documentKb.indexedAt).toLocaleString()],
+            ]}
+          />
+        )}
+        {tab === "knowledge" &&
+          !kbData?.documentKb &&
+          data.classification?.reviewRoute === "accept" && (
+            <div>
+              <p className="mb-3 text-sm text-[var(--color-text-muted)]">Not indexed yet</p>
+              <button
+                onClick={() => indexMutation.mutate()}
+                disabled={indexMutation.isPending}
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm font-semibold text-[var(--color-accent)] disabled:opacity-50"
+              >
+                {indexMutation.isPending ? "Indexing…" : "Index into Knowledge Base"}
+              </button>
+              {indexMutation.isError && (
+                <p className="mt-2 text-sm text-[var(--color-danger)]">
+                  Indexing failed. Try again.
+                </p>
+              )}
+            </div>
+          )}
+        {tab === "knowledge" &&
+          !kbData?.documentKb &&
+          data.classification?.reviewRoute !== "accept" && (
+            <p className="text-sm text-[var(--color-text-muted)]">
+              Document must be accepted before it can be indexed
+            </p>
+          )}
 
         {tab === "audit" && <StepTimeline entries={auditEntries} mode="expanded" />}
       </div>

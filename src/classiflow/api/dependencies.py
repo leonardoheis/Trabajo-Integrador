@@ -24,6 +24,7 @@ from classiflow.database.repositories.audit import SqlAuditRepository
 from classiflow.database.repositories.classification_record import (
     SqlClassificationRecordRepository,
 )
+from classiflow.database.repositories.document_kb import SqlDocumentKbRepository
 from classiflow.database.repositories.document_steps import SqlDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import SqlEnrichedRecordRepository
 from classiflow.database.repositories.hash import IHashRepository, SqlHashRepository
@@ -31,6 +32,7 @@ from classiflow.database.repositories.human_decision import SqlHumanDecisionRepo
 from classiflow.database.repositories.job import SqlJobRepository
 from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
+from classiflow.domain.repositories.document_kb import IDocumentKbRepository
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
 from classiflow.domain.repositories.human_decision import IHumanDecisionRepository
@@ -51,6 +53,13 @@ from classiflow.ingesta.nodes import (
 )
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.injections.production import Container
+from classiflow.knowledge.chat.service import ChatService
+from classiflow.knowledge.chunking.chunker import ChunkerService
+from classiflow.knowledge.embeddings.embedder import SentenceTransformerEmbedder
+from classiflow.knowledge.indexing.indexer import IndexerService
+from classiflow.knowledge.llm.chat_llm import ChatLlm
+from classiflow.knowledge.retrieval.retriever import RetrieverService
+from classiflow.knowledge.vectordb.vector_store import VectorStore
 from classiflow.services.audit.repository import IAuditRepository
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
@@ -127,12 +136,41 @@ def get_hash_repo(session: DbSession) -> IHashRepository:
     return SqlHashRepository(session)
 
 
+def get_document_kb_repo(session: DbSession) -> IDocumentKbRepository:
+    return SqlDocumentKbRepository(session)
+
+
 def get_audit_repo(session: DbSession) -> IAuditRepository:
     return SqlAuditRepository(session)
 
 
 def get_audit_service(session: DbSession) -> AuditService:
     return AuditService(SqlAuditRepository(session))
+
+
+@inject
+def get_indexer(
+    chunker: Annotated[ChunkerService, Depends(Provide[Container.chunker])],
+    embedder: Annotated[SentenceTransformerEmbedder, Depends(Provide[Container.embedder])],
+    vector_store: Annotated[VectorStore, Depends(Provide[Container.vector_store])],
+) -> IndexerService:
+    return IndexerService(chunker=chunker, embedder=embedder, vector_store=vector_store)
+
+
+@inject
+def get_retriever(
+    embedder: Annotated[SentenceTransformerEmbedder, Depends(Provide[Container.embedder])],
+    vector_store: Annotated[VectorStore, Depends(Provide[Container.vector_store])],
+) -> RetrieverService:
+    return RetrieverService(embedder=embedder, vector_store=vector_store)
+
+
+@inject
+def get_chat_service(
+    retriever: Annotated[RetrieverService, Depends(get_retriever)],
+    chat_llm: Annotated[ChatLlm, Depends(Provide[Container.chat_llm])],
+) -> ChatService:
+    return ChatService(retriever=retriever, chat_llm=chat_llm)
 
 
 @inject
@@ -360,6 +398,8 @@ def get_pipeline_service(
         CompiledStateGraph, Depends(get_classification_coordinator)
     ],
     job_semaphore: Annotated[asyncio.Semaphore, Depends(Provide[Container.job_semaphore])],
+    indexer: Annotated[IndexerService, Depends(get_indexer)],
+    document_kb_repo: Annotated[IDocumentKbRepository, Depends(get_document_kb_repo)],
 ) -> PipelineService:
     return PipelineService(
         job_repo=job_repo,
@@ -371,4 +411,6 @@ def get_pipeline_service(
         document_storage=document_storage,
         classification_coordinator=classification_coordinator,
         job_semaphore=job_semaphore,
+        indexer=indexer,
+        document_kb_repo=document_kb_repo,
     )

@@ -38,6 +38,8 @@ dependencies = [
     "torch>=2.7.1",
     # Not used directly -- pulled in transitively by easyocr (torchvision.transforms).
     "torchvision>=0.22.1",
+    # Knowledge base / chat (stage 5)
+    "chromadb>=0.5",
     "scipy>=1.14",
     "scikit-learn>=1.5",
     "transformers>=4.44",
@@ -102,7 +104,18 @@ exclude = ["src/classiflow/frontend"]
 line-length = 100
 target-version = "py310"
 extend-include = ["*.ipynb"]
-exclude = [".claude", "tasks", "alembic", "models", "src/classiflow/frontend"]
+exclude = [
+    ".claude",
+    "tasks",
+    "alembic",
+    "models",
+    # Excludes the JS/TS toolchain subdirs (React source, npm's dependency tree, build
+    # output), not the whole frontend/ folder -- runner.py there is real Python and
+    # should get the same checks as everything else in src/.
+    "src/classiflow/frontend/node_modules",
+    "src/classiflow/frontend/dist",
+    "src/classiflow/frontend/src",
+]
 
 fix = true
 preview = true
@@ -120,7 +133,6 @@ ignore = [
     "ANN401",
     "COM812",
     "ASYNC119", # false positive: standard FastAPI async generator dependency pattern
-    "S104",     # 0.0.0.0 binding is intentional for containerized deployment
     "S105",     # "bearer" is an OAuth2 spec string, not a hardcoded secret
     "EM101",    # field name strings in @dataclass exceptions are not message literals
 ]
@@ -129,14 +141,14 @@ ignore = [
 # Mirrors [tool.pylint.design] max-args below -- FastAPI's Depends()-per-dependency
 # style, and PipelineService's own growing set of injected collaborators (job_repo,
 # document_steps_repo, enriched_record_repo, broadcaster, coordinator,
-# enrichment_coordinator, document_storage, classification_coordinator,
-# job_semaphore), mean DI-composing functions/classes legitimately grow one param per
-# wired collaborator.
-max-args = 9
+# enrichment_coordinator, document_storage, classification_coordinator, job_semaphore,
+# indexer, document_kb_repo), mean DI-composing functions/classes legitimately grow one
+# param per wired collaborator.
+max-args = 11
 # Mirrors [tool.pylint.design] max-public-methods below -- _Settings (settings.py)
 # gets one read-only property per config field by design; each new Settings.* value
 # legitimately adds one property, not unrelated behavior accumulating on one class.
-max-public-methods = 24
+max-public-methods = 34
 
 [tool.ruff.format]
 # Set Ruff to imitate Black
@@ -152,6 +164,12 @@ line-ending = "auto"
     "PLR6301", # pytest class methods don't need to use self
     "PLR0914", # test fixtures wiring many nodes/repos legitimately need more locals
 ]
+# Scoped to this one file (not the project-wide `ignore` list above) so any other
+# subprocess call added elsewhere in the codebase still gets flagged and reviewed on
+# its own merits. This file's only call resolves the executable via shutil.which,
+# never passes shell=True, and only ever runs a fixed, hardcoded argument list --
+# nothing here is untrusted input.
+"src/classiflow/frontend/runner.py" = ["S404", "S603"]
 
 #########################
 # MyPy
@@ -163,7 +181,12 @@ follow_imports = "normal"
 python_version = "3.10"
 mypy_path = ["src"]
 plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
-exclude = ["src/classiflow/playground/", "src/classiflow/frontend/"]
+exclude = [
+    "src/classiflow/playground/",
+    # JS/TS toolchain subdirs only -- not the whole frontend/ folder, since runner.py
+    # there is real Python and should get the same checks as everything else in src/.
+    "src/classiflow/frontend/(node_modules|dist|src)/",
+]
 
 disallow_any_unimported = true
 disallow_any_generics = true
@@ -178,7 +201,7 @@ warn_unused_configs = true
 check_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers", "markitdown", "pymupdf", "easyocr", "scipy.*", "sklearn.*", "transformers"]
+module = ["google.*", "filetype", "llama_cpp", "faiss", "sentence_transformers", "markitdown", "pymupdf", "easyocr", "chromadb", "chromadb.*", "scipy.*", "sklearn.*", "transformers"]
 ignore_missing_imports = true
 
 #########################
@@ -272,7 +295,7 @@ valid-metaclass-classmethod-first-arg = ["mcs"]
 bad-functions = ["map", "filter"]
 
 [tool.pylint.design]
-max-args = 9
+max-args = 11
 max-attributes = 7
 max-bool-expr = 5
 max-branches = 12
@@ -282,7 +305,7 @@ max-parents = 7
 # _Settings gets one read-only property per config field (slm_max_tokens, slm_n_ctx,
 # ...) by design -- each new Settings.* field legitimately adds one, this isn't
 # accumulating unrelated behavior on one class.
-max-public-methods = 24
+max-public-methods = 34
 max-returns = 6
 max-statements = 50
 
@@ -386,7 +409,9 @@ typecheck = "mypy src"
 test = "pytest tests"
 coverage = { shell = "pytest tests -v --override-ini=addopts= --log-level=CRITICAL --cov=. --cov-branch --cov-report=xml --cov-report=html --cov-report=term-missing:skip-covered --junitxml=tests/reports/pytest-report.xml" }
 check = ["lint", "typecheck", "coverage", "precommit-reloaded"]
-serve = "uvicorn classiflow.api.app:app --reload --port 8000"
+serve = "python -m classiflow"
+serve-api = { shell = "uvicorn classiflow.api.app:create_app --factory --reload --port 8000" }
+serve-ui = { shell = "npm run dev", cwd = "src/classiflow/frontend" }
 precommit = "uv run pre-commit run --all-files --verbose"
 precommit-reloaded = "uv run --all-groups pre-commit run --all-files"
 precommit-update = "uv run pre-commit run --hook-stage manual pre-commit-update"

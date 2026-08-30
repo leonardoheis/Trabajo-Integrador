@@ -42,8 +42,10 @@ def get_sentence_model() -> SentenceTransformer:
     # zero-config fallback, on every find_similarity()/add() call (once per document),
     # not just once at construction. Without the cache, that path would rebuild the
     # whole SentenceTransformer model every call.
+    # local_files_only: already cached under embedding_model_path, never fetched at
+    # request time.
     return SentenceTransformer(  # type: ignore[no-any-return]
-        _MODEL_NAME, cache_folder=Settings.embedding_model_path
+        _MODEL_NAME, cache_folder=Settings.embedding_model_path, local_files_only=True
     )
 
 

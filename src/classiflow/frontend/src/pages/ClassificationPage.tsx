@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { fetchJobsPage, type ClassificationSummary, type SortField } from "../api/documents";
+import { synchronizeKb, type SynchronizeKbResult } from "../api/knowledge";
 import DataTable, { type Column } from "../components/DataTable";
 import StatusBadge from "../components/StatusBadge";
 
@@ -49,6 +50,16 @@ export default function ClassificationPage() {
   const [sortField, setSortField] = useState<SortField | undefined>(undefined);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [syncResult, setSyncResult] = useState<SynchronizeKbResult | null>(null);
+
+  const syncMutation = useMutation({
+    mutationFn: synchronizeKb,
+    onSuccess: (result) => {
+      setSyncResult(result);
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+  });
 
   const { data } = useQuery({
     queryKey: ["jobs", label, page, pageSize, sortField, sortDir],
@@ -78,7 +89,7 @@ export default function ClassificationPage() {
   return (
     <div className="p-6">
       <h1 className="mb-6 text-xl font-bold text-[var(--color-text)]">Classification</h1>
-      <div className="mb-4">
+      <div className="mb-4 flex items-center">
         <input
           placeholder="Filter by label"
           value={label}
@@ -88,6 +99,18 @@ export default function ClassificationPage() {
           }}
           className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]"
         />
+        <button
+          onClick={() => syncMutation.mutate()}
+          disabled={syncMutation.isPending}
+          className="ml-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm font-semibold text-[var(--color-accent)] disabled:opacity-50"
+        >
+          {syncMutation.isPending ? "Syncing…" : "Sync Knowledge Base"}
+        </button>
+        {syncResult && (
+          <span className="ml-3 font-mono text-xs text-[var(--color-text-faint)]">
+            Indexed {syncResult.indexedJobIds.length}, skipped {syncResult.skippedCount}
+          </span>
+        )}
       </div>
       <DataTable
         columns={COLUMNS}

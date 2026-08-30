@@ -3,11 +3,13 @@ from typing import TYPE_CHECKING, cast
 
 from fastapi import BackgroundTasks
 
+from classiflow.database.repositories.document_kb import InMemoryDocumentKbRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.job import InMemoryJobRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.services.pipeline.service import PipelineService
+from tests.fakes import make_indexer
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -55,6 +57,8 @@ class TestPipelineServiceConcurrencyCap:
             document_storage=cast("IDocumentStorage", None),  # unused: extraction key absent
             classification_coordinator=cast("CompiledStateGraph", None),  # unused: not accepted
             job_semaphore=asyncio.Semaphore(_SEMAPHORE_CAP),
+            indexer=make_indexer(),  # unused: coordinator always rejects
+            document_kb_repo=InMemoryDocumentKbRepository(),  # unused: coordinator always rejects
         )
         background_tasks = BackgroundTasks()
         for i in range(_JOB_COUNT):

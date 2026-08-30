@@ -14,7 +14,7 @@ from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
 from classiflow.settings import Settings
 
 
-def _n_gpu_layers() -> int:
+def n_gpu_layers() -> int:
     # -1 offloads all layers to GPU. llama_supports_gpu_offload() only reflects whether
     # this build has a GPU backend compiled in, not whether one is actually present, so
     # it's paired with a live torch.cuda.is_available() check before trusting it.
@@ -118,7 +118,7 @@ def get_llm_langchain(model_path: str) -> BaseLLM:
         return ChatTemplatedLlamaCpp(
             model_path=model_path,
             n_ctx=Settings.slm_n_ctx,
-            n_gpu_layers=_n_gpu_layers(),
+            n_gpu_layers=n_gpu_layers(),
             max_tokens=Settings.slm_max_tokens,
             temperature=Settings.slm_temperature,
             top_p=Settings.slm_top_p,
