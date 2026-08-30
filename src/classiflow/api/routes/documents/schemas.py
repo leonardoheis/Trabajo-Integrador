@@ -14,6 +14,7 @@ class ClassificationSummary(BaseSchema):
     confidence: float
     judged_by_llm: bool
     created_at: datetime
+    indexed: bool
 
 
 class JobsPage(BaseSchema):

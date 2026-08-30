@@ -3,7 +3,7 @@ from http import HTTPStatus
 import pytest
 from fastapi.testclient import TestClient
 
-from classiflow.database.models import ClassificationRecord, EnrichedRecord, Job
+from classiflow.database.models import ClassificationRecord, DocumentKb, EnrichedRecord, Job
 from classiflow.injections.test import TestContainer
 
 pytestmark = pytest.mark.usefixtures("_jwt_secret")
@@ -155,6 +155,30 @@ class TestJobsListEndpoint:
         assert response.status_code == HTTPStatus.OK
         filenames = [i["filename"] for i in response.json()["items"]]
         assert filenames == ["high.pdf", "low.pdf"]
+
+    async def test_marks_indexed_documents(
+        self,
+        client: TestClient,
+        auth_headers: dict[str, str],
+        test_container: TestContainer,
+    ) -> None:
+        await _seed_classified_job(test_container, "job-indexed-1", "indexed-me.pdf")
+        await _seed_classified_job(test_container, "job-not-indexed-1", "not-indexed-me.pdf")
+        await test_container.document_kb_repo().save(
+            DocumentKb(
+                job_id="job-indexed-1",
+                sha256="a" * 64,
+                filename="indexed-me.pdf",
+                chunk_count=3,
+            )
+        )
+
+        response = client.get("/jobs", headers=auth_headers)
+
+        assert response.status_code == HTTPStatus.OK
+        items = {i["filename"]: i for i in response.json()["items"]}
+        assert items["indexed-me.pdf"]["indexed"] is True
+        assert items["not-indexed-me.pdf"]["indexed"] is False
 
 
 class TestJobDetailEndpoint:

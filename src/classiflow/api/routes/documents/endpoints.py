@@ -12,6 +12,7 @@ from classiflow.api.dependencies import (
     get_audit_repo,
     get_classification_record_repo,
     get_current_user,
+    get_document_kb_repo,
     get_enriched_record_repo,
     get_job_repo,
 )
@@ -25,6 +26,7 @@ from classiflow.api.routes.documents.schemas import (
     JobsPage,
 )
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
+from classiflow.domain.repositories.document_kb import IDocumentKbRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
 from classiflow.domain.repositories.job import IJobRepository
 from classiflow.injections.production import Container
@@ -59,6 +61,7 @@ async def list_completed_jobs(
     classification_repo: Annotated[
         IClassificationRecordRepository, Depends(get_classification_record_repo)
     ],
+    document_kb_repo: Annotated[IDocumentKbRepository, Depends(get_document_kb_repo)],
     label: str | None = None,
     review_route: Annotated[str | None, Query(alias="reviewRoute")] = None,
     page: int = 1,
@@ -76,6 +79,7 @@ async def list_completed_jobs(
             continue
         if review_route is not None and (record is None or record.review_route != review_route):
             continue
+        doc_kb = await document_kb_repo.find_by_job_id(job.job_id)
         summaries.append(
             ClassificationSummary(
                 job_id=job.job_id,
@@ -86,6 +90,7 @@ async def list_completed_jobs(
                 confidence=record.confidence if record else 0.0,
                 judged_by_llm=record.judged_by_llm if record else False,
                 created_at=job.created_at,
+                indexed=doc_kb is not None,
             )
         )
 
