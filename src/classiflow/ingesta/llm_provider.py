@@ -11,11 +11,10 @@ from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 from pydantic import Field
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
-from classiflow.observability import tracing_callbacks
 from classiflow.settings import Settings
 
 
-def _n_gpu_layers() -> int:
+def n_gpu_layers() -> int:
     # -1 offloads all layers to GPU. llama_supports_gpu_offload() only reflects whether
     # this build has a GPU backend compiled in, not whether one is actually present, so
     # it's paired with a live torch.cuda.is_available() check before trusting it.
@@ -112,20 +111,18 @@ def unload_slm() -> None:
 
 @lru_cache(maxsize=4)
 def get_llm_langchain(model_path: str) -> BaseLLM:
-    # Callbacks are resolved here rather than taken as a parameter -- this function is
-    # lru_cached on model_path alone, so a per-call callbacks argument would either be
-    # silently ignored on cache hits or force a separate cache entry (and a separate
-    # multi-GB GGUF load) per distinct callback list.
+    # No tracing callbacks passed here: weave registers its tracer globally via
+    # langchain's configure hook (see observability.init_tracing), which covers every
+    # runnable rather than just this LLM object.
     try:
         return ChatTemplatedLlamaCpp(
             model_path=model_path,
             n_ctx=Settings.slm_n_ctx,
-            n_gpu_layers=_n_gpu_layers(),
+            n_gpu_layers=n_gpu_layers(),
             max_tokens=Settings.slm_max_tokens,
             temperature=Settings.slm_temperature,
             top_p=Settings.slm_top_p,
             seed=Settings.slm_seed,
-            callbacks=tracing_callbacks() or None,
             verbose=False,
         )
     except FileNotFoundError as exc:

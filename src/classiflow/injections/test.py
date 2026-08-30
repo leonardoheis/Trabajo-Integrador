@@ -1,5 +1,6 @@
 import asyncio
 import tempfile
+from collections.abc import AsyncIterator
 
 import numpy as np
 import numpy.typing as npt
@@ -27,6 +28,7 @@ from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.classification_record import (
     InMemoryClassificationRecordRepository,
 )
+from classiflow.database.repositories.document_kb import InMemoryDocumentKbRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
@@ -52,6 +54,11 @@ from classiflow.ingesta.nodes import (
     FormatValidationNode,
 )
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
+from classiflow.knowledge.chat.service import ChatService
+from classiflow.knowledge.chunking.chunker import ChunkerService
+from classiflow.knowledge.indexing.indexer import IndexerService
+from classiflow.knowledge.retrieval.retriever import RetrieverService
+from classiflow.knowledge.vectordb.in_memory_store import InMemoryVectorStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.auth.service import AuthService
 from classiflow.services.job.service import JobService
@@ -74,6 +81,35 @@ def _test_mime_detector(file_bytes: bytes) -> str:
 
 def _test_embed(_text: str) -> npt.NDArray[np.float32]:
     return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+
+
+class _StubEmbedder:
+    """Deterministic 3-d embedding: no model download, no inference in tests."""
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [self.embed_query(text) for text in texts]
+
+    def embed_query(self, text: str) -> list[float]:  # noqa: PLR6301
+        lowered = text.lower()
+        return [
+            1.0 if "ordenanza" in lowered else 0.0,
+            1.0 if "presupuesto" in lowered else 0.0,
+            float(len(lowered) % 3) / 3.0,
+        ]
+
+
+class _StubChatLlm:
+    """Echoes a fixed Spanish answer, mirroring MockLlm's role for the SLM nodes.
+
+    Duck-typed like the sibling stubs: subclassing ChatLlm would force the unused
+    parameters to keep the base's names and trip ARG002.
+    """
+
+    def __init__(self, response: str = "Según los pasajes provistos, no hay datos.") -> None:
+        self._response = response
+
+    async def astream(self, _system: str, _user: str) -> AsyncIterator[str]:
+        yield self._response
 
 
 _TEST_ENTITY_RESPONSE = (
@@ -125,6 +161,27 @@ class TestContainer(containers.DeclarativeContainer):
     human_decision_repo = providers.Singleton(InMemoryHumanDecisionRepository)
     job_repo = providers.Singleton(InMemoryJobRepository)
     enriched_record_repo = providers.Singleton(InMemoryEnrichedRecordRepository)
+    document_kb_repo = providers.Singleton(InMemoryDocumentKbRepository)
+    vector_store = providers.Singleton(InMemoryVectorStore)
+    embedder = providers.Singleton(_StubEmbedder)
+    chat_llm = providers.Singleton(_StubChatLlm)
+    chunker = providers.Factory(ChunkerService)
+    indexer = providers.Factory(
+        IndexerService,
+        chunker=chunker,
+        embedder=embedder,
+        vector_store=vector_store,
+    )
+    retriever = providers.Factory(
+        RetrieverService,
+        embedder=embedder,
+        vector_store=vector_store,
+    )
+    chat_service = providers.Factory(
+        ChatService,
+        retriever=retriever,
+        chat_llm=chat_llm,
+    )
     document_storage = providers.Singleton(LocalDiskStorage, root=_TEST_STORAGE_ROOT)
     entity_extraction_chain = providers.Singleton(_test_entity_chain)
     classification_record_repo = providers.Singleton(InMemoryClassificationRecordRepository)
@@ -263,4 +320,6 @@ class TestContainer(containers.DeclarativeContainer):
         document_storage=document_storage,
         classification_coordinator=classification_coordinator,
         job_semaphore=job_semaphore,
+        indexer=indexer,
+        document_kb_repo=document_kb_repo,
     )

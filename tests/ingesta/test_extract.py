@@ -1,5 +1,7 @@
 from collections.abc import Callable
 
+import pymupdf
+
 from classiflow.ingesta.config_extraction import ExtractionConfig
 from classiflow.ingesta.extract import TextExtractor
 from classiflow.ingesta.extractors import ExtractorBase, MarkItDownError, OcrError
@@ -98,4 +100,46 @@ def test_thin_but_usable_markitdown_text_survives_ocr_failure() -> None:
 
     result = TextExtractor(chain, _CONFIG)(b"%PDF-1.4 fake", "partial.pdf")
     assert result.text == thin_but_usable
+    assert result.extractor_used == "markitdown"
+
+
+def _pdf_with_image_only_page() -> bytes:
+    # Page 0: image, no text layer (a scan). Page 1: enough text to clear both the
+    # per-page and document-total thresholds -- so only the per-page rule can fire.
+    doc = pymupdf.open()  # type: ignore[no-untyped-call]
+    page = doc.new_page()
+    png = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 8, 8), 0).tobytes("png")
+    page.insert_image(pymupdf.Rect(0, 0, 100, 100), stream=png)
+    doc.new_page().insert_text((72, 72), "x" * _CONFIG.min_text_for_ocr)
+    return bytes(doc.tobytes())
+
+
+def _pdf_all_text_pages() -> bytes:
+    doc = pymupdf.open()  # type: ignore[no-untyped-call]
+    doc.new_page().insert_text((72, 72), "x" * _CONFIG.min_text_for_ocr)
+    return bytes(doc.tobytes())
+
+
+def test_image_only_page_forces_ocr_despite_sufficient_total_text() -> None:
+    chain = [
+        _StubExtractor("markitdown", lambda _b, _f: _LONG_TEXT),
+        _StubExtractor("ocr", lambda _b, _f: _USABLE_OCR_TEXT),
+    ]
+
+    result = TextExtractor(chain, _CONFIG)(_pdf_with_image_only_page(), "scan.pdf")
+    assert result.extractor_used == "ocr"
+    assert result.text == _USABLE_OCR_TEXT
+
+
+def test_all_text_pages_do_not_force_ocr() -> None:
+    def _fail_if_called(_file_bytes: bytes, _filename: str) -> str:
+        msg = "OCR must not be called"
+        raise AssertionError(msg)
+
+    chain = [
+        _StubExtractor("markitdown", lambda _b, _f: _LONG_TEXT),
+        _StubExtractor("ocr", _fail_if_called),
+    ]
+
+    result = TextExtractor(chain, _CONFIG)(_pdf_all_text_pages(), "digital.pdf")
     assert result.extractor_used == "markitdown"

@@ -28,7 +28,7 @@ _JUDGE_MODEL = str(_MODELS_DIR / "gemma-4-E4B-it-Q4_K_M.gguf")
 
 class _Settings(BaseSettings):
     API_PORT: int = 8000
-    HOST: str = "0.0.0.0"  # nosec
+    HOST: list[str] = ["127.0.0.1", "localhost"]  # nosec
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -77,6 +77,23 @@ class _Settings(BaseSettings):
     # KV-cache cost (roughly linear in n_ctx).
     SLM_N_CTX: int = int(os.getenv("SLM_N_CTX", "4096"))
 
+    # Knowledge base / chat (stage 5)
+    CHROMA_PATH: str = os.getenv("CHROMA_PATH", str(_PROJECT_ROOT / "data" / "chroma"))
+    CHROMA_COLLECTION: str = os.getenv("CHROMA_COLLECTION", "classiflow_docs")
+    # Multilingual on purpose: the corpus is Spanish. Node 4's duplicate control keeps
+    # all-MiniLM-L6-v2 -- swapping it there would invalidate the cosine threshold
+    # calibrated in config/duplicate_control.yaml.
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
+    CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1000"))
+    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
+    RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
+
+    CHAT_MAX_TOKENS: int = int(os.getenv("CHAT_MAX_TOKENS", "2048"))
+    CHAT_MODEL_PATH: str = _DEFAULT_MODEL
+    # Retrieval passages plus the question do not fit in the 2048 the validation nodes
+    # use, so the chat model gets its own context size.
+    CHAT_MODEL_N_CTX: int = int(os.getenv("CHAT_MODEL_N_CTX", "8192"))
+
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     # Points at the frontend's OAuth popup route, not this backend's own /auth/callback
@@ -94,11 +111,12 @@ class _Settings(BaseSettings):
     # test run) never calls weave.init() or reaches the network.
     WANDB_API_KEY: str = ""
     WANDB_PROJECT: str = "classiflow"
-    # Consumed by weave, not by this app: weave.init() registers its own unpatched
-    # WeaveTracer globally unless this is already set in os.environ, and that tracer
-    # raises on llama.cpp's None metadata fields (see PatchedWeaveTracer). "false" opts
-    # out so only the patched tracer attaches. init_tracing() is what exports it.
-    WEAVE_TRACE_LANGCHAIN: str = "false"
+    # Consumed by weave, not by this app: weave.init() reads it from os.environ to
+    # decide whether to register its global LangChain tracer. That tracer is what traces
+    # the whole pipeline (chains and LangGraph nodes, not just direct LLM calls), so it
+    # stays ON -- init_tracing() patches the tracer class first to fix weave's crash on
+    # llama.cpp's None metadata. Set "false" only to disable LangChain tracing entirely.
+    WEAVE_TRACE_LANGCHAIN: str = "true"
 
     @property
     def database_url(self) -> str:
@@ -183,6 +201,42 @@ class _Settings(BaseSettings):
     @property
     def slm_n_ctx(self) -> int:
         return self.SLM_N_CTX
+
+    @property
+    def chroma_path(self) -> str:
+        return self.CHROMA_PATH
+
+    @property
+    def chroma_collection(self) -> str:
+        return self.CHROMA_COLLECTION
+
+    @property
+    def embedding_model(self) -> str:
+        return self.EMBEDDING_MODEL
+
+    @property
+    def chunk_size(self) -> int:
+        return self.CHUNK_SIZE
+
+    @property
+    def chunk_overlap(self) -> int:
+        return self.CHUNK_OVERLAP
+
+    @property
+    def retrieval_top_k(self) -> int:
+        return self.RETRIEVAL_TOP_K
+
+    @property
+    def chat_max_tokens(self) -> int:
+        return self.CHAT_MAX_TOKENS
+
+    @property
+    def chat_model_path(self) -> str:
+        return self.CHAT_MODEL_PATH
+
+    @property
+    def chat_model_n_ctx(self) -> int:
+        return self.CHAT_MODEL_N_CTX
 
     @property
     def wandb_api_key(self) -> str:

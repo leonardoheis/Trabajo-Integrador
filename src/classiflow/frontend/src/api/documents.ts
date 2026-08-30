@@ -3,11 +3,13 @@ import { apiFetch } from "./auth";
 export interface ClassificationSummary {
   jobId: string;
   filename: string;
+  status: string;
   label: string | null;
   reviewRoute: string;
   confidence: number;
   judgedByLlm: boolean;
   createdAt: string;
+  indexed: boolean;
 }
 
 export interface JobsPage {

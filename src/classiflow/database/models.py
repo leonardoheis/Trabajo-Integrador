@@ -89,6 +89,34 @@ class DocumentStep(Base):
     job: Mapped[Job] = relationship("Job", back_populates="steps")
 
 
+class DocumentKb(Base):
+    """Catalogue of documents indexed into the knowledge base.
+
+    Also the source of truth for rebuilding the Chroma collection: everything needed
+    to re-index (job, hash, chunk count and the document's own extracted metadata)
+    lives here.
+    """
+
+    __tablename__ = "document_kb"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    doc_type: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    year: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    chunk_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    indexed_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+    # Nullable: rows created before this relationship existed cannot be backfilled
+    # with a real match.
+    enriched_record_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("enriched_records.id", ondelete="CASCADE"), nullable=True
+    )
+
+
 class HumanDecision(Base):
     __tablename__ = "human_decisions"
 
@@ -119,6 +147,10 @@ class EnrichedRecord(Base):
     # Job.extracted_text, which only persists for non-accepted jobs) so it is
     # available for future embedding/analysis work.
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Denormalized from the job, so this record is self-contained for indexing
+    # (used by the KB indexing hook and the synchronize-kb backfill) without a join.
+    filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     entities: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
     # Named metadata_ (not metadata) because `metadata` is reserved on every SQLAlchemy
     # Declarative class (Base.metadata is the schema's MetaData object) -- the DB column

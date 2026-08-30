@@ -10,6 +10,7 @@ import pytest
 from langgraph.graph.state import CompiledStateGraph
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
+from classiflow.database.repositories.document_kb import InMemoryDocumentKbRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
 from classiflow.database.repositories.hash import InMemoryHashRepository
@@ -29,6 +30,7 @@ from classiflow.ingesta.nodes import (
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.services.audit.service import AuditService
 from classiflow.services.pipeline.service import PipelineService
+from tests.fakes import make_indexer
 
 if TYPE_CHECKING:
     from classiflow.database.models import DocumentStep
@@ -172,6 +174,8 @@ async def test_extractor_used_is_queryable_from_document_step() -> None:
             "CompiledStateGraph", None
         ),
         job_semaphore=asyncio.Semaphore(1),  # unused: only _persist_steps runs
+        indexer=make_indexer(),  # unused: only _persist_steps runs
+        document_kb_repo=InMemoryDocumentKbRepository(),  # unused: only _persist_steps runs
     )
     job_id = "persisted-job"
     final_state: JobState = {

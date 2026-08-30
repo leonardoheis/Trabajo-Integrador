@@ -8,11 +8,13 @@ from classiflow.database.models import ClassificationRecord, EnrichedRecord, Job
 class ClassificationSummary(BaseSchema):
     job_id: str
     filename: str
+    status: str
     label: str | None
     review_route: str
     confidence: float
     judged_by_llm: bool
     created_at: datetime
+    indexed: bool
 
 
 class JobsPage(BaseSchema):

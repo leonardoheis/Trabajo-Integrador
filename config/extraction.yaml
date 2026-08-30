@@ -4,6 +4,12 @@
 # MarkItDown yielding fewer characters than this triggers the OCR fallback attempt.
 min_text_for_ocr: 50
 
+# A PDF page carrying an image but fewer text-layer characters than this counts as an
+# unextracted scan and forces the OCR fallback even when the document's total text
+# passes min_text_for_ocr (e.g. a 3-page scan whose only text layer is one page of
+# scanner-baked OCR junk).
+ocr_page_min_chars: 25
+
 # Text shorter than this after all extractors have run is treated as unusable
 # (empty result) rather than a partial success.
 min_usable_text: 20

@@ -40,6 +40,7 @@ class ConfidenceGateNode(BaseNode):
         confidence: float,
         foreign_municipality: str | None,
         classifier_disagreement: bool,
+        risk_score: int,
     ) -> ReviewRoute:
         start = await self._emit_started(ctx)
         route = self.decide(
@@ -47,6 +48,7 @@ class ConfidenceGateNode(BaseNode):
             confidence=confidence,
             foreign_municipality=foreign_municipality,
             classifier_disagreement=classifier_disagreement,
+            risk_score=risk_score,
         )
         await self._emit_and_audit(
             ctx,
@@ -59,6 +61,27 @@ class ConfidenceGateNode(BaseNode):
         )
         return route
 
+    def forces_human_review(
+        self,
+        *,
+        primary_label: str,
+        foreign_municipality: str | None,
+        classifier_disagreement: bool,
+        risk_score: int,
+    ) -> bool:
+        # Any of these means the final route is HUMAN_REVIEW no matter what the judge
+        # concludes -- the coordinator's _judge_review_route reads this same check to
+        # decide whether to trust JudgeOutput.accept or force human review regardless
+        # of it. Routing such cases to LLM_JUDGE first (see decide() below) still runs
+        # the judge for every flagged document -- its verdict/reasoning is persisted as
+        # advisory signal for the human reviewer, it just never changes the outcome.
+        return (
+            classifier_disagreement
+            or risk_score > self.config.smell_review_risk_threshold
+            or foreign_municipality is not None
+            or primary_label == DocumentCategory.OTRO.value
+        )
+
     def decide(
         self,
         *,
@@ -66,12 +89,14 @@ class ConfidenceGateNode(BaseNode):
         confidence: float,
         foreign_municipality: str | None,
         classifier_disagreement: bool,
+        risk_score: int,
     ) -> ReviewRoute:
-        if foreign_municipality is not None:
-            return ReviewRoute.HUMAN_REVIEW
-        if primary_label == DocumentCategory.OTRO.value:
-            return ReviewRoute.HUMAN_REVIEW
-        if classifier_disagreement:
+        if self.forces_human_review(
+            primary_label=primary_label,
+            foreign_municipality=foreign_municipality,
+            classifier_disagreement=classifier_disagreement,
+            risk_score=risk_score,
+        ):
             return ReviewRoute.LLM_JUDGE
         if confidence >= self.config.confidence_threshold:
             return ReviewRoute.ACCEPT

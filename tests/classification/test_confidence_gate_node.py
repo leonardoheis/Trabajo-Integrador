@@ -18,14 +18,17 @@ def _node() -> ConfidenceGateNode:
 
 
 class TestConfidenceGateDecide:
-    def test_foreign_municipality_routes_to_human_review_regardless_of_confidence(self) -> None:
+    def test_foreign_municipality_routes_to_llm_judge_regardless_of_confidence(self) -> None:
+        # The judge always runs for a flagged document (coordinator._judge_review_route
+        # forces the final HUMAN_REVIEW outcome regardless of its verdict).
         route = _node().decide(
             primary_label="decretos",
             confidence=0.99,
             foreign_municipality="Cordoba",
             classifier_disagreement=False,
+            risk_score=0,
         )
-        assert route == "human_review"
+        assert route == "llm_judge"
 
     def test_classifier_disagreement_routes_to_llm_judge_regardless_of_confidence(self) -> None:
         route = _node().decide(
@@ -33,17 +36,39 @@ class TestConfidenceGateDecide:
             confidence=0.99,
             foreign_municipality=None,
             classifier_disagreement=True,
+            risk_score=0,
         )
         assert route == "llm_judge"
 
-    def test_foreign_municipality_wins_over_disagreement(self) -> None:
+    def test_disagreement_and_foreign_municipality_both_route_to_llm_judge(self) -> None:
         route = _node().decide(
             primary_label="decretos",
             confidence=0.99,
             foreign_municipality="Cordoba",
             classifier_disagreement=True,
+            risk_score=0,
         )
-        assert route == "human_review"
+        assert route == "llm_judge"
+
+    def test_high_risk_score_routes_to_llm_judge_regardless_of_confidence(self) -> None:
+        route = _node().decide(
+            primary_label="decretos",
+            confidence=0.99,
+            foreign_municipality=None,
+            classifier_disagreement=False,
+            risk_score=_CONFIG.smell_review_risk_threshold + 1,
+        )
+        assert route == "llm_judge"
+
+    def test_risk_score_at_threshold_does_not_force_llm_judge(self) -> None:
+        route = _node().decide(
+            primary_label="decretos",
+            confidence=0.9,
+            foreign_municipality=None,
+            classifier_disagreement=False,
+            risk_score=_CONFIG.smell_review_risk_threshold,
+        )
+        assert route == "accept"
 
     def test_high_confidence_with_no_flags_accepts(self) -> None:
         route = _node().decide(
@@ -51,6 +76,7 @@ class TestConfidenceGateDecide:
             confidence=0.9,
             foreign_municipality=None,
             classifier_disagreement=False,
+            risk_score=0,
         )
         assert route == "accept"
 
@@ -60,6 +86,7 @@ class TestConfidenceGateDecide:
             confidence=0.75,
             foreign_municipality=None,
             classifier_disagreement=False,
+            risk_score=0,
         )
         assert route == "accept"
 
@@ -69,26 +96,66 @@ class TestConfidenceGateDecide:
             confidence=0.5,
             foreign_municipality=None,
             classifier_disagreement=False,
+            risk_score=0,
         )
         assert route == "llm_judge"
 
-    def test_primary_label_otro_routes_to_human_review_regardless_of_confidence(self) -> None:
+    def test_primary_label_otro_routes_to_llm_judge_regardless_of_confidence(self) -> None:
         route = _node().decide(
             primary_label="otro",
             confidence=0.99,
             foreign_municipality=None,
             classifier_disagreement=False,
+            risk_score=0,
         )
-        assert route == "human_review"
+        assert route == "llm_judge"
 
-    def test_foreign_municipality_wins_over_otro(self) -> None:
+    def test_foreign_municipality_and_otro_both_route_to_llm_judge(self) -> None:
         route = _node().decide(
             primary_label="otro",
             confidence=0.99,
             foreign_municipality="Cordoba",
             classifier_disagreement=False,
+            risk_score=0,
         )
-        assert route == "human_review"
+        assert route == "llm_judge"
+
+
+class TestConfidenceGateForcesHumanReview:
+    def test_true_for_each_flag_independently(self) -> None:
+        node = _node()
+        assert node.forces_human_review(
+            primary_label="decretos",
+            foreign_municipality=None,
+            classifier_disagreement=True,
+            risk_score=0,
+        )
+        assert node.forces_human_review(
+            primary_label="decretos",
+            foreign_municipality=None,
+            classifier_disagreement=False,
+            risk_score=_CONFIG.smell_review_risk_threshold + 1,
+        )
+        assert node.forces_human_review(
+            primary_label="decretos",
+            foreign_municipality="Cordoba",
+            classifier_disagreement=False,
+            risk_score=0,
+        )
+        assert node.forces_human_review(
+            primary_label="otro",
+            foreign_municipality=None,
+            classifier_disagreement=False,
+            risk_score=0,
+        )
+
+    def test_false_with_no_flags(self) -> None:
+        assert not _node().forces_human_review(
+            primary_label="decretos",
+            foreign_municipality=None,
+            classifier_disagreement=False,
+            risk_score=0,
+        )
 
 
 class TestConfidenceGateRun:
@@ -105,6 +172,7 @@ class TestConfidenceGateRun:
             confidence=0.9,
             foreign_municipality=None,
             classifier_disagreement=False,
+            risk_score=0,
         )
         assert route == "accept"
         records = await audit_repo.list_for_job(_JOB_ID)

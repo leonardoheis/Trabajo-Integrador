@@ -29,13 +29,13 @@ def _dump(update: ClassificationUpdate) -> dict[str, ClassificationUpdateValue]:
     return {k: v for k, v in update if v is not None}
 
 
-def _judge_review_route(*, judge_accepted: bool, disagreement: bool) -> ReviewRoute:
-    # Disagreement is judged strictly higher-risk than low-confidence-alone: the
-    # judge's verdict is captured as advisory data (Task 6 persists
-    # final_label/reasoning), but a disagreement case NEVER auto-accepts, no matter
-    # what the judge concludes. Only the low-confidence-no-disagreement path still
-    # derives the route from JudgeOutput.accept, unchanged from today.
-    if disagreement:
+def _judge_review_route(*, judge_accepted: bool, forced_human_review: bool) -> ReviewRoute:
+    # A forced-human-review reason (disagreement, foreign municipality, "otro") is
+    # judged strictly higher-risk than low-confidence-alone: the judge's verdict is
+    # still captured as advisory data (final_label/reasoning), but these cases NEVER
+    # auto-accept no matter what the judge concludes. Only the low-confidence-alone
+    # path still derives the route from JudgeOutput.accept.
+    if forced_human_review:
         return ReviewRoute.HUMAN_REVIEW
     return ReviewRoute.ACCEPT if judge_accepted else ReviewRoute.HUMAN_REVIEW
 
@@ -109,6 +109,7 @@ def build_classification_coordinator(
             confidence=state["confidence"],
             foreign_municipality=state.get("foreign_municipality"),
             classifier_disagreement=state.get("classifier_disagreement", False),
+            risk_score=state.get("risk_score", 0),
         )
         return _dump(ClassificationUpdate(review_route=route))
 
@@ -127,9 +128,14 @@ def build_classification_coordinator(
             foreign_municipality=state.get("foreign_municipality"),
         )
         result = await llm_judge.run(ctx, judge_input)
+        forced_human_review = confidence_gate.forces_human_review(
+            primary_label=state["label"],
+            foreign_municipality=state.get("foreign_municipality"),
+            classifier_disagreement=state.get("classifier_disagreement", False),
+            risk_score=state.get("risk_score", 0),
+        )
         review_route = _judge_review_route(
-            judge_accepted=result.accept,
-            disagreement=state.get("classifier_disagreement", False),
+            judge_accepted=result.accept, forced_human_review=forced_human_review
         )
         return _dump(
             ClassificationUpdate(
