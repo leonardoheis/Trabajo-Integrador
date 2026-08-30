@@ -23,16 +23,12 @@ describe("ChatPage", () => {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         enqueueToken = () => {
-          controller.enqueue(
-            encoder.encode('event: token\ndata: {"text":"hi"}\n\n'),
-          );
+          controller.enqueue(encoder.encode('event: token\ndata: {"text":"hi"}\n\n'));
           controller.close();
         };
       },
     });
-    vi.spyOn(authApi, "apiFetch").mockResolvedValue(
-      new Response(body, { status: 200 }),
-    );
+    vi.spyOn(authApi, "apiFetch").mockResolvedValue(new Response(body, { status: 200 }));
 
     vi.useFakeTimers();
     try {
