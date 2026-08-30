@@ -1,4 +1,5 @@
 import asyncio
+from unittest.mock import MagicMock
 
 import numpy as np
 import numpy.typing as npt
@@ -10,7 +11,11 @@ from classiflow.domain.job import JobStatus
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.ingesta.domain import JobContext
 from classiflow.ingesta.nodes import DuplicateControlNode
-from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
+from classiflow.ingesta.nodes.node4_duplicate_control import (
+    EmbeddingStore,
+    get_sentence_model,
+    unload_duplicate_control_embedder,
+)
 from classiflow.services.audit.service import AuditService
 
 _DIM = 4
@@ -203,3 +208,25 @@ class TestDuplicateControlNode:
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].duration_ms is not None
         assert records[0].duration_ms >= 0
+
+
+class TestUnloadDuplicateControlEmbedder:
+    def test_forces_a_reload_on_the_next_call(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        EXPECTED_CALL_COUNT_AFTER_FIRST_CALL = 1
+        EXPECTED_CALL_COUNT_AFTER_RELOAD = 2
+        mock_transformer = MagicMock(side_effect=lambda *_args, **_kwargs: object())
+        monkeypatch.setattr(
+            "classiflow.ingesta.nodes.node4_duplicate_control.SentenceTransformer",
+            mock_transformer,
+        )
+        get_sentence_model.cache_clear()
+        try:
+            get_sentence_model()
+            assert mock_transformer.call_count == EXPECTED_CALL_COUNT_AFTER_FIRST_CALL
+
+            unload_duplicate_control_embedder()
+            get_sentence_model()
+
+            assert mock_transformer.call_count == EXPECTED_CALL_COUNT_AFTER_RELOAD
+        finally:
+            get_sentence_model.cache_clear()
