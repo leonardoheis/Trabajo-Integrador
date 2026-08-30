@@ -59,4 +59,6 @@ repos:
     hooks:
       - id: codespell
         stages: [pre-commit]
+        args: [--toml=pyproject.toml]
+        additional_dependencies: ["tomli"]
         exclude: ^(src/classiflow/playground/|documents/|\.claude/|models/|src/classiflow/frontend/package-lock\.json)

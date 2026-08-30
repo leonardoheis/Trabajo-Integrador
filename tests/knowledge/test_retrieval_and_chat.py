@@ -1,9 +1,22 @@
 from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.domain.chat import ChatQuery
 from classiflow.knowledge.indexing.indexer import IndexerService
-from classiflow.knowledge.retrieval.retriever import RetrieverService
+from classiflow.knowledge.retrieval.retriever import RetrieverService, detect_filename
 from classiflow.knowledge.vectordb.in_memory_store import InMemoryVectorStore
 from tests.knowledge.fakes import FAKE_ENTITIES, TEXT, FakeChatLlm, FakeEmbedder
+
+
+class TestDetectFilename:
+    def test_finds_a_pdf_filename_in_free_text(self) -> None:
+        question = "puedes darme un resumen de lo que dice el documento boletin_2056_2026.pdf?"
+
+        assert detect_filename(question) == "boletin_2056_2026.pdf"
+
+    def test_is_case_insensitive(self) -> None:
+        assert detect_filename("resumen de DECRETO_810_2026.PDF") == "DECRETO_810_2026.PDF"
+
+    def test_returns_none_without_a_filename(self) -> None:
+        assert detect_filename("de que trata el boletin 2044?") is None
 
 
 def _retriever(store: InMemoryVectorStore, top_k: int) -> RetrieverService:
@@ -49,6 +62,37 @@ class TestRetrieverService:
         hits = await retriever.retrieve(ChatQuery(question="presupuesto", top_k=1))
 
         assert len(hits) == 1
+
+    async def test_mentioning_a_filename_in_the_question_narrows_retrieval(
+        self, indexer: IndexerService, store: InMemoryVectorStore
+    ) -> None:
+        await indexer.index("job-1", "ordenanza_10902_2026.pdf", "sha-1", TEXT, FAKE_ENTITIES)
+        await indexer.index("job-2", "decreto_810_2026.pdf", "sha-2", TEXT, FAKE_ENTITIES)
+        retriever = _retriever(store, top_k=5)
+
+        hits = await retriever.retrieve(
+            ChatQuery(question="resumen de ordenanza_10902_2026.pdf sobre presupuesto")
+        )
+
+        assert hits
+        assert all(hit.metadata.get("filename") == "ordenanza_10902_2026.pdf" for hit in hits)
+
+    async def test_an_explicit_filters_filename_is_not_overridden(
+        self, indexer: IndexerService, store: InMemoryVectorStore
+    ) -> None:
+        await indexer.index("job-1", "ordenanza_10902_2026.pdf", "sha-1", TEXT, FAKE_ENTITIES)
+        await indexer.index("job-2", "decreto_810_2026.pdf", "sha-2", TEXT, FAKE_ENTITIES)
+        retriever = _retriever(store, top_k=5)
+
+        hits = await retriever.retrieve(
+            ChatQuery(
+                question="resumen de ordenanza_10902_2026.pdf",
+                filters={"filename": "decreto_810_2026.pdf"},
+            )
+        )
+
+        assert hits
+        assert all(hit.metadata.get("filename") == "decreto_810_2026.pdf" for hit in hits)
 
 
 class TestChatService:

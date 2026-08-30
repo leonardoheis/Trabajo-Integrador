@@ -85,8 +85,8 @@ class _Settings(BaseSettings):
     # calibrated in config/duplicate_control.yaml.
     EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
     CHUNK_SIZE: int = int(os.getenv("CHUNK_SIZE", "1000"))
-    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "150"))
-    RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "5"))
+    CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "250"))
+    RETRIEVAL_TOP_K: int = int(os.getenv("RETRIEVAL_TOP_K", "10"))
 
     CHAT_MAX_TOKENS: int = int(os.getenv("CHAT_MAX_TOKENS", "2048"))
     CHAT_MODEL_PATH: str = _DEFAULT_MODEL
