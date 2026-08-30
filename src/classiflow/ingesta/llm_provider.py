@@ -1,4 +1,3 @@
-import gc
 from functools import lru_cache
 
 import llama_cpp
@@ -11,6 +10,7 @@ from llama_cpp.llama_chat_format import Jinja2ChatFormatter
 from pydantic import Field
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
+from classiflow.model_cache import evict_lru_cache
 from classiflow.settings import Settings
 
 
@@ -101,12 +101,7 @@ def unload_slm() -> None:
     # Only actually frees anything if nothing else still references the model, which is
     # why api/dependencies.py builds the *_chain nodes lazily rather than injecting
     # container-held chains.
-    # ponytail: runs synchronously on the event loop (called once per finished job, not
-    # a hot path) -- move to asyncio.to_thread if it ever shows up as request latency.
-    get_llm_langchain.cache_clear()
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    evict_lru_cache(get_llm_langchain)
 
 
 @lru_cache(maxsize=4)

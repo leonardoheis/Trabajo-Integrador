@@ -1,9 +1,6 @@
 import asyncio
-import gc
 from functools import lru_cache
 from typing import Protocol, cast, runtime_checkable
-
-import torch
 
 from classiflow.classification.bert.classifier import BertClassifier
 from classiflow.classification.config_classification import (
@@ -13,6 +10,7 @@ from classiflow.classification.config_classification import (
 from classiflow.classification.domain.results import SecondOpinionResult
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.events.broadcaster import EventBroadcaster
+from classiflow.model_cache import evict_lru_cache
 from classiflow.pipeline.base import BaseNode
 from classiflow.pipeline.context import JobContext
 from classiflow.services.audit.service import AuditService
@@ -36,11 +34,7 @@ def unload_bert() -> None:
     # BETO moves itself onto CUDA and would otherwise stay resident for the process
     # lifetime. On an 8GB card that permanently shrinks the budget below what the next
     # job's ~4.8GB GGUF needs, so job 1 succeeds and job 2 fails to load its model.
-    # Mirrors unload_slm(): drop the cache's reference, collect, release to the driver.
-    _load_bert_classifier.cache_clear()
-    gc.collect()
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    evict_lru_cache(_load_bert_classifier)
 
 
 class SecondOpinionNode(BaseNode):
