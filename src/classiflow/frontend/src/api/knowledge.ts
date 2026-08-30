@@ -42,3 +42,7 @@ export async function synchronizeKb(): Promise<SynchronizeKbResult> {
   }
   return response.json();
 }
+
+export async function warmupChat(): Promise<void> {
+  await apiFetch("/knowledge/chat/warmup", { method: "POST" });
+}

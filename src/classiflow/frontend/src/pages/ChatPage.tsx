@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch } from "../api/auth";
+import { warmupChat } from "../api/knowledge";
 
 interface Source {
   chunkId: string;
@@ -43,6 +44,10 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+
+  useEffect(() => {
+    warmupChat().catch(() => {});
+  }, []);
 
   async function handleSend(): Promise<void> {
     const q = question.trim();
