@@ -213,8 +213,11 @@ class PipelineService:
                 # Guaranteed even when a node raises mid-pipeline -- without this,
                 # a crashed job would leave its GPU models resident, denying VRAM
                 # to every job (and chat warmup) that runs afterward.
-                _release_gpu_models()
+                # _end_job() runs first: it's a simple counter decrement that cannot
+                # raise, so the in-flight counter is always released even if one of
+                # the unload calls inside _release_gpu_models() raises.
                 _end_job()
+                _release_gpu_models()
 
             await self._broadcaster.emit(
                 NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.DONE)
