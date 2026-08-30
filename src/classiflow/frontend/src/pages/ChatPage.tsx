@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "../api/auth";
 import { warmupChat } from "../api/knowledge";
 
+const _COLD_START_MS = 1500;
+
 interface Source {
   chunkId: string;
   filename: string;
@@ -44,6 +46,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [coldStart, setColdStart] = useState(false);
 
   useEffect(() => {
     warmupChat().catch(() => {});
@@ -59,6 +62,7 @@ export default function ChatPage() {
       { role: "assistant", content: "" },
     ]);
     setIsStreaming(true);
+    const coldStartTimer = setTimeout(() => setColdStart(true), _COLD_START_MS);
 
     try {
       const response = await apiFetch("/knowledge/chat/stream", {
@@ -83,6 +87,8 @@ export default function ChatPage() {
 
         for (const event of events) {
           if (event.type === "token") {
+            clearTimeout(coldStartTimer);
+            setColdStart(false);
             const { text } = JSON.parse(event.data) as { text: string };
             setMessages((prev) => {
               const next = [...prev];
@@ -113,6 +119,7 @@ export default function ChatPage() {
         return next;
       });
     } finally {
+      clearTimeout(coldStartTimer);
       setIsStreaming(false);
     }
   }
@@ -132,7 +139,12 @@ export default function ChatPage() {
                     : "bg-[var(--color-surface)] text-[var(--color-text)]"
               }`}
             >
-              {m.content || (isStreaming && i === messages.length - 1 ? "…" : "")}
+              {m.content ||
+                (isStreaming && i === messages.length - 1
+                  ? coldStart
+                    ? "Cargando modelo, puede tardar unos segundos…"
+                    : "…"
+                  : "")}
             </p>
             {m.sources && m.sources.length > 0 && (
               <ul className="mt-1 space-y-1">
