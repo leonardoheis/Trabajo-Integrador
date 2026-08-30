@@ -1,7 +1,9 @@
 import asyncio
+import gc
 from collections.abc import AsyncIterator
 from functools import lru_cache
 
+import torch
 from llama_cpp import Llama
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
@@ -31,6 +33,15 @@ def get_chat_llm(model_path: str, n_ctx: int) -> Llama:
         raise ModelNotFoundError(path=model_path) from exc
     except Exception as exc:
         raise ModelLoadError(path=model_path, cause=str(exc)) from exc
+
+
+def unload_chat_llm() -> None:
+    # Same reasoning as ingesta.llm_provider.unload_slm(): drop the lru_cache's reference
+    # so gc can collect the Llama instance and its __del__ frees the GGUF's CUDA context.
+    get_chat_llm.cache_clear()
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
 
 class LlamaCppChatLlm(ChatLlm):
