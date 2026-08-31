@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
 import { apiFetch } from "../api/auth";
-import { warmupChat } from "../api/knowledge";
+import { warmupChat, fetchConversation, clearConversation } from "../api/knowledge";
 
 const _COLD_START_MS = 1500;
 
@@ -51,11 +52,27 @@ export default function ChatPage() {
 
   useEffect(() => {
     warmupChat().catch(() => {});
+    fetchConversation()
+      .then((history) => {
+        const loaded: Message[] = history.turns.flatMap((turn) => [
+          { role: "user" as const, content: turn.question },
+          { role: "assistant" as const, content: turn.answer },
+        ]);
+        // If the user has already sent a message before this resolves (slow
+        // network, or just unlucky ordering), don't clobber it with history.
+        setMessages((prev) => (prev.length === 0 ? loaded : prev));
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
+
+  async function handleClear(): Promise<void> {
+    await clearConversation().catch(() => {});
+    setMessages([]);
+  }
 
   async function handleSend(): Promise<void> {
     const q = question.trim();
@@ -135,7 +152,7 @@ export default function ChatPage() {
       <div className="flex-1 space-y-4 overflow-y-auto">
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
-            <p
+            <div
               className={`inline-block max-w-[75%] rounded-md px-3 py-2 text-base ${
                 m.role === "user"
                   ? "bg-[var(--color-accent)] text-[var(--color-bg)]"
@@ -144,13 +161,19 @@ export default function ChatPage() {
                     : "bg-[var(--color-surface)] text-[var(--color-text)]"
               }`}
             >
-              {m.content ||
+              {m.role === "assistant" && m.content ? (
+                <div className="chat-markdown">
+                  <ReactMarkdown>{m.content}</ReactMarkdown>
+                </div>
+              ) : (
+                m.content ||
                 (isStreaming && i === messages.length - 1
                   ? coldStart
                     ? "Cargando modelo, puede tardar unos segundos…"
                     : "…"
-                  : "")}
-            </p>
+                  : "")
+              )}
+            </div>
             {m.sources && m.sources.length > 0 && (
               <ul className="mt-1 space-y-1">
                 {m.sources.map((s) => (
@@ -182,6 +205,13 @@ export default function ChatPage() {
           className="rounded-md bg-[var(--color-accent)] px-4 py-2 text-base font-semibold text-[var(--color-bg)] disabled:opacity-50"
         >
           Send
+        </button>
+        <button
+          onClick={handleClear}
+          disabled={isStreaming}
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-base font-semibold text-[var(--color-text-muted)] disabled:opacity-50"
+        >
+          Clear conversation
         </button>
       </div>
     </div>

@@ -1,7 +1,9 @@
+from functools import cache
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from loguru import logger
 
 from classiflow.injections import configure_container
 from classiflow.observability import init_tracing
@@ -10,6 +12,19 @@ from .error_handlers import EXCEPTION_HANDLERS
 from .routes import ROUTERS
 
 _FRONTEND_DIST = Path(__file__).parents[1] / "frontend" / "dist"
+_LOG_FILE = Path(__file__).parents[3] / "classiflow.log"
+
+
+@cache
+def _add_log_file_sink() -> None:
+    # @cache-d for the same reason as configure_container(): create_app() itself isn't
+    # cached and tests call it multiple times per process (once per module-scoped
+    # `client` fixture) -- this guards against stacking duplicate sinks, which would
+    # write every log line N times over.
+    # mode="w": overwrite on every process start, so the file always reflects only the
+    # current run -- makes it easy to grep a stuck job's timeline without scrolling
+    # back through the terminal (or a previous run's output).
+    logger.add(_LOG_FILE, mode="w", level="INFO")
 
 
 def create_app() -> FastAPI:
@@ -20,6 +35,7 @@ def create_app() -> FastAPI:
     # every @inject/Provide[Container.x] marker resolves to the raw Provide sentinel
     # instead of the real dependency (e.g. "'Provide' object has no attribute ...").
     configure_container()
+    _add_log_file_sink()
 
     # Once per process, before any LLM is built -- weave decides whether to register its
     # own global LangChain tracer during init(), so this has to precede the first model

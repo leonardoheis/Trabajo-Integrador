@@ -16,6 +16,47 @@ from classiflow.settings import Settings
 _PROVIDER = "llama"
 
 
+class _ActiveGenerations:
+    """Mutable box around the in-flight-generation count.
+
+    A plain module-level int would need `global` to mutate (PLW0603); mutating an
+    attribute on a single shared instance instead avoids rebinding the module name
+    (same pattern as PipelineService's _JobsInFlight). The lock matters here in a
+    way it doesn't for that job counter: this one is mutated from the background
+    thread astream() spawns, not just the event-loop thread.
+
+    unload_chat_llm() (called by PipelineService before every ingestion job, to
+    free VRAM for the SLM/BERT models) must never evict the handle while a
+    generation is in flight: llama.cpp's C bindings are not safe for concurrent
+    use of one handle from two threads, and forcing gc.collect()/
+    torch.cuda.empty_cache() concurrently with an active generate call can hang
+    the whole process -- observed in production as a pipeline job stuck forever
+    at "processing" with zero steps recorded.
+    """
+
+    def __init__(self) -> None:
+        self.count = 0
+        self.lock = threading.Lock()
+
+
+_active_generations = _ActiveGenerations()
+
+
+def _begin_generation() -> None:
+    with _active_generations.lock:
+        _active_generations.count += 1
+
+
+def _end_generation() -> None:
+    with _active_generations.lock:
+        _active_generations.count -= 1
+
+
+def is_chat_llm_busy() -> bool:
+    with _active_generations.lock:
+        return _active_generations.count > 0
+
+
 @lru_cache(maxsize=2)
 # Chat-sized GGUF handle, deliberately separate from ingesta.llm_provider's
 # get_llm_langchain: that one is cached at n_ctx=2048 for the validation nodes and
@@ -39,6 +80,10 @@ def get_chat_llm(model_path: str, n_ctx: int) -> Llama:
 def unload_chat_llm() -> None:
     # Same reasoning as ingesta.llm_provider.unload_slm(): drop the lru_cache's reference
     # so gc can collect the Llama instance and its __del__ frees the GGUF's CUDA context.
+    # Skipped (not awaited) while a generation is in flight -- see _active_generations'
+    # docstring above. The model simply stays resident until the next eligible call.
+    if is_chat_llm_busy():
+        return
     evict_lru_cache(get_chat_llm)
 
 
@@ -52,6 +97,7 @@ class LlamaCppChatLlm(ChatLlm):
 
     def _complete(self, system: str, user: str) -> str:
         llm = get_chat_llm(self._model_path, self._n_ctx)
+        _begin_generation()
         try:
             response = llm.create_chat_completion(
                 messages=[
@@ -64,10 +110,13 @@ class LlamaCppChatLlm(ChatLlm):
             )
         except Exception as exc:
             raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
+        finally:
+            _end_generation()
         return _first_message_content(response)
 
     def _stream_tokens(self, system: str, user: str) -> Iterator[str]:
         llm = get_chat_llm(self._model_path, self._n_ctx)
+        _begin_generation()
         try:
             stream = llm.create_chat_completion(
                 messages=[
@@ -85,6 +134,8 @@ class LlamaCppChatLlm(ChatLlm):
                     yield token
         except Exception as exc:
             raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
+        finally:
+            _end_generation()
 
     def _produce_tokens(
         self, system: str, user: str, token_queue: "queue.Queue[str | ChatLlmError | None]"

@@ -1,3 +1,4 @@
+import asyncio
 from http import HTTPStatus
 
 import pytest
@@ -19,6 +20,9 @@ _MINIMAL_PDF = (
 )
 _SLM_LEGITIMATE = '{"is_legitimate": true, "confidence": 0.92, "reasoning": "official doc"}'
 _NODE3_GET_LLM = "classiflow.ingesta.nodes.node3_content_validation.get_llm_langchain"
+# Matches tests/api/conftest.py's _TEST_EMAIL -- the email `auth_headers` authenticates
+# as, and the key TestContainer.conversation_repo's data is scoped by.
+_CONVO_TEST_EMAIL = "test@classiflow.dev"
 
 
 def _ingest(
@@ -236,3 +240,86 @@ class TestChatWarmupEndpoint:
 
         assert response.status_code == _NO_CONTENT
         assert calls == []
+
+
+# The conversation is keyed by user email, and every test in this module-scoped
+# `client` fixture authenticates as the same _CONVO_TEST_EMAIL against the same
+# TestContainer.conversation_repo Singleton -- clear it before each test that touches
+# chat history, so it starts from a known-empty conversation instead of accumulating
+# turns left over from earlier tests.
+def _clear_conversation(test_container: TestContainer) -> None:
+    asyncio.run(test_container.conversation_repo().clear(_CONVO_TEST_EMAIL))
+
+
+class TestChatPersistsHistory:
+    def test_chat_stream_persists_a_turn_after_completing(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        _clear_conversation(test_container)
+        response = client.post(
+            "/knowledge/chat/stream", json={"question": "hola"}, headers=auth_headers
+        )
+        assert response.status_code == HTTPStatus.OK
+        # Drain the stream so the post-stream record_turn() call actually runs.
+        _ = response.text
+
+        history_response = client.get("/knowledge/conversation", headers=auth_headers)
+        assert history_response.status_code == HTTPStatus.OK
+        turns = history_response.json()["turns"]
+        assert len(turns) == 1
+        assert turns[0]["question"] == "hola"
+
+    def test_chat_uses_prior_history_in_the_next_prompt(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        _clear_conversation(test_container)
+        first = client.post(
+            "/knowledge/chat/stream", json={"question": "primera pregunta"}, headers=auth_headers
+        )
+        _ = first.text
+
+        second = client.post(
+            "/knowledge/chat/stream", json={"question": "segunda pregunta"}, headers=auth_headers
+        )
+        assert second.status_code == HTTPStatus.OK
+        _ = second.text
+
+        stub_chat_llm = test_container.chat_llm()
+        assert "primera pregunta" in stub_chat_llm.received_prompts[-1]
+
+
+class TestConversationEndpoint:
+    def test_get_requires_auth(self, client: TestClient) -> None:
+        response = client.get("/knowledge/conversation")
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+    def test_get_returns_empty_history_for_a_new_user(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        _clear_conversation(test_container)
+        response = client.get("/knowledge/conversation", headers=auth_headers)
+        assert response.status_code == HTTPStatus.OK
+        body = response.json()
+        assert body["summary"] is None
+        assert body["turns"] == []
+
+    def test_delete_requires_auth(self, client: TestClient) -> None:
+        response = client.delete("/knowledge/conversation")
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+    def test_delete_clears_history(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        _clear_conversation(test_container)
+        first = client.post(
+            "/knowledge/chat/stream", json={"question": "hola"}, headers=auth_headers
+        )
+        _ = first.text
+        before = client.get("/knowledge/conversation", headers=auth_headers).json()
+        assert len(before["turns"]) == 1
+
+        delete_response = client.delete("/knowledge/conversation", headers=auth_headers)
+        assert delete_response.status_code == HTTPStatus.NO_CONTENT
+
+        after = client.get("/knowledge/conversation", headers=auth_headers).json()
+        assert after["turns"] == []

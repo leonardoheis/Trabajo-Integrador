@@ -8,16 +8,21 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from classiflow.api.dependencies import (
+    CurrentUser,
     get_chat_service,
     get_classification_record_repo,
+    get_conversation_repo,
     get_current_user,
     get_document_kb_repo,
     get_enriched_record_repo,
+    get_memory_service,
     get_pipeline_service,
 )
 from classiflow.api.routes.knowledge.schemas import (
     ChatRequest,
     ChatResponse,
+    ConversationResponse,
+    ConversationTurnSchema,
     DocumentKbResponse,
     DocumentKbSchema,
     SourceSchema,
@@ -29,11 +34,13 @@ from classiflow.classification.exceptions import (
     ClassificationRecordNotFoundError,
 )
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
+from classiflow.domain.repositories.conversation import IConversationRepository
 from classiflow.domain.repositories.document_kb import IDocumentKbRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
 from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.domain.chat import ChatQuery, SourceRef
 from classiflow.knowledge.llm.llama import get_chat_llm
+from classiflow.knowledge.memory.service import MemoryService
 from classiflow.services.pipeline.service import PipelineService, is_pipeline_busy
 from classiflow.settings import Settings
 
@@ -57,26 +64,39 @@ def _sources_payload(sources: list[SourceRef]) -> list[dict[str, object]]:
 @router.post("/chat")
 async def chat(
     body: ChatRequest,
+    current_user: CurrentUser,
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
+    memory_service: Annotated[MemoryService, Depends(get_memory_service)],
 ) -> ChatResponse:
-    answer = await chat_service.answer(_to_query(body))
+    history = await memory_service.load(current_user.email)
+    answer = await chat_service.answer(_to_query(body), history=history)
+    await memory_service.record_turn(current_user.email, body.question, answer.answer)
     return ChatResponse.from_domain(answer)
 
 
 @router.post("/chat/stream")
 async def chat_stream(
     body: ChatRequest,
+    current_user: CurrentUser,
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
+    memory_service: Annotated[MemoryService, Depends(get_memory_service)],
 ) -> StreamingResponse:
+    history = await memory_service.load(current_user.email)
+
     async def _stream() -> AsyncGenerator[str, None]:
         sources: list[SourceRef] = []
-        async for token, current_sources in chat_service.astream(_to_query(body)):
+        answer_parts: list[str] = []
+        async for token, current_sources in chat_service.astream(_to_query(body), history=history):
             sources = current_sources
+            answer_parts.append(token)
             yield _sse("token", {"text": token})
         # Sources are emitted once at the end rather than per token: they are identical
         # on every yield, and repeating them would dominate the stream.
         yield _sse("sources", _sources_payload(sources))
         yield _sse("done", {})
+        await memory_service.record_turn(
+            current_user.email, body.question, "".join(answer_parts).strip()
+        )
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
 
@@ -130,3 +150,24 @@ async def index_document(
     await pipeline.index_enriched_record(record, record.filename or "", record.sha256 or job_id)
     doc = await document_kb_repo.find_by_job_id(job_id)
     return DocumentKbResponse(document_kb=DocumentKbSchema.from_model(doc) if doc else None)
+
+
+@router.get("/conversation")
+async def get_conversation(
+    current_user: CurrentUser,
+    conversation_repo: Annotated[IConversationRepository, Depends(get_conversation_repo)],
+) -> ConversationResponse:
+    turns = await conversation_repo.all_turns(current_user.email)
+    summary = await conversation_repo.get_summary(current_user.email)
+    return ConversationResponse(
+        summary=summary,
+        turns=[ConversationTurnSchema.from_model(t) for t in turns],
+    )
+
+
+@router.delete("/conversation", status_code=HTTPStatus.NO_CONTENT)
+async def clear_conversation(
+    current_user: CurrentUser,
+    memory_service: Annotated[MemoryService, Depends(get_memory_service)],
+) -> None:
+    await memory_service.clear(current_user.email)

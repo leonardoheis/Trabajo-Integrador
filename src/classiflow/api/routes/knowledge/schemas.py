@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import Field
 
 from classiflow.api.schemas import BaseSchema
-from classiflow.database.models import DocumentKb
+from classiflow.database.models import ConversationTurn, DocumentKb
 from classiflow.knowledge.domain.chat import ChatAnswer, SourceRef
 
 
@@ -69,3 +69,18 @@ class DocumentKbSchema(BaseSchema):
 
 class DocumentKbResponse(BaseSchema):
     document_kb: DocumentKbSchema | None
+
+
+class ConversationTurnSchema(BaseSchema):
+    question: str
+    answer: str
+    created_at: datetime
+
+    @classmethod
+    def from_model(cls, turn: ConversationTurn) -> "ConversationTurnSchema":
+        return cls(question=turn.question, answer=turn.answer, created_at=turn.created_at)
+
+
+class ConversationResponse(BaseSchema):
+    summary: str | None
+    turns: list[ConversationTurnSchema]

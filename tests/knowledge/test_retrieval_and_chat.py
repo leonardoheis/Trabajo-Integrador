@@ -1,6 +1,8 @@
+from classiflow.database.models import ConversationTurn
 from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.domain.chat import ChatQuery
 from classiflow.knowledge.indexing.indexer import IndexerService
+from classiflow.knowledge.memory.domain import ConversationHistory
 from classiflow.knowledge.retrieval.retriever import RetrieverService, detect_filename
 from classiflow.knowledge.vectordb.in_memory_store import InMemoryVectorStore
 from tests.knowledge.fakes import FAKE_ENTITIES, TEXT, FakeChatLlm, FakeEmbedder
@@ -156,6 +158,47 @@ class TestChatService:
 
         assert "".join(token for token, _ in chunks) == "Según la Ordenanza 10902/2026, sí."
         assert all(sources for _, sources in chunks)
+
+    async def test_answer_passes_history_into_the_prompt(
+        self, indexer: IndexerService, store: InMemoryVectorStore
+    ) -> None:
+        await indexer.index("job-1", "ordenanza_10902_2026.pdf", "sha-1", TEXT, FAKE_ENTITIES)
+        llm = FakeChatLlm()
+        history = ConversationHistory(
+            summary=None,
+            recent_turns=[ConversationTurn(user_email="u", question="prior q", answer="prior a")],
+        )
+
+        await _chat(store, llm, top_k=2).answer(
+            ChatQuery(question="¿Cuál es el presupuesto?"), history=history
+        )
+
+        assert "prior q" in llm.last_user
+        assert "prior a" in llm.last_user
+
+    async def test_astream_passes_history_into_the_prompt(
+        self, indexer: IndexerService, store: InMemoryVectorStore
+    ) -> None:
+        await indexer.index("job-1", "ordenanza_10902_2026.pdf", "sha-1", TEXT, FAKE_ENTITIES)
+        llm = FakeChatLlm()
+        history = ConversationHistory(summary="resumen de contexto", recent_turns=[])
+
+        async for _ in _chat(store, llm, top_k=2).astream(
+            ChatQuery(question="¿Cuál es el presupuesto?"), history=history
+        ):
+            pass
+
+        assert "resumen de contexto" in llm.last_user
+
+    async def test_history_defaults_to_none_and_matches_existing_behavior(
+        self, indexer: IndexerService, store: InMemoryVectorStore
+    ) -> None:
+        await indexer.index("job-1", "ordenanza_10902_2026.pdf", "sha-1", TEXT, FAKE_ENTITIES)
+        llm = FakeChatLlm()
+
+        await _chat(store, llm, top_k=2).answer(ChatQuery(question="¿Cuál es el presupuesto?"))
+
+        assert "Contexto de la conversación" not in llm.last_user
 
 
 class TestSplitPreservesComposition:

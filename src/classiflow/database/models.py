@@ -197,3 +197,39 @@ class ClassificationRecord(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
+
+
+class ConversationTurn(Base):
+    """One question/answer pair in a user's chat history.
+
+    Append-only: rows are never updated, and are only deleted by the explicit
+    "clear conversation" action. The last RAW_WINDOW_SIZE rows for a user are sent
+    verbatim in every chat prompt; older rows are folded into ConversationSummary
+    instead but remain here as the source of truth.
+    """
+
+    __tablename__ = "conversation_turns"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
+class ConversationSummary(Base):
+    """Running summary of a user's turns older than the raw prompting window.
+
+    At most one row per user, overwritten in place each time a turn ages out of
+    MemoryService.RAW_WINDOW_SIZE.
+    """
+
+    __tablename__ = "conversation_summaries"
+
+    user_email: Mapped[str] = mapped_column(String(255), primary_key=True)
+    summary_text: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )

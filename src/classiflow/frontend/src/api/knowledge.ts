@@ -46,3 +46,29 @@ export async function synchronizeKb(): Promise<SynchronizeKbResult> {
 export async function warmupChat(): Promise<void> {
   await apiFetch("/knowledge/chat/warmup", { method: "POST" });
 }
+
+export interface ConversationTurnRecord {
+  question: string;
+  answer: string;
+  createdAt: string;
+}
+
+export interface ConversationResponse {
+  summary: string | null;
+  turns: ConversationTurnRecord[];
+}
+
+export async function fetchConversation(): Promise<ConversationResponse> {
+  const response = await apiFetch("/knowledge/conversation");
+  if (!response.ok) {
+    throw new Error(`GET /knowledge/conversation failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function clearConversation(): Promise<void> {
+  const response = await apiFetch("/knowledge/conversation", { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(`DELETE /knowledge/conversation failed: ${response.status}`);
+  }
+}
