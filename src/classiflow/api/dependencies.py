@@ -24,6 +24,7 @@ from classiflow.database.repositories.audit import SqlAuditRepository
 from classiflow.database.repositories.classification_record import (
     SqlClassificationRecordRepository,
 )
+from classiflow.database.repositories.conversation import SqlConversationRepository
 from classiflow.database.repositories.document_kb import SqlDocumentKbRepository
 from classiflow.database.repositories.document_steps import SqlDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import SqlEnrichedRecordRepository
@@ -32,6 +33,7 @@ from classiflow.database.repositories.human_decision import SqlHumanDecisionRepo
 from classiflow.database.repositories.job import SqlJobRepository
 from classiflow.database.repositories.user import SqlUserRepository
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
+from classiflow.domain.repositories.conversation import IConversationRepository
 from classiflow.domain.repositories.document_kb import IDocumentKbRepository
 from classiflow.domain.repositories.document_steps import IDocumentStepsRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
@@ -58,6 +60,7 @@ from classiflow.knowledge.chunking.chunker import ChunkerService
 from classiflow.knowledge.embeddings.embedder import SentenceTransformerEmbedder
 from classiflow.knowledge.indexing.indexer import IndexerService
 from classiflow.knowledge.llm.chat_llm import ChatLlm
+from classiflow.knowledge.memory.service import MemoryService
 from classiflow.knowledge.retrieval.retriever import RetrieverService
 from classiflow.knowledge.vectordb.vector_store import VectorStore
 from classiflow.services.audit.repository import IAuditRepository
@@ -140,6 +143,10 @@ def get_document_kb_repo(session: DbSession) -> IDocumentKbRepository:
     return SqlDocumentKbRepository(session)
 
 
+def get_conversation_repo(session: DbSession) -> IConversationRepository:
+    return SqlConversationRepository(session)
+
+
 def get_audit_repo(session: DbSession) -> IAuditRepository:
     return SqlAuditRepository(session)
 
@@ -171,6 +178,14 @@ def get_chat_service(
     chat_llm: Annotated[ChatLlm, Depends(Provide[Container.chat_llm])],
 ) -> ChatService:
     return ChatService(retriever=retriever, chat_llm=chat_llm)
+
+
+@inject
+def get_memory_service(
+    conversation_repo: Annotated[IConversationRepository, Depends(get_conversation_repo)],
+    chat_llm: Annotated[ChatLlm, Depends(Provide[Container.chat_llm])],
+) -> MemoryService:
+    return MemoryService(repo=conversation_repo, chat_llm=chat_llm)
 
 
 @inject

@@ -2,6 +2,7 @@ from itertools import starmap
 
 from classiflow.knowledge.domain.chat import RetrievedChunk
 from classiflow.knowledge.domain.document import format_citation
+from classiflow.knowledge.memory.domain import ConversationHistory
 
 SYSTEM_PROMPT = (
     "Sos un asistente para responder preguntas sobre documentación normativa de la "
@@ -39,9 +40,25 @@ def _passage(index: int, chunk: RetrievedChunk) -> str:
     return f"[{index}] {label}\n{chunk.text}"
 
 
-def build_user_prompt(question: str, chunks: list[RetrievedChunk]) -> str:
+def build_user_prompt(
+    question: str,
+    chunks: list[RetrievedChunk],
+    history: ConversationHistory | None = None,
+) -> str:
+    parts = []
+    if history is not None and (history.summary or history.recent_turns):
+        parts.append(_history_block(history))
     if not chunks:
         context = _NO_CONTEXT
     else:
         context = "\n\n".join(starmap(_passage, enumerate(chunks, start=1)))
-    return f"Pasajes:\n{context}\n\nPregunta: {question}\n\nRespuesta:"
+    parts.append(f"Pasajes:\n{context}\n\nPregunta: {question}\n\nRespuesta:")
+    return "\n\n".join(parts)
+
+
+def _history_block(history: ConversationHistory) -> str:
+    lines = ["Contexto de la conversación:"]
+    if history.summary:
+        lines.append(f"Resumen de intercambios anteriores: {history.summary}")
+    lines.extend(f"P: {turn.question}\nR: {turn.answer}" for turn in history.recent_turns)
+    return "\n".join(lines)

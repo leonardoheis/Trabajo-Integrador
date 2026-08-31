@@ -40,3 +40,41 @@ body {
   color: var(--color-text);
   font-family: var(--font-serif);
 }
+
+.chat-markdown > :first-child {
+  margin-top: 0;
+}
+.chat-markdown > :last-child {
+  margin-bottom: 0;
+}
+.chat-markdown p {
+  margin: 0.5em 0;
+}
+.chat-markdown ul,
+.chat-markdown ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+.chat-markdown li {
+  margin: 0.2em 0;
+}
+.chat-markdown strong {
+  font-weight: 700;
+}
+.chat-markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-bg-inset);
+  border-radius: 0.25em;
+  padding: 0.1em 0.35em;
+}
+.chat-markdown pre {
+  background: var(--color-bg-inset);
+  border-radius: 0.375em;
+  padding: 0.75em;
+  overflow-x: auto;
+}
+.chat-markdown pre code {
+  background: none;
+  padding: 0;
+}

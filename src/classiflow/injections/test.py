@@ -28,6 +28,7 @@ from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.classification_record import (
     InMemoryClassificationRecordRepository,
 )
+from classiflow.database.repositories.conversation import InMemoryConversationRepository
 from classiflow.database.repositories.document_kb import InMemoryDocumentKbRepository
 from classiflow.database.repositories.document_steps import InMemoryDocumentStepsRepository
 from classiflow.database.repositories.enriched_record import InMemoryEnrichedRecordRepository
@@ -107,8 +108,10 @@ class _StubChatLlm:
 
     def __init__(self, response: str = "Según los pasajes provistos, no hay datos.") -> None:
         self._response = response
+        self.received_prompts: list[str] = []
 
-    async def astream(self, _system: str, _user: str) -> AsyncIterator[str]:
+    async def astream(self, _system: str, user: str) -> AsyncIterator[str]:
+        self.received_prompts.append(user)
         yield self._response
 
 
@@ -162,6 +165,7 @@ class TestContainer(containers.DeclarativeContainer):
     job_repo = providers.Singleton(InMemoryJobRepository)
     enriched_record_repo = providers.Singleton(InMemoryEnrichedRecordRepository)
     document_kb_repo = providers.Singleton(InMemoryDocumentKbRepository)
+    conversation_repo = providers.Singleton(InMemoryConversationRepository)
     vector_store = providers.Singleton(InMemoryVectorStore)
     embedder = providers.Singleton(_StubEmbedder)
     chat_llm = providers.Singleton(_StubChatLlm)

@@ -9,6 +9,7 @@ from classiflow.api.app import create_app
 from classiflow.api.dependencies import (
     get_audit_repo,
     get_classification_record_repo,
+    get_conversation_repo,
     get_document_kb_repo,
     get_document_steps_repo,
     get_enriched_record_repo,
@@ -99,6 +100,7 @@ def client(test_container: TestContainer) -> TestClient:
         test_container.enriched_record_repo
     )
     app.dependency_overrides[get_document_kb_repo] = _override(test_container.document_kb_repo)
+    app.dependency_overrides[get_conversation_repo] = _override(test_container.conversation_repo)
 
     return TestClient(app)
 

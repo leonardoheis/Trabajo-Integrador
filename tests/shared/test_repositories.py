@@ -26,6 +26,10 @@ from classiflow.database.repositories.classification_record import (
     InMemoryClassificationRecordRepository,
     SqlClassificationRecordRepository,
 )
+from classiflow.database.repositories.conversation import (
+    InMemoryConversationRepository,
+    SqlConversationRepository,
+)
 from classiflow.database.repositories.document_kb import (
     InMemoryDocumentKbRepository,
     SqlDocumentKbRepository,
@@ -914,3 +918,113 @@ class TestInMemoryDocumentKbRepository:
         await repo.save(_document_kb(sha256="a" * 64))
         await repo.save(_document_kb(sha256="c" * 64))
         assert len(await repo.list_all()) == _ROWS_2
+
+
+_CONVO_USER = "convo-user@classiflow.dev"
+_CONVO_OTHER_USER = "other-user@classiflow.dev"
+
+
+class TestSqlConversationRepository:
+    async def test_save_turn_then_recent_turns_returns_it(self, session: AsyncSession) -> None:
+        repo = SqlConversationRepository(session)
+        await repo.save_turn(_CONVO_USER, "q1", "a1")
+        turns = await repo.recent_turns(_CONVO_USER, limit=6)
+        assert len(turns) == 1
+        assert turns[0].question == "q1"
+        assert turns[0].answer == "a1"
+
+    async def test_recent_turns_returns_oldest_first_within_the_limit(
+        self, session: AsyncSession
+    ) -> None:
+        repo = SqlConversationRepository(session)
+        for i in range(8):
+            await repo.save_turn(_CONVO_USER, f"q{i}", f"a{i}")
+        turns = await repo.recent_turns(_CONVO_USER, limit=6)
+        assert [t.question for t in turns] == ["q2", "q3", "q4", "q5", "q6", "q7"]
+
+    async def test_recent_turns_scoped_to_user(self, session: AsyncSession) -> None:
+        repo = SqlConversationRepository(session)
+        await repo.save_turn(_CONVO_USER, "mine", "a")
+        await repo.save_turn(_CONVO_OTHER_USER, "not-mine", "a")
+        turns = await repo.recent_turns(_CONVO_USER, limit=6)
+        assert [t.question for t in turns] == ["mine"]
+
+    async def test_all_turns_returns_oldest_first(self, session: AsyncSession) -> None:
+        repo = SqlConversationRepository(session)
+        await repo.save_turn(_CONVO_USER, "q1", "a1")
+        await repo.save_turn(_CONVO_USER, "q2", "a2")
+        turns = await repo.all_turns(_CONVO_USER)
+        assert [t.question for t in turns] == ["q1", "q2"]
+
+    async def test_turn_count(self, session: AsyncSession) -> None:
+        repo = SqlConversationRepository(session)
+        assert await repo.turn_count(_CONVO_USER) == 0
+        await repo.save_turn(_CONVO_USER, "q1", "a1")
+        await repo.save_turn(_CONVO_USER, "q2", "a2")
+        assert await repo.turn_count(_CONVO_USER) == _ROWS_2
+
+    async def test_get_summary_missing_returns_none(self, session: AsyncSession) -> None:
+        repo = SqlConversationRepository(session)
+        assert await repo.get_summary(_CONVO_USER) is None
+
+    async def test_save_summary_then_get_returns_it(self, session: AsyncSession) -> None:
+        repo = SqlConversationRepository(session)
+        await repo.save_summary(_CONVO_USER, "the summary")
+        assert await repo.get_summary(_CONVO_USER) == "the summary"
+
+    async def test_save_summary_overwrites_existing(self, session: AsyncSession) -> None:
+        repo = SqlConversationRepository(session)
+        await repo.save_summary(_CONVO_USER, "first")
+        await repo.save_summary(_CONVO_USER, "second")
+        assert await repo.get_summary(_CONVO_USER) == "second"
+
+    async def test_clear_removes_turns_and_summary(self, session: AsyncSession) -> None:
+        repo = SqlConversationRepository(session)
+        await repo.save_turn(_CONVO_USER, "q1", "a1")
+        await repo.save_summary(_CONVO_USER, "summary")
+        await repo.clear(_CONVO_USER)
+        assert await repo.all_turns(_CONVO_USER) == []
+        assert await repo.get_summary(_CONVO_USER) is None
+
+    async def test_clear_does_not_affect_other_users(self, session: AsyncSession) -> None:
+        repo = SqlConversationRepository(session)
+        await repo.save_turn(_CONVO_USER, "mine", "a")
+        await repo.save_turn(_CONVO_OTHER_USER, "not-mine", "a")
+        await repo.clear(_CONVO_USER)
+        remaining = await repo.all_turns(_CONVO_OTHER_USER)
+        assert [t.question for t in remaining] == ["not-mine"]
+
+
+class TestInMemoryConversationRepository:
+    async def test_save_turn_then_recent_turns_returns_it(self) -> None:
+        repo = InMemoryConversationRepository()
+        await repo.save_turn(_CONVO_USER, "q1", "a1")
+        turns = await repo.recent_turns(_CONVO_USER, limit=6)
+        assert len(turns) == 1
+        assert turns[0].question == "q1"
+
+    async def test_recent_turns_returns_oldest_first_within_the_limit(self) -> None:
+        repo = InMemoryConversationRepository()
+        for i in range(8):
+            await repo.save_turn(_CONVO_USER, f"q{i}", f"a{i}")
+        turns = await repo.recent_turns(_CONVO_USER, limit=6)
+        assert [t.question for t in turns] == ["q2", "q3", "q4", "q5", "q6", "q7"]
+
+    async def test_turn_count(self) -> None:
+        repo = InMemoryConversationRepository()
+        assert await repo.turn_count(_CONVO_USER) == 0
+        await repo.save_turn(_CONVO_USER, "q1", "a1")
+        assert await repo.turn_count(_CONVO_USER) == 1
+
+    async def test_save_summary_then_get_returns_it(self) -> None:
+        repo = InMemoryConversationRepository()
+        await repo.save_summary(_CONVO_USER, "the summary")
+        assert await repo.get_summary(_CONVO_USER) == "the summary"
+
+    async def test_clear_removes_turns_and_summary(self) -> None:
+        repo = InMemoryConversationRepository()
+        await repo.save_turn(_CONVO_USER, "q1", "a1")
+        await repo.save_summary(_CONVO_USER, "summary")
+        await repo.clear(_CONVO_USER)
+        assert await repo.all_turns(_CONVO_USER) == []
+        assert await repo.get_summary(_CONVO_USER) is None
