@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../api/auth";
 import { warmupChat } from "../api/knowledge";
 
@@ -47,10 +47,15 @@ export default function ChatPage() {
   const [question, setQuestion] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [coldStart, setColdStart] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     warmupChat().catch(() => {});
   }, []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: "end" });
+  }, [messages]);
 
   async function handleSend(): Promise<void> {
     const q = question.trim();
@@ -160,6 +165,7 @@ export default function ChatPage() {
             )}
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
       <div className="mt-4 flex gap-2">
         <input

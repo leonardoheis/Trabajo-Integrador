@@ -1,5 +1,7 @@
 import asyncio
-from collections.abc import AsyncIterator
+import queue
+import threading
+from collections.abc import AsyncIterator, Iterator
 from functools import lru_cache
 
 from llama_cpp import Llama
@@ -64,13 +66,59 @@ class LlamaCppChatLlm(ChatLlm):
             raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
         return _first_message_content(response)
 
+    def _stream_tokens(self, system: str, user: str) -> Iterator[str]:
+        llm = get_chat_llm(self._model_path, self._n_ctx)
+        try:
+            stream = llm.create_chat_completion(
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                max_tokens=self._max_tokens,
+                temperature=Settings.slm_temperature,
+                top_p=Settings.slm_top_p,
+                stream=True,
+            )
+            for chunk in stream:
+                token = _delta_content(chunk)
+                if token:
+                    yield token
+        except Exception as exc:
+            raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
+
+    def _produce_tokens(
+        self, system: str, user: str, token_queue: "queue.Queue[str | ChatLlmError | None]"
+    ) -> None:
+        try:
+            for token in self._stream_tokens(system, user):
+                token_queue.put(token)
+        except ChatLlmError as exc:
+            token_queue.put(exc)
+        finally:
+            token_queue.put(None)
+
     async def astream(self, system: str, user: str) -> AsyncIterator[str]:
         # llama.cpp generation is blocking and CPU/GPU bound; running it inline would
         # freeze every other request (other jobs, health checks, open SSE streams) for
-        # its whole duration. Yielded as a single chunk -- token-level streaming would
-        # need a queue bridging the worker thread back to the event loop, which is not
-        # worth it for the local fallback provider.
-        yield await asyncio.to_thread(self._complete, system, user)
+        # its whole duration. A background thread produces tokens from the blocking
+        # stream=True generator and pushes them onto a thread-safe queue; this coroutine
+        # drains that queue on the event loop, so each token reaches the caller as soon
+        # as llama.cpp emits it instead of waiting for the whole completion.
+        token_queue: queue.Queue[str | ChatLlmError | None] = queue.Queue()
+        thread = threading.Thread(
+            target=self._produce_tokens, args=(system, user, token_queue), daemon=True
+        )
+        thread.start()
+        try:
+            while (item := await asyncio.to_thread(token_queue.get)) is not None:
+                if isinstance(item, ChatLlmError):
+                    raise item
+                yield item
+        finally:
+            # thread.join() is blocking; if the caller disconnects early (a dropped SSE
+            # stream) this cleanup path must not freeze the event loop waiting for
+            # llama.cpp's uninterruptible generation to finish on its own.
+            await asyncio.to_thread(thread.join)
 
 
 def _first_message_content(response: object) -> str:
@@ -86,4 +134,20 @@ def _first_message_content(response: object) -> str:
     if not isinstance(message, dict):
         return ""
     content = message.get("content")
+    return content if isinstance(content, str) else ""
+
+
+def _delta_content(chunk: object) -> str:
+    if not isinstance(chunk, dict):
+        return ""
+    choices = chunk.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return ""
+    first = choices[0]
+    if not isinstance(first, dict):
+        return ""
+    delta = first.get("delta")
+    if not isinstance(delta, dict):
+        return ""
+    content = delta.get("content")
     return content if isinstance(content, str) else ""

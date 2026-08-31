@@ -1,4 +1,5 @@
 import secrets
+from http import HTTPStatus
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
@@ -10,6 +11,7 @@ from classiflow.api.schemas import BaseSchema
 from classiflow.domain.repositories.user import IUserRepository
 from classiflow.domain.user import AuthToken
 from classiflow.injections.production import Container
+from classiflow.knowledge.llm.llama import unload_chat_llm
 from classiflow.services.auth.oauth import exchange_code, get_authorization_url
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -48,3 +50,10 @@ async def auth_callback(
 @router.get("/me")
 async def auth_me(current_user: CurrentUser) -> CurrentUserSchema:
     return CurrentUserSchema(email=current_user.email, is_admin=current_user.is_admin)
+
+
+@router.post("/logout", status_code=HTTPStatus.NO_CONTENT)
+async def auth_logout(_current_user: CurrentUser) -> None:
+    # The JWT itself is stateless and cleared client-side; this only releases the
+    # chat GGUF's VRAM, which otherwise stays resident until the next ingestion job.
+    unload_chat_llm()
