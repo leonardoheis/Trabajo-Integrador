@@ -1,5 +1,5 @@
 from http import HTTPStatus
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -247,3 +247,18 @@ class TestAuthMeEndpoint:
         response = client.get("/auth/me", headers=admin_auth_headers)
         assert response.status_code == HTTPStatus.OK
         assert response.json()["isAdmin"] is True
+
+
+class TestAuthLogoutEndpoint:
+    def test_requires_auth(self, client: TestClient) -> None:
+        response = client.post("/auth/logout")
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+    def test_unloads_the_chat_model(
+        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        mock_unload = MagicMock()
+        monkeypatch.setattr("classiflow.api.routes.auth.endpoints.unload_chat_llm", mock_unload)
+        response = client.post("/auth/logout", headers=auth_headers)
+        assert response.status_code == HTTPStatus.NO_CONTENT
+        mock_unload.assert_called_once()

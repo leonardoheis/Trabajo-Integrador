@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { fetchCurrentUser, type CurrentUser } from "../api/auth";
+import { fetchCurrentUser, logoutRequest, type CurrentUser } from "../api/auth";
 import { openOAuthPopup } from "./oauthPopup";
 import { getToken, setToken, clearToken } from "./tokenStorage";
 
@@ -36,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout(): void {
+    logoutRequest().catch(() => {});
     clearToken();
     setUser(null);
   }

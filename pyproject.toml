@@ -413,7 +413,7 @@ test = "pytest tests"
 coverage = { shell = "pytest tests -v --override-ini=addopts= --log-level=CRITICAL --cov=. --cov-branch --cov-report=xml --cov-report=html --cov-report=term-missing:skip-covered --junitxml=tests/reports/pytest-report.xml" }
 check = ["lint", "typecheck", "coverage", "precommit-reloaded"]
 serve = "python -m classiflow"
-serve-api = { shell = "uvicorn classiflow.api.app:create_app --factory --reload --port 8000" }
+serve-api = { shell = "uvicorn classiflow.api.app:create_app --factory --port 8000" }
 serve-ui = { shell = "npm run dev", cwd = "src/classiflow/frontend" }
 precommit = "uv run pre-commit run --all-files --verbose"
 precommit-reloaded = "uv run --all-groups pre-commit run --all-files"

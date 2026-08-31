@@ -2,6 +2,7 @@ import os
 from collections.abc import Callable
 from uuid import UUID
 
+import wandb
 import weave
 from langchain_core.outputs import LLMResult
 from langchain_core.tracers.schemas import Run
@@ -53,6 +54,12 @@ def init_tracing() -> None:
     # request is made, so tests and clones without a key behave exactly as before.
     if not Settings.tracing_enabled:
         return
+    # wandb's default console mode wraps sys.stdout/stderr to mirror them into the W&B
+    # UI. On Windows that wrapper's flush() raises OSError: [WinError 1] (seen from
+    # tqdm progress bars during model loading, and from uvicorn's own access logger),
+    # which crashes any request that loads a HuggingFace/tqdm-using model mid-trace.
+    # "off" disables only the console capture -- metric/trace logging is unaffected.
+    wandb.setup(settings=wandb.Settings(console="off"))
     _patch_weave_tracer()
     # weave reads WEAVE_TRACE_LANGCHAIN from os.environ during init() to decide whether
     # to register its global tracer. pydantic-settings loads .env into the Settings

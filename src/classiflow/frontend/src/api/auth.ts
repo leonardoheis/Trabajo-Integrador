@@ -26,3 +26,10 @@ export async function fetchCurrentUser(): Promise<CurrentUser> {
   }
   return response.json();
 }
+
+export async function logoutRequest(): Promise<void> {
+  const response = await apiFetch("/auth/logout", { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`POST /auth/logout failed: ${response.status}`);
+  }
+}
