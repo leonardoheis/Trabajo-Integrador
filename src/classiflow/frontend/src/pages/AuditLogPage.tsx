@@ -5,13 +5,13 @@ import { fetchAuditPage, type AuditRecordItem } from "../api/audit";
 import DataTable, { type Column } from "../components/DataTable";
 
 const COLUMNS: Column<AuditRecordItem>[] = [
-  { header: "Job", render: (r) => <span className="font-mono text-xs">{r.jobId}</span> },
+  { header: "Job", render: (r) => <span className="font-mono text-sm">{r.jobId}</span> },
   { header: "Node", render: (r) => r.node },
   { header: "Event", render: (r) => r.event },
   {
     header: "Timestamp",
     render: (r) => (
-      <span className="font-mono text-xs text-[var(--color-text-faint)]">
+      <span className="font-mono text-sm text-[var(--color-text-faint)]">
         {new Date(r.timestamp).toLocaleString()}
       </span>
     ),
@@ -33,12 +33,12 @@ export default function AuditLogPage() {
 
   return (
     <div className="p-6">
-      <h1 className="mb-6 text-xl font-bold text-[var(--color-text)]">Audit Log</h1>
+      <h1 className="mb-6 text-2xl font-bold text-[var(--color-text)]">Audit Log</h1>
       <input
         placeholder="Filter by job ID"
         value={jobId}
         onChange={(e) => setJobId(e.target.value)}
-        className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]"
+        className="mb-4 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-base text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]"
       />
       <DataTable
         columns={COLUMNS}

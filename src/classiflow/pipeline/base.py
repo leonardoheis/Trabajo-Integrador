@@ -1,6 +1,7 @@
 import time
 from abc import abstractmethod
-from typing import ClassVar, Protocol
+from collections.abc import Callable
+from typing import ClassVar, cast
 
 import weave
 
@@ -11,25 +12,29 @@ from classiflow.pipeline.context import JobContext
 from classiflow.services.audit.service import AuditService
 
 
-class _CallWithSelfInput(Protocol):
-    # weave.op's call_display_name callable receives its own weave.trace.weave_client
-    # .Call type, which isn't part of weave's public API -- this Protocol names only
-    # the one attribute this module actually reads instead of importing a private path.
-    inputs: dict[str, object]
-
-
-def _display_name(call: _CallWithSelfInput) -> str:
-    node = call.inputs["self"]
-    assert isinstance(node, BaseNode)
-    return node.name
-
-
 def _drop_self(inputs: dict[str, object]) -> dict[str, object]:
     # `self` holds injected services (AuditService, EventBroadcaster, DB repos, ...)
     # that aren't meaningful trace data and aren't guaranteed JSON-serializable --
     # only the node's own call arguments (already the same data every node passes to
     # AuditDetail.model_validate for its audit record) are worth logging to weave.
     return {k: v for k, v in inputs.items() if k != "self"}
+
+
+def make_display_name(cls: type["BaseNode"]) -> Callable[[object], str]:
+    # weave.op()'s call_display_name callable used to read call.inputs["self"] to get
+    # the running node instance -- but weave.trace.weave_client.WeaveClient.create_call
+    # applies postprocess_inputs (our _drop_self, above) *before* building the Call
+    # object that call_display_name receives, so "self" is never actually there by the
+    # time this runs (confirmed by reading weave's own source; it raised KeyError on
+    # every node call). Every BaseNode subclass's `name` property is a fixed string
+    # literal that never reads instance state, so the class itself can stand in for the
+    # property's `self` argument -- no live instance needed.
+    def display_name(_call: object) -> str:
+        getter = cast("property", cls.name).fget
+        assert getter is not None
+        return cast("str", getter(cls))
+
+    return display_name
 
 
 class BaseNode:
@@ -46,7 +51,7 @@ class BaseNode:
         if run is not None and not cls.__dict__.get("_weave_traced", False):
             cls.run = weave.op(  # type: ignore[attr-defined]
                 run,
-                call_display_name=_display_name,
+                call_display_name=make_display_name(cls),
                 postprocess_inputs=_drop_self,
             )
             cls._weave_traced = True

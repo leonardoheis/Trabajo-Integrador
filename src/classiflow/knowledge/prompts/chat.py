@@ -30,6 +30,12 @@ _NO_CONTEXT = "No se encontraron pasajes relevantes en la base de conocimiento p
 def _passage(index: int, chunk: RetrievedChunk) -> str:
     citation = chunk.to_source()
     label = format_citation(citation.doc_type, citation.number, citation.year, citation.filename)
+    # The filename is what a user names a document by (and what retrieval can now filter
+    # on) -- but format_citation only falls back to it when doc_type/number/year didn't
+    # resolve. Always surface it so the model can connect "this passage" to "that file"
+    # even when a (possibly garbled) citation also resolved.
+    if citation.filename not in label:
+        label = f"{label} ({citation.filename})"
     return f"[{index}] {label}\n{chunk.text}"
 
 

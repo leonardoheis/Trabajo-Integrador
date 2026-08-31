@@ -29,7 +29,7 @@ export default function DataTable<T>({
   onSortChange?: (key: string) => void;
 }) {
   return (
-    <table className="w-full border-collapse text-sm">
+    <table className="w-full border-collapse text-base">
       <thead>
         <tr className="border-b border-[var(--color-border)] text-left">
           {columns.map((col) => {

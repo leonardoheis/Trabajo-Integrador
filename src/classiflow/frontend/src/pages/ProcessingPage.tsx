@@ -40,19 +40,19 @@ function UploadForm() {
         multiple
         accept=".pdf,.docx,image/*"
         onChange={(e) => setSelected(Array.from(e.target.files ?? []))}
-        className="flex-1 text-sm text-[var(--color-text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--color-border-subtle)] file:px-3 file:py-1.5 file:font-mono file:text-xs file:text-[var(--color-text)]"
+        className="flex-1 text-base text-[var(--color-text-muted)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--color-border-subtle)] file:px-3 file:py-1.5 file:font-mono file:text-sm file:text-[var(--color-text)]"
       />
       <button
         onClick={() => upload.mutate(selected)}
         disabled={selected.length === 0 || upload.isPending}
-        className="rounded-md bg-[var(--color-accent)] px-3 py-2 text-sm font-semibold text-[var(--color-bg)] disabled:opacity-50"
+        className="rounded-md bg-[var(--color-accent)] px-3 py-2 text-base font-semibold text-[var(--color-bg)] disabled:opacity-50"
       >
         {upload.isPending
           ? "Uploading…"
           : `Upload${selected.length > 1 ? ` (${selected.length})` : ""}`}
       </button>
       {upload.isError && (
-        <span className="text-sm text-[var(--color-danger)]">Upload failed. Try again.</span>
+        <span className="text-base text-[var(--color-danger)]">Upload failed. Try again.</span>
       )}
     </div>
   );
@@ -107,7 +107,7 @@ function JobCard({ job }: { job: JobSummary }) {
   return (
     <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-all duration-150">
       <p className="font-semibold text-[var(--color-text)]">{job.filename}</p>
-      <p className="mb-4 font-mono text-xs text-[var(--color-text-faint)]">{job.jobId}</p>
+      <p className="mb-4 font-mono text-sm text-[var(--color-text-faint)]">{job.jobId}</p>
       <StepTimeline entries={entries} />
     </div>
   );
@@ -125,7 +125,7 @@ export default function ProcessingPage() {
 
   return (
     <div className="p-6">
-      <h1 className="mb-6 text-xl font-bold text-[var(--color-text)]">Processing</h1>
+      <h1 className="mb-6 text-2xl font-bold text-[var(--color-text)]">Processing</h1>
 
       <UploadForm />
 
@@ -136,13 +136,13 @@ export default function ProcessingPage() {
         {queued.map((job) => (
           <div
             key={job.jobId}
-            className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm"
+            className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-base"
           >
             <span className="text-[var(--color-text)]">{job.filename}</span>
             <span className="text-[var(--color-text-faint)]">waiting for a worker</span>
           </div>
         ))}
-        {queued.length === 0 && <p className="text-sm text-[var(--color-text-muted)]">None</p>}
+        {queued.length === 0 && <p className="text-base text-[var(--color-text-muted)]">None</p>}
       </div>
 
       <p className="mb-2 font-mono text-[11px] uppercase tracking-wider text-[var(--color-text-faint)]">
