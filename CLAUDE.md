@@ -93,17 +93,23 @@ This is the single verification gate. It runs in order:
 
 | Step | Command | What it checks |
 |------|---------|---------------|
-| `lint` | `ruff check . && ruff format --check .` | Style and lint rules |
+| `lint` | `ruff check . && ruff format --check .` | Style and lint rules (Python only) |
 | `typecheck` | `mypy src` | Type correctness |
+| `coverage` | `pytest tests -v --cov=. ...` | Full backend test suite + coverage report |
+| `precommit-reloaded` | `uv run --all-groups pre-commit run --all-files` | Every pre-commit hook, including frontend eslint/prettier and codespell |
+
+`poe lint`/`poe typecheck` are Python-only — frontend lint/format checks only run as part of
+`precommit-reloaded` (inside the full `poe check`), not via any standalone `poe` task.
 
 Individual tools (when you need to run one step in isolation):
 
 ```bash
-uv run poe lint        # lint + format check only
+uv run poe lint        # lint + format check only (Python)
 uv run poe typecheck   # mypy only
-uv run poe test        # pytest tests/ only
+uv run poe test        # pytest tests/ only, no coverage report
+uv run poe coverage    # pytest tests/ with coverage report (what `check` actually runs)
 uv run poe fmt         # auto-format (ruff format .)
-uv run poe precommit   # full pre-commit run on all files
+uv run poe precommit   # full pre-commit run on all files (verbose)
 ```
 
 Hooks enforced on every commit (see `.pre-commit-config.yaml`):
@@ -242,7 +248,7 @@ Claude prepares and verifies changes but **never** runs `git commit`, `git push`
 
 Before opening a PR, Claude must:
 1. Implement the changes in a worktree branch.
-2. Run `uv run poe check` — all steps (lint, typecheck, nbtest, coverage) must pass.
+2. Run `uv run poe check` — all steps (lint, typecheck, coverage, precommit-reloaded) must pass.
 3. Run `uv run --all-groups pre-commit run --all-files` — all hooks must pass.
 4. Present a **change summary**: each file (new/modified), what changed, and test results.
 5. Ask: *"Do you authorize the PR creation?"*
@@ -250,13 +256,13 @@ Before opening a PR, Claude must:
 
 Saying "execute task X" or "implement and make a PR" is **not** authorization — the user must explicitly approve after reviewing the summary.
 
-**Base branch:** Each stage gets its own sprint integration branch; task PRs target that
-branch, never `main` directly. The integration branch itself gets PR'd into `main` once
-its stage is closed out (e.g. `feat/ingesta-pipeline` → `main`, Stage 1, PR #17).
-Current: **`feat/extraction-hardening`** (Stage 2 — Extraction Hardening). All Stage 2
-tasks (S2-T01–T07) are implemented and committed; the branch itself is not yet merged
-to `main` — that merge needs explicit user authorization like any other PR.
-`feat/ingesta-pipeline` is closed; don't target it for new work.
+**Base branch:** Stages 1–5 (ingesta pipeline through knowledge base + chat) are all done
+and merged to `main` (PRs #17, #20, #21, #22, and the Stage 5 KB/chat/theme work landing
+across PRs #25–#27). There is no active per-stage integration branch anymore — new work
+is a short-lived feature branch cut directly from `main` (e.g. `feat/chat-vram-isolation`,
+`feat/archive-daylight-theme`, `feat/inspectable-pipeline-steps`), PR'd back into `main`
+once done. Same authorization rule applies: implement on the branch, verify, present the
+summary, wait for explicit "authorize"/"yes"/"go ahead" before pushing or opening the PR.
 
 ## Downloaded documents (Phase 1 output)
 
