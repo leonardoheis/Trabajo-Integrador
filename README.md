@@ -56,7 +56,7 @@ Sources (inputs)
 | 2 | Extraction hardening — bounded concurrency + observability around Stage 1's text extraction | ✅ done — [PR #20](https://github.com/leonardoheis/Trabajo-Integrador/pull/20) |
 | 3 | Refinement & enrichment — text cleaning, entity extraction, metadata enrichment | ✅ done — [PR #21](https://github.com/leonardoheis/Trabajo-Integrador/pull/21) |
 | 4 | Classification & routing — primary classifier, BETO v2 second opinion, LLM judge, review queue | ✅ done — [PR #22](https://github.com/leonardoheis/Trabajo-Integrador/pull/22) |
-| 5 | Knowledge base + chat agent | 🔲 not started — see [`tasks/plan_stage5.md`](tasks/plan_stage5.md) |
+| 5 | Knowledge base + chat agent | ✅ done — [PR #25](https://github.com/leonardoheis/Trabajo-Integrador/pull/25), [PR #26](https://github.com/leonardoheis/Trabajo-Integrador/pull/26), [PR #27](https://github.com/leonardoheis/Trabajo-Integrador/pull/27) |
 
 Full task-by-task detail per stage: [`tasks/todo_stage2.md`](tasks/todo_stage2.md) ·
 [`tasks/todo_stage3.md`](tasks/todo_stage3.md) · [`tasks/todo_stage4.md`](tasks/todo_stage4.md).
@@ -202,21 +202,35 @@ not re-extract anything.
 │       │   │                       smells_risk · confidence_gate · llm_judge · routing
 │       │   ├── domain/              DocumentCategory · ReviewRoute · results
 │       │   └── prompts/             primary_classification.py · llm_judge.py
+│       ├── knowledge/                Stage 5 — RAG knowledge base + chat, one folder per pipeline
+│       │   │                       stage: domain/ · chunking/ · embeddings/ · vectordb/ ·
+│       │   │                       retrieval/ · prompts/ · llm/ · chat/ · indexing/ (see its own
+│       │   │                       README.md for the full breakdown)
+│       ├── model_cache.py           evict_lru_cache() — shared VRAM-eviction helper for every
+│       │                           cached model loader (SLM, BERT, chat LLM, both embedders)
 │       ├── pipeline/                base.py (BaseNode) · context.py (JobContext) — shared across stages
 │       ├── storage/                 document_storage.py — classified-document filesystem layout
 │       ├── api/                    FastAPI application
 │       │   ├── app.py · runner.py · dependencies.py (DI-wired Depends() aliases)
 │       │   ├── routes/             auth/ · health/ · pipeline/ (ingest, SSE events, review queue) ·
-│       │   │                       classification/ (review-queue decisions)
+│       │   │                       classification/ (review-queue decisions) ·
+│       │   │                       knowledge/ (chat, sync, per-document indexing)
 │       │   └── error_handlers/     typed exception → JSONResponse handlers
 │       ├── injections/             production.py (Container) · test.py (TestContainer)
-│       └── playground/             stage1/ · stage2/ · stage3/ · stage4/ demo notebooks ·
+│       ├── frontend/                React 19 + Vite + Tailwind v4 web UI — Processing,
+│       │                           Classification, Document Detail, Users, Audit Log, Chat pages
+│       └── playground/             stage1/ · stage2/ · stage3/ · stage4/ · stage5/ demo notebooks ·
 │                                   samples/ (sample PDFs the notebooks depend on)
 ├── alembic/versions/                0001 initial schema · 0002 rename agent→node ·
 │                                   0003 add Job.extracted_text · 0004 enriched_records ·
 │                                   0005 classification_records · 0006 judge verdict fields ·
-│                                   0007 enriched_record raw_text
+│                                   0007 enriched_record raw_text · 0008 allowed_user is_admin ·
+│                                   0009 documents catalogue · 0010 rename documents→document_kb ·
+│                                   0011 enriched_record filename/sha256 · 0012 drop
+│                                   scraped-catalogue-only columns from document_kb
 ├── tasks/                          plan_stageN.md + todo_stageN.md per stage (1–5)
+├── docs/superpowers/                specs/ + plans/ — design specs and implementation plans
+│                                   for work done via the superpowers brainstorming/planning flow
 ├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
 └── uv.lock                         Locked dependency graph
 ```
@@ -270,6 +284,48 @@ primary_classifier ──► second_opinion ──► foreign_municipality ─�
 Human-reviewed jobs are corrected via `POST /classification/{job_id}/decision`, which
 upserts the existing record rather than duplicating it.
 
+## Stage 5 — Knowledge Base + Chat Agent (done — [PR #25](https://github.com/leonardoheis/Trabajo-Integrador/pull/25), [PR #26](https://github.com/leonardoheis/Trabajo-Integrador/pull/26), [PR #27](https://github.com/leonardoheis/Trabajo-Integrador/pull/27))
+
+A RAG (retrieval-augmented generation) pipeline (`src/classiflow/knowledge/`) that indexes
+accepted, classified documents and answers questions about them with cited sources:
+
+```
+EnrichedRecord (accepted) ──► chunk ──► embed ──► ChromaDB
+                                                      │
+question ──► embed ──► similarity search ◄───────────┘
+                │
+          top-k chunks ──► chat prompt ──► local LLM (llama.cpp) ──► streamed answer + sources
+```
+
+- **Indexing is manual, never automatic.** A document only enters the Knowledge Base when a
+  human (or an accepted auto-classification) explicitly triggers it — the "Index into
+  Knowledge Base" button on a document's detail page, or the "Sync Knowledge Base" batch
+  action on the Classification page (`PipelineService.synchronize_kb()`). Only `accept`-routed
+  documents are eligible; classification alone never indexes anything.
+- **Chunking** (`knowledge/chunking/`) splits `cleaned_text` into overlapping windows
+  (`CHUNK_SIZE`/`CHUNK_OVERLAP`), each headed with a citation line derived from the document's
+  own extracted entities (`doc_type`/`number`/`year`) — no external metadata source (an earlier
+  CSV-based lookup was dropped in favor of the LLM-extracted entities already produced during
+  enrichment).
+- **Embeddings** — a multilingual SentenceTransformer (`paraphrase-multilingual-MiniLM-L12-v2`,
+  separate from node4's `all-MiniLM-L6-v2` duplicate-control model, which must not change since
+  its threshold is calibrated against it) — see **Models** below for the manual download step.
+- **Retrieval** (`knowledge/retrieval/`) does similarity search over Chroma, with an automatic
+  fallback: if a question names a document by filename, that filename is used as an exact
+  metadata filter instead of relying purely on embedding similarity (dense search is weak at
+  exact identifier lookup).
+- **Chat** (`knowledge/chat/`) streams a local llama.cpp completion (`Meta-Llama-3.1-8B-Instruct`,
+  the same model file the ingestion/classification stages share) grounded strictly in the
+  retrieved passages, with inline source citations.
+- **VRAM isolation** — the chat model, the pipeline's own SLM/BERT models, and both embedding
+  models are evicted from GPU memory at the start and end of every pipeline job (`model_cache.py`'s
+  `evict_lru_cache()`), so a chat session and a processing job never hold two resident copies at
+  once on the same card. The chat model is pre-warmed when the Chat page opens, skipped silently
+  if a job is currently running.
+- **Frontend** (`src/classiflow/frontend/`, React + Vite + Tailwind) — a Chat page with streamed
+  answers and source citations, a Knowledge Base tab on the document detail page, and an "Indexed"
+  column on the Classification table showing which documents are actually in the KB.
+
 ## Build Status
 
 Stage 1–4 status, task tables, and PR links are summarized in the [Stages](#stages)
@@ -294,6 +350,13 @@ table above. Full per-task detail: [`tasks/todo.md`](tasks/todo.md) (Stage 1) ·
 - **LLM judge as disagreement arbiter** — a separate model (Gemma 4) resolves
   primary/second-opinion disagreements using the second opinion's own OOD/SVM grounding,
   but never auto-accepts a genuine disagreement regardless of its verdict
+- **Weave (W&B) tracing** — every pipeline node is wrapped in `weave.op()` at class-definition
+  time (`pipeline/base.py`); tracing only activates when `WANDB_API_KEY` is set, so a clone
+  with no `.env` (including every test run) never calls `weave.init()` or reaches the network
+- **Explicit, never-automatic Knowledge Base indexing** — a document enters the KB only via a
+  manual action (per-document button or batch sync), never as a side effect of classification,
+  and its cached models (chat LLM, both embedders) are evicted from VRAM at every pipeline job
+  boundary so a chat session and a processing job never both hold a model resident at once
 
 ## Document Categories
 
@@ -326,22 +389,27 @@ Assuming ~200 KB average per PDF, that's **~4 GB** total storage. The ingested d
 
 ```bash
 uv sync --dev
+npm --prefix src/classiflow/frontend install   # frontend dependencies
 ```
 
 Always use `uv sync` — do not use `pip install`.
 
 ## Models
 
-The pipeline uses four models. `models/bert_tunning_beto_v2/` is committed via Git LFS
+The pipeline uses five models. `models/bert_tunning_beto_v2/` is committed via Git LFS
 (clone as normal — no separate download step). Everything else under `models/` is
-gitignored and must be fetched manually before the pipeline will run end to end.
+gitignored and must be fetched manually before the pipeline will run end to end — **every
+model here loads with `local_files_only=True`, so nothing is ever fetched at request time,
+including the two embedding models below** (this changed from an earlier auto-download
+behavior; both must now be present on disk before first use).
 
 | Model | Purpose | Source | Target path |
 |---|---|---|---|
-| Meta-Llama-3.1-8B-Instruct (Q4_K_M GGUF) | Shared SLM/LLM for node2 (format gray-zone), node3 (content legitimacy), Stage 3 enrichment, and the Stage 4 primary classifier | Hugging Face — search for a Q4_K_M GGUF quantization of `Meta-Llama-3.1-8B-Instruct` | `models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf` |
+| Meta-Llama-3.1-8B-Instruct (Q4_K_M GGUF) | Shared SLM/LLM for node2 (format gray-zone), node3 (content legitimacy), Stage 3 enrichment, the Stage 4 primary classifier, and the Stage 5 chat agent | Hugging Face — search for a Q4_K_M GGUF quantization of `Meta-Llama-3.1-8B-Instruct` | `models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf` |
 | Gemma 4 E4B-it (Q4_K_M GGUF) | LLM judge — final quality gate for judge-routed classification cases | Hugging Face — search for a Q4_K_M GGUF quantization of `gemma-4-E4B-it` | `models/gemma-4-E4B-it-Q4_K_M.gguf` |
 | BETO v2 (fine-tuned) | Stage 4 second-opinion classifier + SVM reviewer + OOD scoring | committed via Git LFS | `models/bert_tunning_beto_v2/` |
-| all-MiniLM-L6-v2 | Embedding model used by node4 for semantic duplicate detection | [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | `models/embeddings/` (auto-downloaded on first use) |
+| all-MiniLM-L6-v2 | Embedding model used by node4 for semantic duplicate detection | [sentence-transformers/all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) | `models/embeddings/` |
+| paraphrase-multilingual-MiniLM-L12-v2 | Stage 5 chat/indexing embedder (multilingual — the corpus is Spanish); kept separate from node4's model since node4's duplicate-detection threshold is calibrated against that specific model and must not move | [sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2) | default HF cache (or `EMBEDDING_MODEL_PATH` if set) |
 
 **LLM/SLM — manual download required.** Find a Q4_K_M GGUF release for each model on
 Hugging Face (e.g. via the Hub search UI or `huggingface-cli search`), then:
@@ -353,20 +421,38 @@ uv run huggingface-cli download <repo-id> \
     gemma-4-E4B-it-Q4_K_M.gguf --local-dir models
 ```
 
-**Embedding model — no action needed.** `node4_duplicate_control.py`'s
-`SentenceTransformer("all-MiniLM-L6-v2", cache_folder=Settings.embedding_model_path)`
-downloads it automatically into `models/embeddings/` the first time node4 runs.
+**Embedding models — manual download required too.** Both are pinned by name via
+`sentence_transformers.SentenceTransformer(..., local_files_only=True)`, so they must already
+be present in the local cache before first use:
 
-Both paths are configurable via `Settings` (`NODE2_MODEL_PATH`/`NODE3_MODEL_PATH` share
-one path by default; `EMBEDDING_MODEL_PATH`) if you want to point at a different
-location or a different quantization of the SLM.
+```bash
+uv run huggingface-cli download sentence-transformers/all-MiniLM-L6-v2 \
+    --local-dir models/embeddings/models--sentence-transformers--all-MiniLM-L6-v2
+uv run huggingface-cli download sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+```
+
+(The second command uses the default Hugging Face cache location, matching what
+`SentenceTransformer` looks for when no `cache_folder` is given — set `HF_HOME` first if you
+want it somewhere else.)
+
+Both GGUF paths are configurable via `Settings` (`NODE2_MODEL_PATH`/`NODE3_MODEL_PATH` share
+one path by default; `EMBEDDING_MODEL_PATH` for node4's embedder) if you want to point at a
+different location or a different quantization.
 
 ## Development
 
 ```bash
-uv run poe check   # lint + type check + coverage (run after every change)
+uv run poe check   # lint + typecheck + full test suite + full pre-commit (run after every change)
 uv run poe fmt     # auto-format
-uv run poe test    # unit tests only
+uv run poe test    # unit tests only, no coverage report
+uv run poe serve   # backend + frontend together (python -m classiflow)
+```
+
+Backend and frontend can also run separately:
+
+```bash
+uv run poe serve-api   # uvicorn, --reload, port 8000
+uv run poe serve-ui    # vite dev server (src/classiflow/frontend)
 ```
 
 ### Running the migrations
