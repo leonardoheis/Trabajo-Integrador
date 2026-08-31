@@ -56,7 +56,7 @@ Sources (inputs)
 | 2 | Extraction hardening — bounded concurrency + observability around Stage 1's text extraction | ✅ done — [PR #20](https://github.com/leonardoheis/Trabajo-Integrador/pull/20) |
 | 3 | Refinement & enrichment — text cleaning, entity extraction, metadata enrichment | ✅ done — [PR #21](https://github.com/leonardoheis/Trabajo-Integrador/pull/21) |
 | 4 | Classification & routing — primary classifier, BETO v2 second opinion, LLM judge, review queue | ✅ done — [PR #22](https://github.com/leonardoheis/Trabajo-Integrador/pull/22) |
-| 5 | Knowledge base + chat agent | ✅ done — [PR #25](https://github.com/leonardoheis/Trabajo-Integrador/pull/25), [PR #26](https://github.com/leonardoheis/Trabajo-Integrador/pull/26), [PR #27](https://github.com/leonardoheis/Trabajo-Integrador/pull/27) |
+| 5 | Knowledge base + chat agent | ✅ done — [PR #25](https://github.com/leonardoheis/Trabajo-Integrador/pull/25), [PR #26](https://github.com/leonardoheis/Trabajo-Integrador/pull/26), [PR #27](https://github.com/leonardoheis/Trabajo-Integrador/pull/27), [PR #28](https://github.com/leonardoheis/Trabajo-Integrador/pull/28), [PR #29](https://github.com/leonardoheis/Trabajo-Integrador/pull/29), [PR #30](https://github.com/leonardoheis/Trabajo-Integrador/pull/30) |
 
 Full task-by-task detail per stage: [`tasks/todo_stage2.md`](tasks/todo_stage2.md) ·
 [`tasks/todo_stage3.md`](tasks/todo_stage3.md) · [`tasks/todo_stage4.md`](tasks/todo_stage4.md).
@@ -204,8 +204,8 @@ not re-extract anything.
 │       │   └── prompts/             primary_classification.py · llm_judge.py
 │       ├── knowledge/                Stage 5 — RAG knowledge base + chat, one folder per pipeline
 │       │   │                       stage: domain/ · chunking/ · embeddings/ · vectordb/ ·
-│       │   │                       retrieval/ · prompts/ · llm/ · chat/ · indexing/ (see its own
-│       │   │                       README.md for the full breakdown)
+│       │   │                       retrieval/ · prompts/ · llm/ · chat/ · indexing/ · memory/
+│       │   │                       (conversation history + summarization)
 │       ├── model_cache.py           evict_lru_cache() — shared VRAM-eviction helper for every
 │       │                           cached model loader (SLM, BERT, chat LLM, both embedders)
 │       ├── pipeline/                base.py (BaseNode) · context.py (JobContext) — shared across stages
@@ -227,7 +227,8 @@ not re-extract anything.
 │                                   0007 enriched_record raw_text · 0008 allowed_user is_admin ·
 │                                   0009 documents catalogue · 0010 rename documents→document_kb ·
 │                                   0011 enriched_record filename/sha256 · 0012 drop
-│                                   scraped-catalogue-only columns from document_kb
+│                                   scraped-catalogue-only columns from document_kb ·
+│                                   0013 add conversation_turns/conversation_summaries
 ├── tasks/                          plan_stageN.md + todo_stageN.md per stage (1–5)
 ├── docs/superpowers/                specs/ + plans/ — design specs and implementation plans
 │                                   for work done via the superpowers brainstorming/planning flow
@@ -284,7 +285,7 @@ primary_classifier ──► second_opinion ──► foreign_municipality ─�
 Human-reviewed jobs are corrected via `POST /classification/{job_id}/decision`, which
 upserts the existing record rather than duplicating it.
 
-## Stage 5 — Knowledge Base + Chat Agent (done — [PR #25](https://github.com/leonardoheis/Trabajo-Integrador/pull/25), [PR #26](https://github.com/leonardoheis/Trabajo-Integrador/pull/26), [PR #27](https://github.com/leonardoheis/Trabajo-Integrador/pull/27))
+## Stage 5 — Knowledge Base + Chat Agent (done — [PR #25](https://github.com/leonardoheis/Trabajo-Integrador/pull/25), [PR #26](https://github.com/leonardoheis/Trabajo-Integrador/pull/26), [PR #27](https://github.com/leonardoheis/Trabajo-Integrador/pull/27), [PR #28](https://github.com/leonardoheis/Trabajo-Integrador/pull/28), [PR #29](https://github.com/leonardoheis/Trabajo-Integrador/pull/29), [PR #30](https://github.com/leonardoheis/Trabajo-Integrador/pull/30))
 
 A RAG (retrieval-augmented generation) pipeline (`src/classiflow/knowledge/`) that indexes
 accepted, classified documents and answers questions about them with cited sources:
@@ -316,15 +317,27 @@ question ──► embed ──► similarity search ◄────────
   exact identifier lookup).
 - **Chat** (`knowledge/chat/`) streams a local llama.cpp completion (`Meta-Llama-3.1-8B-Instruct`,
   the same model file the ingestion/classification stages share) grounded strictly in the
-  retrieved passages, with inline source citations.
+  retrieved passages, with inline source citations. Streaming is real token-by-token generation
+  (a background thread bridges llama.cpp's blocking `stream=True` generator to the async caller
+  via a queue), not a single buffered chunk.
+- **Conversation memory** (`knowledge/memory/`) persists each user's chat history across sessions
+  in `conversation_turns`/`conversation_summaries`. Every new question includes the last 6 turns
+  verbatim plus a running summary of older ones; once a 7th turn is saved, the oldest turn folds
+  into that summary via one extra LLM call, fired after the answer has already streamed back so it
+  never adds latency to a response. `GET`/`DELETE /knowledge/conversation` expose the full history
+  and a "Clear conversation" reset; raw turns are never auto-pruned.
 - **VRAM isolation** — the chat model, the pipeline's own SLM/BERT models, and both embedding
   models are evicted from GPU memory at the start and end of every pipeline job (`model_cache.py`'s
   `evict_lru_cache()`), so a chat session and a processing job never hold two resident copies at
   once on the same card. The chat model is pre-warmed when the Chat page opens, skipped silently
-  if a job is currently running.
-- **Frontend** (`src/classiflow/frontend/`, React + Vite + Tailwind) — a Chat page with streamed
-  answers and source citations, a Knowledge Base tab on the document detail page, and an "Indexed"
-  column on the Classification table showing which documents are actually in the KB.
+  if a job is currently running, and also released on sign-out (`POST /auth/logout`) so it doesn't
+  sit resident indefinitely after a session ends. Unloading skips itself (rather than blocking)
+  while a chat generation is actively in flight, since llama.cpp's C bindings aren't safe for
+  concurrent use of one model handle from two threads.
+- **Frontend** (`src/classiflow/frontend/`, React + Vite + Tailwind) — a Chat page with streamed,
+  markdown-rendered answers and source citations, prior-conversation history loaded on mount, a
+  Knowledge Base tab on the document detail page, and an "Indexed" column on the Classification
+  table showing which documents are actually in the KB.
 
 ## Build Status
 
@@ -357,6 +370,10 @@ table above. Full per-task detail: [`tasks/todo.md`](tasks/todo.md) (Stage 1) ·
   manual action (per-document button or batch sync), never as a side effect of classification,
   and its cached models (chat LLM, both embedders) are evicted from VRAM at every pipeline job
   boundary so a chat session and a processing job never both hold a model resident at once
+- **Chat memory as a bounded window + running summary, not unbounded history** — the last 6 turns
+  are sent verbatim on every question; older turns are folded into a single running summary via
+  one extra LLM call, deliberately fired *after* the current answer has streamed back so memory
+  bookkeeping never adds latency to a user-visible response
 
 ## Document Categories
 
@@ -451,9 +468,17 @@ uv run poe serve   # backend + frontend together (python -m classiflow)
 Backend and frontend can also run separately:
 
 ```bash
-uv run poe serve-api   # uvicorn, --reload, port 8000
+uv run poe serve-api   # uvicorn, port 8000 (no --reload -- see note below)
 uv run poe serve-ui    # vite dev server (src/classiflow/frontend)
 ```
+
+`--reload` is intentionally not used: its reloader-parent/worker-subprocess split made an
+already-hung backend (see below) much harder to stop cleanly. Restart manually after backend
+code changes.
+
+Every backend run also writes `classiflow.log` at the repo root, overwritten fresh on each
+start — useful for finding exactly where a stuck job's execution stopped without needing to
+scroll back through terminal output.
 
 ### Running the migrations
 
