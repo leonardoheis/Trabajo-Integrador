@@ -2,26 +2,26 @@
 
 :root {
   /* Backgrounds */
-  --color-bg: #14110f;
-  --color-bg-inset: #100d0a;
-  --color-surface: #1b1712;
-  --color-surface-hover: #221d16;
+  --color-bg: #f7f3ea;
+  --color-bg-inset: #efe7d4;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f4eee0;
 
   /* Borders */
-  --color-border: #322a20;
-  --color-border-subtle: #2a2319;
+  --color-border: #e4dbc8;
+  --color-border-subtle: #efe8d8;
 
   /* Text */
-  --color-text: #f2ead9;
-  --color-text-muted: #a89a80;
-  --color-text-faint: #6b5f4d;
-  --color-text-pending: #57503f;
+  --color-text: #2a2318;
+  --color-text-muted: #6b5f4d;
+  --color-text-faint: #8a7d64;
+  --color-text-pending: #b6ab92;
 
   /* Accents */
-  --color-accent: #c1663a;
-  --color-success: #6b8f5a;
-  --color-warning: #d49d3c;
-  --color-danger: #b5453a;
+  --color-accent: #b4552e;
+  --color-success: #4d6b3f;
+  --color-warning: #a1752c;
+  --color-danger: #9c3b30;
 
   /* Type */
   --font-serif: Georgia, "Times New Roman", serif;

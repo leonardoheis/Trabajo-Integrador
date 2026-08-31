@@ -21,14 +21,14 @@ function ConfidenceBar({ value }: { value: number }) {
           style={{ width: `${Math.round(value * 100)}%` }}
         />
       </div>
-      <span className="font-mono text-sm text-[var(--color-text-muted)]">{value.toFixed(2)}</span>
+      <span className="font-mono text-base text-[var(--color-text-muted)]">{value.toFixed(2)}</span>
     </div>
   );
 }
 
 function KeyValueGrid({ pairs }: { pairs: [string, React.ReactNode][] }) {
   return (
-    <dl className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-3 text-sm">
+    <dl className="grid grid-cols-[140px_1fr] gap-x-4 gap-y-3 text-base">
       {pairs.map(([label, value]) => (
         <Fragment key={label}>
           <dt className="pt-0.5 font-mono text-[11px] uppercase tracking-wide text-[var(--color-text-faint)]">
@@ -107,7 +107,7 @@ export default function DocumentDetailPage() {
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-3 py-2 text-sm capitalize transition-colors duration-150 ${
+              className={`px-3 py-2 text-base capitalize transition-colors duration-150 ${
                 tab === t
                   ? "border-b-2 border-[var(--color-accent)] font-semibold text-[var(--color-text)]"
                   : "text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)]"
@@ -119,7 +119,7 @@ export default function DocumentDetailPage() {
         </div>
 
         {tab === "extraction" && (
-          <pre className="whitespace-pre-wrap font-serif text-sm text-[var(--color-text)]">
+          <pre className="whitespace-pre-wrap font-serif text-base text-[var(--color-text)]">
             {data.enriched?.rawText ?? "No extraction data"}
           </pre>
         )}
@@ -133,7 +133,7 @@ export default function DocumentDetailPage() {
           />
         )}
         {tab === "enrichment" && !data.enriched && (
-          <p className="text-sm text-[var(--color-text-muted)]">No enrichment data</p>
+          <p className="text-base text-[var(--color-text-muted)]">No enrichment data</p>
         )}
 
         {tab === "classification" && data.classification && (
@@ -146,7 +146,7 @@ export default function DocumentDetailPage() {
                   "Review route",
                   <span
                     key="route"
-                    className="font-mono text-xs uppercase text-[var(--color-warning)]"
+                    className="font-mono text-sm uppercase text-[var(--color-warning)]"
                   >
                     {data.classification.reviewRoute}
                   </span>,
@@ -181,7 +181,7 @@ export default function DocumentDetailPage() {
                 <p className="mb-2 mt-6 font-mono text-[11px] uppercase tracking-wide text-[var(--color-text-faint)]">
                   Judge reasoning
                 </p>
-                <p className="text-sm leading-relaxed text-[var(--color-text-muted)]">
+                <p className="text-base leading-relaxed text-[var(--color-text-muted)]">
                   {data.classification.judgeReasoning}
                 </p>
               </>
@@ -190,7 +190,7 @@ export default function DocumentDetailPage() {
               pairs={[
                 [
                   "All scores",
-                  <span key="all-scores" className="block whitespace-pre-wrap font-mono text-xs">
+                  <span key="all-scores" className="block whitespace-pre-wrap font-mono text-sm">
                     {Object.entries(data.classification.allScores)
                       .map(([label, score]) => `${label}: ${score}`)
                       .join("\n")}
@@ -209,7 +209,7 @@ export default function DocumentDetailPage() {
                 ],
                 [
                   "SVM scores",
-                  <span key="svm-scores" className="block whitespace-pre-wrap font-mono text-xs">
+                  <span key="svm-scores" className="block whitespace-pre-wrap font-mono text-sm">
                     {Object.entries(data.classification.svmScores)
                       .map(([label, score]) => `${label}: ${score}`)
                       .join("\n") || "—"}
@@ -217,7 +217,7 @@ export default function DocumentDetailPage() {
                 ],
                 [
                   "OOD metrics",
-                  <span key="ood-metrics" className="block whitespace-pre-wrap font-mono text-xs">
+                  <span key="ood-metrics" className="block whitespace-pre-wrap font-mono text-sm">
                     {data.classification.oodMetrics
                       ? JSON.stringify(data.classification.oodMetrics, null, 2)
                       : "—"}
@@ -239,7 +239,7 @@ export default function DocumentDetailPage() {
           </div>
         )}
         {tab === "classification" && !data.classification && (
-          <p className="text-sm text-[var(--color-text-muted)]">No classification data</p>
+          <p className="text-base text-[var(--color-text-muted)]">No classification data</p>
         )}
 
         {tab === "knowledge" && kbData?.documentKb && (
@@ -248,7 +248,7 @@ export default function DocumentDetailPage() {
               ["Filename", kbData.documentKb.filename],
               [
                 "SHA-256",
-                <span key="sha" className="font-mono text-xs">
+                <span key="sha" className="font-mono text-sm">
                   {kbData.documentKb.sha256}
                 </span>,
               ],
@@ -264,16 +264,16 @@ export default function DocumentDetailPage() {
           !kbData?.documentKb &&
           data.classification?.reviewRoute === "accept" && (
             <div>
-              <p className="mb-3 text-sm text-[var(--color-text-muted)]">Not indexed yet</p>
+              <p className="mb-3 text-base text-[var(--color-text-muted)]">Not indexed yet</p>
               <button
                 onClick={() => indexMutation.mutate()}
                 disabled={indexMutation.isPending}
-                className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm font-semibold text-[var(--color-accent)] disabled:opacity-50"
+                className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-base font-semibold text-[var(--color-accent)] disabled:opacity-50"
               >
                 {indexMutation.isPending ? "Indexing…" : "Index into Knowledge Base"}
               </button>
               {indexMutation.isError && (
-                <p className="mt-2 text-sm text-[var(--color-danger)]">
+                <p className="mt-2 text-base text-[var(--color-danger)]">
                   Indexing failed. Try again.
                 </p>
               )}
@@ -282,7 +282,7 @@ export default function DocumentDetailPage() {
         {tab === "knowledge" &&
           !kbData?.documentKb &&
           data.classification?.reviewRoute !== "accept" && (
-            <p className="text-sm text-[var(--color-text-muted)]">
+            <p className="text-base text-[var(--color-text-muted)]">
               Document must be accepted before it can be indexed
             </p>
           )}

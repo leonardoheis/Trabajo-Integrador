@@ -126,12 +126,12 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-full flex-col p-6">
-      <h1 className="mb-4 text-xl font-bold text-[var(--color-text)]">Chat</h1>
+      <h1 className="mb-4 text-2xl font-bold text-[var(--color-text)]">Chat</h1>
       <div className="flex-1 space-y-4 overflow-y-auto">
         {messages.map((m, i) => (
           <div key={i} className={m.role === "user" ? "text-right" : "text-left"}>
             <p
-              className={`inline-block max-w-[75%] rounded-md px-3 py-2 text-sm ${
+              className={`inline-block max-w-[75%] rounded-md px-3 py-2 text-base ${
                 m.role === "user"
                   ? "bg-[var(--color-accent)] text-[var(--color-bg)]"
                   : m.error
@@ -168,12 +168,12 @@ export default function ChatPage() {
           onKeyDown={(e) => e.key === "Enter" && handleSend()}
           placeholder="Ask a question about the indexed documents…"
           disabled={isStreaming}
-          className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]"
+          className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-base text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]"
         />
         <button
           onClick={handleSend}
           disabled={isStreaming || !question.trim()}
-          className="rounded-md bg-[var(--color-accent)] px-4 py-2 text-sm font-semibold text-[var(--color-bg)] disabled:opacity-50"
+          className="rounded-md bg-[var(--color-accent)] px-4 py-2 text-base font-semibold text-[var(--color-bg)] disabled:opacity-50"
         >
           Send
         </button>

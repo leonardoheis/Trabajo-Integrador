@@ -38,7 +38,7 @@ function StepRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
         className={`absolute -left-[21px] h-1.5 w-1.5 rounded-full ${live ? "animate-pulse " : ""}${STATUS_DOT[entry.status] ?? "bg-[var(--color-text-muted)]"}`}
       />
       <span
-        className={`text-sm ${live ? "font-semibold text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}
+        className={`text-base ${live ? "font-semibold text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}
       >
         {formatNodeName(entry.node)}
       </span>
@@ -69,13 +69,13 @@ function PhaseGroup({ phase, expanded }: { phase: Phase; expanded: boolean }) {
     <div className="transition-all duration-150">
       <div className="relative flex items-center gap-2.5">
         <span className={`absolute -left-[21px] h-1.5 w-1.5 rounded-full ${dotClass}`} />
-        <span className="text-sm font-semibold text-[var(--color-text)]">{phase.name}</span>
+        <span className="text-base font-semibold text-[var(--color-text)]">{phase.name}</span>
         {!showSteps && (
           <span className="font-mono text-[11px] text-[var(--color-text-faint)]">
             {phase.entries.length} step{phase.entries.length === 1 ? "" : "s"}
           </span>
         )}
-        {live && <span className="text-sm text-[var(--color-text-muted)]">running…</span>}
+        {live && <span className="text-base text-[var(--color-text-muted)]">running…</span>}
       </div>
       {showSteps && (
         <div className="ml-4 flex flex-col gap-1 pt-1">
@@ -87,7 +87,7 @@ function PhaseGroup({ phase, expanded }: { phase: Phase; expanded: boolean }) {
             />
           ))}
           {live && (
-            <p className="pl-0 text-sm text-[var(--color-text-muted)]">
+            <p className="pl-0 text-base text-[var(--color-text-muted)]">
               {phase.entries[phase.entries.length - 1].status}…
             </p>
           )}
@@ -107,7 +107,7 @@ export default function StepTimeline({
   mode?: "condensed" | "expanded";
 }) {
   if (entries.length === 0) {
-    return <p className="text-sm text-[var(--color-text-muted)]">Waiting for the first step…</p>;
+    return <p className="text-base text-[var(--color-text-muted)]">Waiting for the first step…</p>;
   }
 
   const phases = groupByPhase(entries);

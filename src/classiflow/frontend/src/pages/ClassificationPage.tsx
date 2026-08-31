@@ -35,7 +35,7 @@ const COLUMNS: Column<ClassificationSummary>[] = [
     header: "Created",
     sortKey: "createdAt",
     render: (row) => (
-      <span className="font-mono text-xs text-[var(--color-text-faint)]">
+      <span className="font-mono text-sm text-[var(--color-text-faint)]">
         {new Date(row.createdAt).toLocaleString()}
       </span>
     ),
@@ -89,7 +89,7 @@ export default function ClassificationPage() {
 
   return (
     <div className="p-6">
-      <h1 className="mb-6 text-xl font-bold text-[var(--color-text)]">Classification</h1>
+      <h1 className="mb-6 text-2xl font-bold text-[var(--color-text)]">Classification</h1>
       <div className="mb-4 flex items-center">
         <input
           placeholder="Filter by label"
@@ -98,17 +98,17 @@ export default function ClassificationPage() {
             setLabel(e.target.value);
             setPage(1);
           }}
-          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]"
+          className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-base text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]"
         />
         <button
           onClick={() => syncMutation.mutate()}
           disabled={syncMutation.isPending}
-          className="ml-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm font-semibold text-[var(--color-accent)] disabled:opacity-50"
+          className="ml-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-base font-semibold text-[var(--color-accent)] disabled:opacity-50"
         >
           {syncMutation.isPending ? "Syncing…" : "Sync Knowledge Base"}
         </button>
         {syncResult && (
-          <span className="ml-3 font-mono text-xs text-[var(--color-text-faint)]">
+          <span className="ml-3 font-mono text-sm text-[var(--color-text-faint)]">
             Indexed {syncResult.indexedJobIds.length}, skipped {syncResult.skippedCount}
           </span>
         )}
@@ -121,7 +121,7 @@ export default function ClassificationPage() {
         sort={sortField ? { key: sortField, dir: sortDir } : undefined}
         onSortChange={handleSortChange}
       />
-      <div className="mt-4 flex items-center justify-between font-mono text-xs text-[var(--color-text-faint)]">
+      <div className="mt-4 flex items-center justify-between font-mono text-sm text-[var(--color-text-faint)]">
         <div className="flex items-center gap-3">
           <span>{data ? `${data.total} document${data.total === 1 ? "" : "s"}` : ""}</span>
           <label className="flex items-center gap-1.5">

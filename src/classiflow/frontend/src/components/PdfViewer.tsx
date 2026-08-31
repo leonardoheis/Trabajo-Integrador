@@ -83,18 +83,18 @@ export default function PdfViewer({ fileUrl }: { fileUrl: string }) {
   const file = useMemo(() => (data ? { data } : undefined), [data]);
 
   if (error) {
-    return <p className="p-4 text-sm text-[var(--color-danger)]">Failed to load the document.</p>;
+    return <p className="p-4 text-base text-[var(--color-danger)]">Failed to load the document.</p>;
   }
 
   if (!file) {
-    return <p className="p-4 text-sm text-[var(--color-text-muted)]">Loading document…</p>;
+    return <p className="p-4 text-base text-[var(--color-text-muted)]">Loading document…</p>;
   }
 
   const width = fitToWidth ? paneWidth : BASE_WIDTH * zoom;
 
   return (
     <div className="flex h-full flex-col bg-[var(--color-surface)]">
-      <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-2 font-mono text-xs text-[var(--color-text-muted)]">
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-2 font-mono text-sm text-[var(--color-text-muted)]">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setPageNumber((p) => Math.max(1, p - 1))}

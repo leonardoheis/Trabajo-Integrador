@@ -1,7 +1,7 @@
 import { NavLink } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 
-const LINK_CLASS = "block rounded-md px-3 py-2 text-sm border-l-2 border-transparent";
+const LINK_CLASS = "block rounded-md px-3 py-2 text-base border-l-2 border-transparent";
 const ACTIVE_CLASS =
   "border-[var(--color-accent)] bg-[var(--color-surface)] text-[var(--color-text)]";
 const INACTIVE_CLASS = "text-[var(--color-text-muted)] hover:text-[var(--color-text)]";
@@ -16,7 +16,7 @@ export default function Sidebar() {
   return (
     <nav className="flex h-full w-56 flex-col justify-between border-r border-[var(--color-border)] bg-[var(--color-bg-inset)] p-4">
       <div className="flex flex-col gap-1">
-        <p className="mb-4 px-3 text-lg font-bold text-[var(--color-accent)]">Classiflow</p>
+        <p className="mb-4 px-3 text-xl font-bold text-[var(--color-accent)]">Classiflow</p>
         <NavLink to="/" end className={linkClass}>
           Processing
         </NavLink>
