@@ -1,4 +1,6 @@
+import { useState } from "react";
 import type { TimelineEntry } from "../api/jobs";
+import KeyValueGrid from "./KeyValueGrid";
 import { groupByPhase, type Phase } from "./timelinePhases";
 
 const STATUS_DOT: Record<string, string> = {
@@ -31,28 +33,58 @@ function isPhaseLive(phase: Phase): boolean {
   return !TERMINAL_STATUSES.has(last.status);
 }
 
+function detailPairs(detail: Record<string, unknown>): [string, React.ReactNode][] {
+  return Object.entries(detail).map(([key, value]) => [
+    key,
+    typeof value === "object" && value !== null ? JSON.stringify(value, null, 2) : String(value),
+  ]);
+}
+
 function StepRow({ entry, live }: { entry: TimelineEntry; live: boolean }) {
+  const [open, setOpen] = useState(false);
+  const hasDetail = entry.detail != null && Object.keys(entry.detail).length > 0;
+
   return (
-    <div className="relative flex items-center gap-2.5 py-0.5 transition-all duration-150">
-      <span
-        className={`absolute -left-[21px] h-1.5 w-1.5 rounded-full ${live ? "animate-pulse " : ""}${STATUS_DOT[entry.status] ?? "bg-[var(--color-text-muted)]"}`}
-      />
-      <span
-        className={`text-base ${live ? "font-semibold text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}
+    <div className="relative flex flex-col gap-1 py-0.5 transition-all duration-150">
+      <button
+        type="button"
+        onClick={() => hasDetail && setOpen((o) => !o)}
+        disabled={!hasDetail}
+        className="relative flex items-center gap-2.5 text-left disabled:cursor-default"
       >
-        {formatNodeName(entry.node)}
-      </span>
-      <span className="font-mono text-[11px] text-[var(--color-text-faint)]">{entry.node}</span>
-      {entry.durationMs != null && (
-        <span className="ml-auto font-mono text-[11px] text-[var(--color-text-muted)]">
-          {formatDuration(entry.durationMs)}
+        <span
+          className={`absolute -left-[21px] h-1.5 w-1.5 rounded-full ${live ? "animate-pulse " : ""}${STATUS_DOT[entry.status] ?? "bg-[var(--color-text-muted)]"}`}
+        />
+        <span
+          className={`text-base ${live ? "font-semibold text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}
+        >
+          {formatNodeName(entry.node)}
         </span>
+        <span className="font-mono text-[11px] text-[var(--color-text-faint)]">{entry.node}</span>
+        {entry.durationMs != null && (
+          <span className="ml-auto font-mono text-[11px] text-[var(--color-text-muted)]">
+            {formatDuration(entry.durationMs)}
+          </span>
+        )}
+        {hasDetail && (
+          <span
+            className={`font-mono text-[11px] text-[var(--color-text-faint)] transition-transform duration-150 ${open ? "rotate-90" : ""}`}
+          >
+            ▸
+          </span>
+        )}
+      </button>
+      {open && hasDetail && (
+        <div className="mt-1">
+          <KeyValueGrid pairs={detailPairs(entry.detail as Record<string, unknown>)} />
+        </div>
       )}
     </div>
   );
 }
 
 function PhaseGroup({ phase, expanded }: { phase: Phase; expanded: boolean }) {
+  const [manuallyExpanded, setManuallyExpanded] = useState(false);
   const live = isPhaseLive(phase);
   const dotClass = live
     ? "animate-pulse bg-[var(--color-accent)]"
@@ -60,14 +92,19 @@ function PhaseGroup({ phase, expanded }: { phase: Phase; expanded: boolean }) {
       ? "bg-[var(--color-success)]"
       : "bg-[var(--color-danger)]";
 
-  // Condensed mode only expands the phase currently in progress; a phase that's
-  // already terminal (done or failed) collapses to its summary line so a
-  // multi-minute job doesn't turn into a wall of already-known-good steps.
-  const showSteps = expanded || live;
+  // Condensed mode only auto-expands the phase currently in progress; a phase that's
+  // already terminal collapses to its summary line unless the user clicks it open, so a
+  // multi-minute job doesn't turn into a wall of already-known-good steps by default.
+  const showSteps = expanded || live || manuallyExpanded;
 
   return (
     <div className="transition-all duration-150">
-      <div className="relative flex items-center gap-2.5">
+      <button
+        type="button"
+        onClick={() => !expanded && !live && setManuallyExpanded((o) => !o)}
+        disabled={expanded || live}
+        className="relative flex items-center gap-2.5 text-left disabled:cursor-default"
+      >
         <span className={`absolute -left-[21px] h-1.5 w-1.5 rounded-full ${dotClass}`} />
         <span className="text-base font-semibold text-[var(--color-text)]">{phase.name}</span>
         {!showSteps && (
@@ -76,7 +113,7 @@ function PhaseGroup({ phase, expanded }: { phase: Phase; expanded: boolean }) {
           </span>
         )}
         {live && <span className="text-base text-[var(--color-text-muted)]">running…</span>}
-      </div>
+      </button>
       {showSteps && (
         <div className="ml-4 flex flex-col gap-1 pt-1">
           {phase.entries.map((entry, i) => (
