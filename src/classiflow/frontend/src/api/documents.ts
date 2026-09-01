@@ -58,7 +58,7 @@ export interface JobDetailResponse {
   }[];
 }
 
-export type SortField = "filename" | "label" | "confidence" | "createdAt";
+export type SortField = "filename" | "label" | "confidence" | "createdAt" | "indexed";
 export type SortDir = "asc" | "desc";
 
 export async function fetchJobsPage(params: {

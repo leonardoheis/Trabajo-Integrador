@@ -35,15 +35,15 @@ from classiflow.storage.document_storage import IDocumentStorage
 
 router = APIRouter(tags=["documents"], dependencies=[Depends(get_current_user)])
 
-SortField = Literal["filename", "label", "confidence", "createdAt"]
+SortField = Literal["filename", "label", "confidence", "createdAt", "indexed"]
 
 
 def _sort_summaries(
     summaries: list[ClassificationSummary], sort: SortField, *, descending: bool
 ) -> None:
     # Each branch's key function returns a single, internally-comparable type (str,
-    # float, or datetime) -- a single shared dict of key functions would need a
-    # str | float | datetime return type that isn't safely comparable across branches,
+    # float, bool, or datetime) -- a single shared dict of key functions would need a
+    # str | float | bool | datetime return type that isn't safely comparable across branches,
     # which is exactly the kind of untyped escape hatch this project avoids.
     if sort == "filename":
         summaries.sort(key=lambda s: s.filename.lower(), reverse=descending)
@@ -51,6 +51,8 @@ def _sort_summaries(
         summaries.sort(key=lambda s: (s.label or "").lower(), reverse=descending)
     elif sort == "confidence":
         summaries.sort(key=lambda s: s.confidence, reverse=descending)
+    elif sort == "indexed":
+        summaries.sort(key=lambda s: s.indexed, reverse=descending)
     else:
         summaries.sort(key=lambda s: s.created_at, reverse=descending)
 
@@ -75,7 +77,8 @@ async def list_completed_jobs(
     summaries = []
     for job in completed:
         record = await classification_repo.find_by_job_id(job.job_id)
-        if label is not None and (record is None or record.label != label):
+        record_label = (record.label or "").lower() if record else ""
+        if label is not None and label.lower() not in record_label:
             continue
         if review_route is not None and (record is None or record.review_route != review_route):
             continue
