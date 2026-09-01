@@ -7,9 +7,43 @@ import { fetchReviewQueue } from "../api/review";
 import DataTable, { type Column } from "../components/DataTable";
 import StatusBadge from "../components/StatusBadge";
 
+function LabelChip({ label }: { label: string | null }) {
+  if (!label) return <span className="text-[var(--color-text-faint)]">—</span>;
+  return (
+    <span className="inline-block rounded bg-[var(--color-accent-subtle,#dce8ff)] px-2 py-0.5 font-mono text-xs font-medium capitalize text-[var(--color-accent)]">
+      {label.replace(/_/g, " ")}
+    </span>
+  );
+}
+
+function ConfidenceCell({ confidence, noData }: { confidence: number; noData: boolean }) {
+  if (noData) return <span className="font-mono text-[var(--color-text-faint)]">—</span>;
+  const pct = Math.round(confidence * 100);
+  const color =
+    pct >= 80
+      ? "var(--color-status-pass, #16a34a)"
+      : pct >= 60
+        ? "var(--color-status-review, #d97706)"
+        : "var(--color-status-escalate, #dc2626)";
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-[var(--color-border)]">
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="font-mono text-sm tabular-nums text-[var(--color-text-muted)]">
+        {confidence.toFixed(2)}
+      </span>
+    </div>
+  );
+}
+
 const COLUMNS: Column<ClassificationSummary>[] = [
   { header: "Filename", sortKey: "filename", render: (row) => row.filename },
-  { header: "Label", sortKey: "label", render: (row) => row.label ?? "—" },
+  {
+    header: "Label",
+    sortKey: "label",
+    render: (row) => <LabelChip label={row.label} />,
+  },
   {
     header: "Review Route",
     // reviewRoute is "n/a" when the job produced no classification record
@@ -21,14 +55,9 @@ const COLUMNS: Column<ClassificationSummary>[] = [
   {
     header: "Confidence",
     sortKey: "confidence",
-    render: (row) =>
-      row.reviewRoute === "n/a" ? (
-        <span className="font-mono text-[var(--color-text-faint)]">—</span>
-      ) : (
-        <span className="font-mono text-[var(--color-text-muted)]">
-          {row.confidence.toFixed(2)}
-        </span>
-      ),
+    render: (row) => (
+      <ConfidenceCell confidence={row.confidence} noData={row.reviewRoute === "n/a"} />
+    ),
   },
   { header: "Judged", render: (row) => (row.judgedByLlm ? "Yes" : "No") },
   { header: "Indexed", sortKey: "indexed", render: (row) => (row.indexed ? "Yes" : "No") },

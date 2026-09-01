@@ -156,6 +156,11 @@ export default function Sidebar() {
           </button>
         </div>
 
+        {!collapsed && (
+          <span className="mt-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-faint)]">
+            Pipeline
+          </span>
+        )}
         <NavItem to="/" end label="Processing" collapsed={collapsed} icon={<IconProcessing />} />
         <NavItem
           to="/classification"
@@ -164,9 +169,19 @@ export default function Sidebar() {
           icon={<IconClassification />}
         />
         <NavItem to="/review" label="Review Queue" collapsed={collapsed} icon={<IconReview />} />
+        {!collapsed && (
+          <span className="mt-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-faint)]">
+            Knowledge
+          </span>
+        )}
         <NavItem to="/chat" label="Chat" collapsed={collapsed} icon={<IconChat />} />
         {isAdmin && (
           <>
+            {!collapsed && (
+              <span className="mt-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-faint)]">
+                Admin
+              </span>
+            )}
             <NavItem to="/users" label="Users" collapsed={collapsed} icon={<IconUsers />} />
             <NavItem to="/audit" label="Audit Log" collapsed={collapsed} icon={<IconAudit />} />
           </>
