@@ -25,7 +25,7 @@ def get_authorization_url(state: str) -> str:
     return f"{_AUTH_URL}?{urlencode(params)}"
 
 
-async def _fetch_email(client: httpx.AsyncClient, code: str) -> str:
+async def _fetch_userinfo(client: httpx.AsyncClient, code: str) -> tuple[str, str | None]:
     token_resp = await client.post(
         _GOOGLE_GRANT_URL,
         data={
@@ -52,9 +52,12 @@ async def _fetch_email(client: httpx.AsyncClient, code: str) -> str:
         raise OAuthError(message=f"userinfo endpoint returned {info_resp.status_code}")
 
     try:
-        return str(info_resp.json()["email"])
+        info = info_resp.json()
+        email = str(info["email"])
+        picture: str | None = info.get("picture") or None
     except (KeyError, ValueError) as exc:
         raise OAuthError(message="Malformed userinfo response from Google") from exc
+    return email, picture
 
 
 async def exchange_code(
@@ -66,7 +69,7 @@ async def exchange_code(
     should_close = http is None
     client = http or httpx.AsyncClient()
     try:
-        email = await _fetch_email(client, code)
+        email, picture = await _fetch_userinfo(client, code)
     except httpx.HTTPError as exc:
         raise OAuthError(message="Google request failed") from exc
     finally:
@@ -76,4 +79,4 @@ async def exchange_code(
     if not await user_repo.is_allowed(email):
         raise NotAllowedError(email=email)
 
-    return AuthToken(access_token=encode_token(email))
+    return AuthToken(access_token=encode_token(email, picture))

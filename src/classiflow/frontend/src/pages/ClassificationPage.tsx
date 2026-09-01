@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import { fetchJobsPage, type ClassificationSummary, type SortField } from "../api/documents";
 import { synchronizeKb, type SynchronizeKbResult } from "../api/knowledge";
+import { fetchReviewQueue } from "../api/review";
 import DataTable, { type Column } from "../components/DataTable";
 import StatusBadge from "../components/StatusBadge";
 
@@ -54,6 +55,28 @@ export default function ClassificationPage() {
   const queryClient = useQueryClient();
   const [syncResult, setSyncResult] = useState<SynchronizeKbResult | null>(null);
 
+  const { data: reviewQueue } = useQuery({
+    queryKey: ["review-queue"],
+    queryFn: fetchReviewQueue,
+  });
+
+  const { data: allJobs } = useQuery({
+    queryKey: ["jobs-all-kpi"],
+    queryFn: () => fetchJobsPage({ pageSize: 10000 }),
+  });
+
+  const kpi = (() => {
+    const items = allJobs?.items ?? [];
+    const classified = items.filter((r) => r.reviewRoute !== "n/a");
+    const autoAccepted = classified.filter((r) => r.reviewRoute === "accept");
+    const autoRate = classified.length > 0 ? autoAccepted.length / classified.length : null;
+    const avgConf =
+      classified.length > 0
+        ? classified.reduce((s, r) => s + r.confidence, 0) / classified.length
+        : null;
+    return { total: items.length, autoRate, avgConf, reviewCount: reviewQueue?.length ?? 0 };
+  })();
+
   const syncMutation = useMutation({
     mutationFn: synchronizeKb,
     onSuccess: (result) => {
@@ -90,6 +113,28 @@ export default function ClassificationPage() {
   return (
     <div className="p-6">
       <h1 className="mb-6 text-2xl font-bold text-[var(--color-text)]">Classification</h1>
+      <div className="mb-5 flex gap-4 font-mono text-sm">
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
+          <span className="text-[var(--color-text-faint)]">Total </span>
+          <span className="font-semibold text-[var(--color-text)]">{kpi.total}</span>
+        </div>
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
+          <span className="text-[var(--color-text-faint)]">Auto-accept rate </span>
+          <span className="font-semibold text-[var(--color-text)]">
+            {kpi.autoRate !== null ? `${(kpi.autoRate * 100).toFixed(1)}%` : "—"}
+          </span>
+        </div>
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
+          <span className="text-[var(--color-text-faint)]">Avg confidence </span>
+          <span className="font-semibold text-[var(--color-text)]">
+            {kpi.avgConf !== null ? kpi.avgConf.toFixed(2) : "—"}
+          </span>
+        </div>
+        <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
+          <span className="text-[var(--color-text-faint)]">Pending review </span>
+          <span className="font-semibold text-[var(--color-text)]">{kpi.reviewCount}</span>
+        </div>
+      </div>
       <div className="mb-4 flex items-center">
         <input
           placeholder="Filter by label"

@@ -5,6 +5,7 @@ class User(BaseModel):
     email: str
     is_active: bool = True
     is_admin: bool = False
+    picture: str | None = None
 
 
 class AuthToken(BaseModel):

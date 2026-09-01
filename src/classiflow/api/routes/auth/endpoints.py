@@ -22,6 +22,7 @@ _STATE_COOKIE = "oauth_state"
 class CurrentUserSchema(BaseSchema):
     email: str
     is_admin: bool
+    picture: str | None = None
 
 
 @router.get("/login")
@@ -49,7 +50,11 @@ async def auth_callback(
 
 @router.get("/me")
 async def auth_me(current_user: CurrentUser) -> CurrentUserSchema:
-    return CurrentUserSchema(email=current_user.email, is_admin=current_user.is_admin)
+    return CurrentUserSchema(
+        email=current_user.email,
+        is_admin=current_user.is_admin,
+        picture=current_user.picture,
+    )
 
 
 @router.post("/logout", status_code=HTTPStatus.NO_CONTENT)

@@ -11,15 +11,18 @@ class DecodedPayload(BaseModel):
     sub: str
     iat: int
     exp: int
+    picture: str | None = None
 
 
-def encode_token(email: str) -> str:
+def encode_token(email: str, picture: str | None = None) -> str:
     now = datetime.now(tz=timezone.utc)
-    payload = {
+    payload: dict[str, object] = {
         "sub": email,
         "iat": now,
         "exp": now + timedelta(minutes=Settings.JWT_EXPIRE_MINUTES),
     }
+    if picture is not None:
+        payload["picture"] = picture
     return jwt.encode(payload, Settings.JWT_SECRET_KEY, algorithm="HS256")
 
 

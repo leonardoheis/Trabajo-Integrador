@@ -3,6 +3,7 @@ import { getToken, clearToken } from "../auth/tokenStorage";
 export interface CurrentUser {
   email: string;
   isAdmin: boolean;
+  picture: string | null;
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
