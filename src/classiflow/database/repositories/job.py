@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -45,6 +46,10 @@ class SqlJobRepository:
     async def list_all(self) -> list[Job]:
         result = await self._session.execute(select(Job).order_by(Job.created_at))
         return list(result.scalars().all())
+
+    async def delete(self, job_id: str) -> None:
+        await self._session.execute(sql_delete(Job).where(Job.job_id == job_id))
+        await self._session.flush()
 
     async def commit(self) -> None:
         await self._session.commit()
@@ -93,6 +98,9 @@ class InMemoryJobRepository:
 
     async def list_all(self) -> list[Job]:
         return list(self._jobs.values())
+
+    async def delete(self, job_id: str) -> None:
+        self._jobs.pop(job_id, None)
 
     async def commit(self) -> None:
         # No transaction/session to commit -- writes are already immediately visible.

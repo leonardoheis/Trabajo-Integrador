@@ -4,6 +4,8 @@ import {
   fetchRunningJobs,
   fetchJobTimeline,
   uploadDocuments,
+  discardJob,
+  pipelineWarmup,
   type JobSummary,
   type TimelineEntry,
 } from "../api/jobs";
@@ -114,17 +116,28 @@ function JobCard({ job }: { job: JobSummary }) {
 }
 
 export default function ProcessingPage() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    pipelineWarmup().catch(() => {});
+  }, []);
+
   const { data: jobs = [] } = useQuery({
     queryKey: ["running-jobs"],
     queryFn: fetchRunningJobs,
     refetchInterval: REFETCH_INTERVAL_MS,
   });
 
+  const discard = useMutation({
+    mutationFn: discardJob,
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["running-jobs"] }),
+  });
+
   const queued = jobs.filter((j) => j.status === "queued");
   const processing = jobs.filter((j) => j.status === "processing");
 
   return (
-    <div className="p-6">
+    <div className="h-full overflow-y-auto p-6">
       <h1 className="mb-6 text-2xl font-bold text-[var(--color-text)]">Processing</h1>
 
       <UploadForm />
@@ -139,7 +152,16 @@ export default function ProcessingPage() {
             className="flex items-center justify-between rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-base"
           >
             <span className="text-[var(--color-text)]">{job.filename}</span>
-            <span className="text-[var(--color-text-faint)]">waiting for a worker</span>
+            <div className="flex items-center gap-3">
+              <span className="text-[var(--color-text-faint)]">waiting for a worker</span>
+              <button
+                onClick={() => discard.mutate(job.jobId)}
+                disabled={discard.isPending}
+                className="rounded border border-[var(--color-danger)] px-2 py-0.5 font-mono text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] disabled:opacity-50"
+              >
+                Discard
+              </button>
+            </div>
           </div>
         ))}
         {queued.length === 0 && <p className="text-base text-[var(--color-text-muted)]">None</p>}

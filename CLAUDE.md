@@ -261,8 +261,8 @@ and merged to `main` (PRs #17, #20, #21, #22, and the Stage 5 KB/chat/memory wor
 across PRs #25–#30). There is no active per-stage integration branch anymore — new work
 is a short-lived feature branch cut directly from `main` (e.g. `feat/chat-vram-isolation`,
 `feat/archive-daylight-theme`, `feat/inspectable-pipeline-steps`,
-`feat/chat-streaming-and-autoscroll`, `feat/chat-markdown-and-memory`), PR'd back into
-`main` once done. Same authorization rule applies: implement on the branch, verify,
+`feat/chat-streaming-and-autoscroll`, `feat/chat-markdown-and-memory`,
+`feat/classification-search-and-sort`), PR'd back into `main` once done. Same authorization rule applies: implement on the branch, verify,
 present the summary, wait for explicit "authorize"/"yes"/"go ahead" before pushing or
 opening the PR.
 

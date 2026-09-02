@@ -66,7 +66,10 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ block: "end" });
+    const id = requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ block: "end" });
+    });
+    return () => cancelAnimationFrame(id);
   }, [messages]);
 
   async function handleClear(): Promise<void> {

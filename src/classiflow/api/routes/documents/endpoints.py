@@ -35,15 +35,15 @@ from classiflow.storage.document_storage import IDocumentStorage
 
 router = APIRouter(tags=["documents"], dependencies=[Depends(get_current_user)])
 
-SortField = Literal["filename", "label", "confidence", "createdAt"]
+SortField = Literal["filename", "label", "confidence", "createdAt", "indexed"]
 
 
 def _sort_summaries(
     summaries: list[ClassificationSummary], sort: SortField, *, descending: bool
 ) -> None:
     # Each branch's key function returns a single, internally-comparable type (str,
-    # float, or datetime) -- a single shared dict of key functions would need a
-    # str | float | datetime return type that isn't safely comparable across branches,
+    # float, bool, or datetime) -- a single shared dict of key functions would need a
+    # str | float | bool | datetime return type that isn't safely comparable across branches,
     # which is exactly the kind of untyped escape hatch this project avoids.
     if sort == "filename":
         summaries.sort(key=lambda s: s.filename.lower(), reverse=descending)
@@ -51,6 +51,8 @@ def _sort_summaries(
         summaries.sort(key=lambda s: (s.label or "").lower(), reverse=descending)
     elif sort == "confidence":
         summaries.sort(key=lambda s: s.confidence, reverse=descending)
+    elif sort == "indexed":
+        summaries.sort(key=lambda s: s.indexed, reverse=descending)
     else:
         summaries.sort(key=lambda s: s.created_at, reverse=descending)
 
@@ -62,7 +64,7 @@ async def list_completed_jobs(
         IClassificationRecordRepository, Depends(get_classification_record_repo)
     ],
     document_kb_repo: Annotated[IDocumentKbRepository, Depends(get_document_kb_repo)],
-    label: str | None = None,
+    search: str | None = None,
     review_route: Annotated[str | None, Query(alias="reviewRoute")] = None,
     page: int = 1,
     page_size: Annotated[int, Query(alias="pageSize")] = 25,
@@ -75,8 +77,11 @@ async def list_completed_jobs(
     summaries = []
     for job in completed:
         record = await classification_repo.find_by_job_id(job.job_id)
-        if label is not None and (record is None or record.label != label):
-            continue
+        if search is not None:
+            needle = search.lower()
+            record_label = (record.label or "").lower() if record else ""
+            if needle not in record_label and needle not in job.filename.lower():
+                continue
         if review_route is not None and (record is None or record.review_route != review_route):
             continue
         doc_kb = await document_kb_repo.find_by_job_id(job.job_id)

@@ -33,6 +33,17 @@ export async function fetchJobTimeline(jobId: string): Promise<TimelineEntry[]> 
   return response.json();
 }
 
+export async function pipelineWarmup(): Promise<void> {
+  await apiFetch("/pipeline/warmup", { method: "POST" });
+}
+
+export async function discardJob(jobId: string): Promise<void> {
+  const response = await apiFetch(`/pipeline/jobs/${jobId}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(`DELETE /pipeline/jobs/${jobId} failed: ${response.status}`);
+  }
+}
+
 export async function uploadDocuments(files: File[]): Promise<string[]> {
   const formData = new FormData();
   for (const file of files) {

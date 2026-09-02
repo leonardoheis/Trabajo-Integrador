@@ -337,7 +337,21 @@ question ──► embed ──► similarity search ◄────────
 - **Frontend** (`src/classiflow/frontend/`, React + Vite + Tailwind) — a Chat page with streamed,
   markdown-rendered answers and source citations, prior-conversation history loaded on mount, a
   Knowledge Base tab on the document detail page, and an "Indexed" column on the Classification
-  table showing which documents are actually in the KB.
+  table showing which documents are actually in the KB. Beyond the chat surface:
+  - **Classification search** — one box filters on label *or* filename (`GET /jobs?search=`),
+    alongside the sortable columns and page-size control.
+  - **Find in text** — a Ctrl+F-style bar on the document detail page's Extraction tab:
+    highlight-all with an active-match accent, `n of m` counter, ↑/↓ buttons and
+    Enter/Shift+Enter to step through matches, which scroll into view as they become active.
+  - **Review Queue page** — the `human_review`/`escalate` backlog with its per-document step
+    timeline, split out from the Classification table.
+  - **Job control** — queued or failed jobs can be discarded from the Processing page
+    (`DELETE /pipeline/jobs/{job_id}`); jobs mid-flight are refused.
+  - **Page-scoped model warmup** — navigating to Processing or Classification calls
+    `POST /pipeline/warmup` (releasing the chat GGUF), and opening Chat calls
+    `POST /knowledge/chat/warmup` (releasing the pipeline's models first). Both no-op while a
+    job is running.
+  - **Light/dark theme toggle** and a reworked collapsible sidebar with Google profile pictures.
 
 ## Build Status
 
@@ -356,6 +370,15 @@ table above. Full per-task detail: [`tasks/todo.md`](tasks/todo.md) (Stage 1) ·
 - **FastAPI + SSE** — `POST /pipeline/ingest` triggers background task; `GET /pipeline/{job_id}/events` streams node state
 - **`dependency-injector`** — `DeclarativeContainer` + `@inject` + `Provide[Container.*]`; `TestContainer` swaps all `Sql*` repos with `InMemory*`
 - **Document tracking** — `document_steps` records per-node path; `human_decisions` records reviewer actions; review queue via `GET /pipeline/review-queue`
+- **Per-request DB sessions for auth** — `get_current_user` builds its repo from FastAPI's own
+  `Depends(get_session)`, never from the container's process-wide `Resource`. Two concurrent
+  requests sharing one `AsyncSession` raise SQLAlchemy's "session is provisioning a new
+  connection" error, which any page issuing parallel queries will hit.
+- **stdout/stderr re-opened in the API subprocess** — W&B's console capture wraps the parent
+  process's streams, and the spawned uvicorn worker inherits handles that are invalid there
+  (`OSError: [WinError 1]` on every write). `create_app()` drops loguru's default sink and
+  re-adds one over a duplicated fd with `errors="replace"`; `runner.py` does the same for
+  `sys.stdout`/`sys.stderr`, which uvicorn's stdlib access logger re-reads at emit time.
 - **Alembic async migrations** — `asyncio.run()` pattern in `env.py`; single connection string swap to move from SQLite to PostgreSQL
 - **BETO v2 second opinion** — a fine-tuned Spanish BERT classifier + SVM reviewer + OOD
   scoring (Mahalanobis / cosine / kNN), used to cross-check the primary LLM classifier
