@@ -1,10 +1,11 @@
 import asyncio
 import json
+import logging
 from collections.abc import AsyncGenerator
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
 
 from classiflow.api.dependencies import (
@@ -33,16 +34,20 @@ from classiflow.classification.exceptions import (
     ClassificationNotAcceptedError,
     ClassificationRecordNotFoundError,
 )
+from classiflow.classification.nodes.second_opinion import unload_bert
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
 from classiflow.domain.repositories.conversation import IConversationRepository
 from classiflow.domain.repositories.document_kb import IDocumentKbRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
+from classiflow.ingesta.llm_provider import unload_slm
 from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.domain.chat import ChatQuery, SourceRef
 from classiflow.knowledge.llm.llama import get_chat_llm
 from classiflow.knowledge.memory.service import MemoryService
 from classiflow.services.pipeline.service import PipelineService, is_pipeline_busy
 from classiflow.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/knowledge", tags=["knowledge"], dependencies=[Depends(get_current_user)]
@@ -78,24 +83,43 @@ async def chat(
 async def chat_stream(
     body: ChatRequest,
     current_user: CurrentUser,
+    background_tasks: BackgroundTasks,
     chat_service: Annotated[ChatService, Depends(get_chat_service)],
     memory_service: Annotated[MemoryService, Depends(get_memory_service)],
 ) -> StreamingResponse:
     history = await memory_service.load(current_user.email)
+    logger.info("chat_stream user=%s question=%r", current_user.email, body.question[:80])
 
     async def _stream() -> AsyncGenerator[str, None]:
         sources: list[SourceRef] = []
         answer_parts: list[str] = []
-        async for token, current_sources in chat_service.astream(_to_query(body), history=history):
-            sources = current_sources
-            answer_parts.append(token)
-            yield _sse("token", {"text": token})
+        try:
+            async for token, current_sources in chat_service.astream(
+                _to_query(body), history=history
+            ):
+                sources = current_sources
+                answer_parts.append(token)
+                yield _sse("token", {"text": token})
+        except Exception:
+            logger.exception("chat_stream generation error user=%s", current_user.email)
+            yield _sse("error", {"message": "Generation failed"})
+            return
         # Sources are emitted once at the end rather than per token: they are identical
         # on every yield, and repeating them would dominate the stream.
         yield _sse("sources", _sources_payload(sources))
         yield _sse("done", {})
-        await memory_service.record_turn(
-            current_user.email, body.question, "".join(answer_parts).strip()
+        answer = "".join(answer_parts).strip()
+        logger.info(
+            "chat_stream done user=%s tokens=%d sources=%d",
+            current_user.email,
+            len(answer_parts),
+            len(sources),
+        )
+        # record_turn runs after the stream closes so it never stalls token delivery.
+        # A slow memory write (or a summarization LLM call) would otherwise block the
+        # generator and prevent the SSE response from closing cleanly.
+        background_tasks.add_task(
+            memory_service.record_turn, current_user.email, body.question, answer
         )
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
@@ -105,6 +129,8 @@ async def chat_stream(
 async def chat_warmup() -> None:
     if is_pipeline_busy():
         return
+    await asyncio.to_thread(unload_slm)
+    await asyncio.to_thread(unload_bert)
     await asyncio.to_thread(get_chat_llm, Settings.chat_model_path, Settings.chat_model_n_ctx)
 
 

@@ -1,7 +1,8 @@
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { fetchJobsPage, type ClassificationSummary, type SortField } from "../api/documents";
+import { pipelineWarmup } from "../api/jobs";
 import { synchronizeKb, type SynchronizeKbResult } from "../api/knowledge";
 import { fetchReviewQueue } from "../api/review";
 import DataTable, { type Column } from "../components/DataTable";
@@ -10,7 +11,7 @@ import StatusBadge from "../components/StatusBadge";
 function LabelChip({ label }: { label: string | null }) {
   if (!label) return <span className="text-[var(--color-text-faint)]">—</span>;
   return (
-    <span className="inline-block rounded bg-[var(--color-accent-subtle,#dce8ff)] px-2 py-0.5 font-mono text-xs font-medium capitalize text-[var(--color-accent)]">
+    <span className="inline-block rounded bg-[var(--color-accent-subtle)] px-2 py-0.5 font-mono text-xs font-medium capitalize text-[var(--color-accent-text)]">
       {label.replace(/_/g, " ")}
     </span>
   );
@@ -21,10 +22,10 @@ function ConfidenceCell({ confidence, noData }: { confidence: number; noData: bo
   const pct = Math.round(confidence * 100);
   const color =
     pct >= 80
-      ? "var(--color-status-pass, #16a34a)"
+      ? "var(--color-status-pass)"
       : pct >= 60
-        ? "var(--color-status-review, #d97706)"
-        : "var(--color-status-escalate, #dc2626)";
+        ? "var(--color-status-review)"
+        : "var(--color-status-escalate)";
   return (
     <div className="flex items-center gap-2">
       <div className="h-1.5 w-14 overflow-hidden rounded-full bg-[var(--color-border)]">
@@ -72,10 +73,14 @@ const COLUMNS: Column<ClassificationSummary>[] = [
   },
 ];
 
-const PAGE_SIZE_OPTIONS = [5, 10, 15, 20, 50] as const;
+const PAGE_SIZE_OPTIONS = [5, 10, 15, 20, 50, 100] as const;
 
 export default function ClassificationPage() {
-  const [label, setLabel] = useState("");
+  useEffect(() => {
+    pipelineWarmup().catch(() => {});
+  }, []);
+
+  const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[1]);
   const [sortField, setSortField] = useState<SortField | undefined>(undefined);
@@ -115,10 +120,10 @@ export default function ClassificationPage() {
   });
 
   const { data } = useQuery({
-    queryKey: ["jobs", label, page, pageSize, sortField, sortDir],
+    queryKey: ["jobs", search, page, pageSize, sortField, sortDir],
     queryFn: () =>
       fetchJobsPage({
-        label: label || undefined,
+        search: search || undefined,
         page,
         pageSize,
         sort: sortField,
@@ -140,7 +145,7 @@ export default function ClassificationPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="h-full overflow-y-auto p-6">
       <h1 className="mb-6 text-2xl font-bold text-[var(--color-text)]">Classification</h1>
       <div className="mb-5 flex gap-4 font-mono text-sm">
         <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2">
@@ -166,10 +171,10 @@ export default function ClassificationPage() {
       </div>
       <div className="mb-4 flex items-center">
         <input
-          placeholder="Filter by label"
-          value={label}
+          placeholder="Filter by label or filename"
+          value={search}
           onChange={(e) => {
-            setLabel(e.target.value);
+            setSearch(e.target.value);
             setPage(1);
           }}
           className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-base text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]"

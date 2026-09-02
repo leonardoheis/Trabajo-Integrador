@@ -72,39 +72,6 @@ from classiflow.storage.document_storage import IDocumentStorage
 
 _bearer = HTTPBearer()
 
-
-@inject
-async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
-    auth_service: Annotated[AuthService, Depends(Provide[Container.auth_service])],
-) -> User:
-    return await auth_service.verify_token(credentials.credentials)
-
-
-CurrentUser = Annotated[User, Depends(get_current_user)]
-
-
-# EventSource (the browser API backing GET /pipeline/{job_id}/events) cannot set
-# custom request headers -- there is no way to attach Authorization: Bearer <token>
-# to it, so this is the standard SSE-specific fallback: accept the token from a query
-# param instead. Used only for that one streaming route; every other route keeps
-# requiring a real Authorization header via CurrentUser/get_current_user above.
-@inject
-async def get_current_user_from_query_token(
-    token: str,
-    auth_service: Annotated[AuthService, Depends(Provide[Container.auth_service])],
-) -> User:
-    return await auth_service.verify_token(token)
-
-
-CurrentUserFromQueryToken = Annotated[User, Depends(get_current_user_from_query_token)]
-
-
-def require_admin(current_user: CurrentUser) -> None:
-    if not current_user.is_admin:
-        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Admin access required")
-
-
 # Session-scoped repos/services, built fresh per request from FastAPI's own native
 # yield-dependency (not dependency_injector's Resource, which has no per-request
 # teardown hook -- see injections/production.py's Container docstring comment for why).
@@ -117,6 +84,36 @@ def get_job_repo(session: DbSession) -> IJobRepository:
 
 def get_user_repo(session: DbSession) -> IUserRepository:
     return SqlUserRepository(session)
+
+
+async def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],
+    user_repo: Annotated[IUserRepository, Depends(get_user_repo)],
+) -> User:
+    return await AuthService(user_repo=user_repo).verify_token(credentials.credentials)
+
+
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+# EventSource (the browser API backing GET /pipeline/{job_id}/events) cannot set
+# custom request headers -- there is no way to attach Authorization: Bearer <token>
+# to it, so this is the standard SSE-specific fallback: accept the token from a query
+# param instead. Used only for that one streaming route; every other route keeps
+# requiring a real Authorization header via CurrentUser/get_current_user above.
+async def get_current_user_from_query_token(
+    token: str,
+    user_repo: Annotated[IUserRepository, Depends(get_user_repo)],
+) -> User:
+    return await AuthService(user_repo=user_repo).verify_token(token)
+
+
+CurrentUserFromQueryToken = Annotated[User, Depends(get_current_user_from_query_token)]
+
+
+def require_admin(current_user: CurrentUser) -> None:
+    if not current_user.is_admin:
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN, detail="Admin access required")
 
 
 def get_document_steps_repo(session: DbSession) -> IDocumentStepsRepository:

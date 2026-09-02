@@ -92,7 +92,7 @@ class _Settings(BaseSettings):
     CHAT_MODEL_PATH: str = _DEFAULT_MODEL
     # Retrieval passages plus the question do not fit in the 2048 the validation nodes
     # use, so the chat model gets its own context size.
-    CHAT_MODEL_N_CTX: int = int(os.getenv("CHAT_MODEL_N_CTX", "8192"))
+    CHAT_MODEL_N_CTX: int = int(os.getenv("CHAT_MODEL_N_CTX", "3072"))
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")

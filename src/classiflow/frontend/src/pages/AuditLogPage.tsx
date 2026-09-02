@@ -32,7 +32,7 @@ export default function AuditLogPage() {
   });
 
   return (
-    <div className="p-6">
+    <div className="h-full overflow-y-auto p-6">
       <h1 className="mb-6 text-2xl font-bold text-[var(--color-text)]">Audit Log</h1>
       <input
         placeholder="Filter by job ID"

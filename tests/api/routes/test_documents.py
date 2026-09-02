@@ -95,11 +95,27 @@ class TestJobsListEndpoint:
             test_container, "job-filter-1", "filter-me.pdf", label="decretos"
         )
 
-        response = client.get("/jobs?label=decretos", headers=auth_headers)
+        response = client.get("/jobs?search=decretos", headers=auth_headers)
 
         assert response.status_code == HTTPStatus.OK
         items = response.json()["items"]
         assert all(i["label"] == "decretos" for i in items)
+
+    async def test_filters_by_filename(
+        self,
+        client: TestClient,
+        auth_headers: dict[str, str],
+        test_container: TestContainer,
+    ) -> None:
+        await _seed_classified_job(
+            test_container, "job-filter-2", "ordenanza_9964.pdf", label="decretos"
+        )
+
+        response = client.get("/jobs?search=9964", headers=auth_headers)
+
+        assert response.status_code == HTTPStatus.OK
+        items = response.json()["items"]
+        assert all("9964" in i["filename"] for i in items)
 
     async def test_filters_by_review_route_camel_case_alias(
         self,
@@ -108,7 +124,7 @@ class TestJobsListEndpoint:
         test_container: TestContainer,
     ) -> None:
         await _seed_classified_job(
-            test_container, "job-filter-2", "human-review-me.pdf", review_route="human_review"
+            test_container, "job-filter-3", "human-review-me.pdf", review_route="human_review"
         )
 
         response = client.get("/jobs?reviewRoute=human_review", headers=auth_headers)
@@ -124,11 +140,15 @@ class TestJobsListEndpoint:
         auth_headers: dict[str, str],
         test_container: TestContainer,
     ) -> None:
-        await _seed_classified_job(test_container, "job-sort-1", "zebra.pdf", label="sort_test")
-        await _seed_classified_job(test_container, "job-sort-2", "apple.pdf", label="sort_test")
+        await _seed_classified_job(
+            test_container, "job-sort-1", "zebra.pdf", label="sort_test_names"
+        )
+        await _seed_classified_job(
+            test_container, "job-sort-2", "apple.pdf", label="sort_test_names"
+        )
 
         response = client.get(
-            "/jobs?label=sort_test&sort=filename&sortDir=asc", headers=auth_headers
+            "/jobs?search=sort_test_names&sort=filename&sortDir=asc", headers=auth_headers
         )
 
         assert response.status_code == HTTPStatus.OK
@@ -142,14 +162,14 @@ class TestJobsListEndpoint:
         test_container: TestContainer,
     ) -> None:
         await _seed_classified_job(
-            test_container, "job-sort-3", "low.pdf", label="sort_test_2", confidence=0.4
+            test_container, "job-sort-3", "low.pdf", label="sort_test_scores", confidence=0.4
         )
         await _seed_classified_job(
-            test_container, "job-sort-4", "high.pdf", label="sort_test_2", confidence=0.9
+            test_container, "job-sort-4", "high.pdf", label="sort_test_scores", confidence=0.9
         )
 
         response = client.get(
-            "/jobs?label=sort_test_2&sort=confidence&sortDir=desc", headers=auth_headers
+            "/jobs?search=sort_test_scores&sort=confidence&sortDir=desc", headers=auth_headers
         )
 
         assert response.status_code == HTTPStatus.OK

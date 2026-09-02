@@ -62,7 +62,7 @@ export type SortField = "filename" | "label" | "confidence" | "createdAt" | "ind
 export type SortDir = "asc" | "desc";
 
 export async function fetchJobsPage(params: {
-  label?: string;
+  search?: string;
   reviewRoute?: string;
   page?: number;
   pageSize?: number;
@@ -70,7 +70,7 @@ export async function fetchJobsPage(params: {
   sortDir?: SortDir;
 }): Promise<JobsPage> {
   const query = new URLSearchParams();
-  if (params.label) query.set("label", params.label);
+  if (params.search) query.set("search", params.search);
   if (params.reviewRoute) query.set("reviewRoute", params.reviewRoute);
   if (params.page) query.set("page", String(params.page));
   if (params.pageSize) query.set("pageSize", String(params.pageSize));

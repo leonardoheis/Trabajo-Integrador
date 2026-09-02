@@ -1,3 +1,4 @@
+import asyncio
 import secrets
 from http import HTTPStatus
 from typing import Annotated
@@ -8,11 +9,16 @@ from fastapi.responses import RedirectResponse
 
 from classiflow.api.dependencies import CurrentUser
 from classiflow.api.schemas import BaseSchema
+from classiflow.classification.nodes.second_opinion import unload_bert
 from classiflow.domain.repositories.user import IUserRepository
 from classiflow.domain.user import AuthToken
+from classiflow.ingesta.llm_provider import unload_slm
+from classiflow.ingesta.nodes.node4_duplicate_control import unload_duplicate_control_embedder
 from classiflow.injections.production import Container
+from classiflow.knowledge.embeddings.embedder import unload_kb_embedder
 from classiflow.knowledge.llm.llama import unload_chat_llm
 from classiflow.services.auth.oauth import exchange_code, get_authorization_url
+from classiflow.services.pipeline.service import is_pipeline_busy
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -59,6 +65,17 @@ async def auth_me(current_user: CurrentUser) -> CurrentUserSchema:
 
 @router.post("/logout", status_code=HTTPStatus.NO_CONTENT)
 async def auth_logout(_current_user: CurrentUser) -> None:
-    # The JWT itself is stateless and cleared client-side; this only releases the
-    # chat GGUF's VRAM, which otherwise stays resident until the next ingestion job.
-    unload_chat_llm()
+    # The JWT itself is stateless and cleared client-side; this only releases VRAM.
+    # The chat GGUF is never used by the pipeline, so it always goes. The other four
+    # (SLM, BETO, duplicate-control and KB embedders) belong to the pipeline graph --
+    # unloading them out from under an in-flight job would fail it.
+    await asyncio.to_thread(unload_chat_llm)
+    if is_pipeline_busy():
+        return
+    for unload in (
+        unload_slm,
+        unload_bert,
+        unload_duplicate_control_embedder,
+        unload_kb_embedder,
+    ):
+        await asyncio.to_thread(unload)

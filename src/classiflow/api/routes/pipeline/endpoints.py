@@ -1,8 +1,9 @@
 from collections.abc import AsyncGenerator
+from http import HTTPStatus
 from typing import Annotated
 
 from dependency_injector.wiring import Provide, inject
-from fastapi import APIRouter, BackgroundTasks, Depends, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from classiflow.api.dependencies import (
@@ -28,10 +29,11 @@ from classiflow.domain.repositories.document_steps import IDocumentStepsReposito
 from classiflow.domain.repositories.job import IJobRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.injections.production import Container
+from classiflow.knowledge.llm.llama import unload_chat_llm
 from classiflow.services.audit.repository import IAuditRepository
 from classiflow.services.job.exceptions import JobNotFoundError
 from classiflow.services.job.service import JobService
-from classiflow.services.pipeline.service import PipelineService
+from classiflow.services.pipeline.service import PipelineService, is_pipeline_busy
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"], dependencies=[Depends(get_current_user)])
 
@@ -40,6 +42,13 @@ router = APIRouter(prefix="/pipeline", tags=["pipeline"], dependencies=[Depends(
 # header, so its one route (pipeline_events) authenticates via CurrentUserFromQueryToken
 # instead, applied per-route rather than at the router level.
 sse_router = APIRouter(prefix="/pipeline", tags=["pipeline"])
+
+
+@router.post("/warmup", status_code=HTTPStatus.NO_CONTENT)
+async def pipeline_warmup() -> None:
+    """Unload the chat LLM so pipeline models have VRAM headroom."""
+    if not is_pipeline_busy():
+        unload_chat_llm()
 
 
 @router.post("/ingest", status_code=202)
@@ -166,6 +175,22 @@ async def pipeline_events(
             await broadcaster.close(job_id)
 
     return StreamingResponse(_stream(), media_type="text/event-stream")
+
+
+@router.delete("/jobs/{job_id}", status_code=HTTPStatus.NO_CONTENT)
+async def discard_job(
+    job_id: str,
+    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
+) -> None:
+    job = await job_repo.find_by_job_id(job_id)
+    if job is None:
+        raise JobNotFoundError(job_id)
+    if job.status not in {"queued", "failed"}:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT,
+            detail=f"Cannot discard a job in '{job.status}' state.",
+        )
+    await job_repo.delete(job_id)
 
 
 @router.post("/{job_id}/decision")

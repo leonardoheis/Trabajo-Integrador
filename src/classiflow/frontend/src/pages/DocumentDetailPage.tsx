@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { useParams } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchJobDetail, documentFileUrl } from "../api/documents";
-import { fetchDocumentKb, indexDocument } from "../api/knowledge";
+import { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router";
+import { documentFileUrl, fetchJobDetail } from "../api/documents";
 import type { TimelineEntry } from "../api/jobs";
+import { fetchDocumentKb, indexDocument } from "../api/knowledge";
 import KeyValueGrid from "../components/KeyValueGrid";
 import PdfViewer from "../components/PdfViewer";
 import ReclassifyPanel from "../components/ReclassifyPanel";
@@ -25,6 +25,46 @@ function ConfidenceBar({ value }: { value: number }) {
       <span className="font-mono text-base text-[var(--color-text-muted)]">{value.toFixed(2)}</span>
     </div>
   );
+}
+
+function escapeRegex(s: string) {
+  return s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+}
+
+function highlight(
+  text: string,
+  query: string,
+  activeIndex: number,
+  refs: React.RefObject<(HTMLElement | null)[]>,
+) {
+  if (!query) return text;
+  refs.current = [];
+  // split() with a capturing group keeps the separators, so odd indices are the
+  // matches and even ones the text between them.
+  const parts = text.split(new RegExp(`(${escapeRegex(query)})`, "gi"));
+  let matchIndex = -1;
+  return parts.map((part, i) => {
+    if (i % 2 === 0) return part;
+    matchIndex += 1;
+    // Captured in a local so the ref callback (which runs after this loop) closes
+    // over this match's position rather than the mutating counter.
+    const position = matchIndex;
+    return (
+      <mark
+        key={i}
+        ref={(el) => {
+          refs.current[position] = el;
+        }}
+        className={
+          position === activeIndex
+            ? "bg-[var(--color-accent)] text-[var(--color-bg)]"
+            : "bg-[var(--color-accent-subtle)] text-[var(--color-text)]"
+        }
+      >
+        {part}
+      </mark>
+    );
+  });
 }
 
 function MoreDetails({ pairs }: { pairs: [string, React.ReactNode][] }) {
@@ -50,6 +90,9 @@ function MoreDetails({ pairs }: { pairs: [string, React.ReactNode][] }) {
 export default function DocumentDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [tab, setTab] = useState<Tab>("classification");
+  const [find, setFind] = useState("");
+  const [activeMatch, setActiveMatch] = useState(0);
+  const markRefs = useRef<(HTMLElement | null)[]>([]);
   const queryClient = useQueryClient();
 
   const { data } = useQuery({
@@ -68,6 +111,24 @@ export default function DocumentDetailPage() {
     mutationFn: () => indexDocument(jobId!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["document-kb", jobId] }),
   });
+  const rawText = data?.enriched?.rawText ?? "";
+  const matchCount = find ? (rawText.match(new RegExp(escapeRegex(find), "gi")) || []).length : 0;
+
+  // A new query invalidates the old position, so jump back to the first match.
+  useEffect(() => {
+    setActiveMatch(0);
+  }, [find]);
+
+  useEffect(() => {
+    markRefs.current[activeMatch]?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [activeMatch, find]);
+
+  function goToMatch(delta: number): void {
+    if (matchCount === 0) return;
+    // + matchCount before the modulo so stepping back from 0 wraps to the end
+    // rather than yielding a negative index.
+    setActiveMatch((current) => (current + delta + matchCount) % matchCount);
+  }
 
   if (!data) {
     return <p className="p-6 text-[var(--color-text-muted)]">Loading...</p>;
@@ -92,7 +153,10 @@ export default function DocumentDetailPage() {
           {TABS.map((t) => (
             <button
               key={t}
-              onClick={() => setTab(t)}
+              onClick={() => {
+                setTab(t);
+                setFind("");
+              }}
               className={`px-3 py-2 text-base capitalize transition-colors duration-150 ${
                 tab === t
                   ? "border-b-2 border-[var(--color-accent)] font-semibold text-[var(--color-text)]"
@@ -105,9 +169,48 @@ export default function DocumentDetailPage() {
         </div>
 
         {tab === "extraction" && (
-          <pre className="whitespace-pre-wrap font-serif text-base text-[var(--color-text)]">
-            {data.enriched?.rawText ?? "No extraction data"}
-          </pre>
+          <>
+            <div className="sticky top-0 z-10 -mx-6 mb-3 flex items-center gap-3 bg-[var(--color-bg)] px-6 py-2">
+              <input
+                value={find}
+                onChange={(e) => setFind(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    goToMatch(e.shiftKey ? -1 : 1);
+                  }
+                }}
+                placeholder="Find in text"
+                className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] p-2 font-mono text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]"
+              />
+              {find && (
+                <div className="flex items-center gap-1">
+                  <span className="mr-1 font-mono text-sm text-[var(--color-text-faint)]">
+                    {matchCount === 0 ? "No results" : `${activeMatch + 1} of ${matchCount}`}
+                  </span>
+                  <button
+                    onClick={() => goToMatch(-1)}
+                    disabled={matchCount === 0}
+                    title="Previous match (Shift+Enter)"
+                    className="rounded px-1.5 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] disabled:opacity-40"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    onClick={() => goToMatch(1)}
+                    disabled={matchCount === 0}
+                    title="Next match (Enter)"
+                    className="rounded px-1.5 py-0.5 text-[var(--color-text-muted)] hover:bg-[var(--color-border-subtle)] disabled:opacity-40"
+                  >
+                    ↓
+                  </button>
+                </div>
+              )}
+            </div>
+            <pre className="whitespace-pre-wrap font-serif text-base text-[var(--color-text)]">
+              {highlight(rawText || "No extraction data", find, activeMatch, markRefs)}
+            </pre>
+          </>
         )}
 
         {tab === "enrichment" && data.enriched && (

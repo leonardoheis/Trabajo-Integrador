@@ -64,7 +64,7 @@ async def list_completed_jobs(
         IClassificationRecordRepository, Depends(get_classification_record_repo)
     ],
     document_kb_repo: Annotated[IDocumentKbRepository, Depends(get_document_kb_repo)],
-    label: str | None = None,
+    search: str | None = None,
     review_route: Annotated[str | None, Query(alias="reviewRoute")] = None,
     page: int = 1,
     page_size: Annotated[int, Query(alias="pageSize")] = 25,
@@ -77,9 +77,11 @@ async def list_completed_jobs(
     summaries = []
     for job in completed:
         record = await classification_repo.find_by_job_id(job.job_id)
-        record_label = (record.label or "").lower() if record else ""
-        if label is not None and label.lower() not in record_label:
-            continue
+        if search is not None:
+            needle = search.lower()
+            record_label = (record.label or "").lower() if record else ""
+            if needle not in record_label and needle not in job.filename.lower():
+                continue
         if review_route is not None and (record is None or record.review_route != review_route):
             continue
         doc_kb = await document_kb_repo.find_by_job_id(job.job_id)

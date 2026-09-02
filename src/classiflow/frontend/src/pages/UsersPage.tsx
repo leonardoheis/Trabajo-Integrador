@@ -54,7 +54,7 @@ export default function UsersPage() {
   ];
 
   return (
-    <div className="p-6">
+    <div className="h-full overflow-y-auto p-6">
       <h1 className="mb-6 text-2xl font-bold text-[var(--color-text)]">Users</h1>
       <div className="mb-4 flex gap-2">
         <input

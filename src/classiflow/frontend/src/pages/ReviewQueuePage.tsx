@@ -10,12 +10,16 @@ export default function ReviewQueuePage() {
   });
 
   if (isLoading) {
-    return <div className="p-6 font-mono text-sm text-[var(--color-text-faint)]">Loading…</div>;
+    return (
+      <div className="h-full overflow-y-auto p-6 font-mono text-sm text-[var(--color-text-faint)]">
+        Loading…
+      </div>
+    );
   }
 
   if (!data || data.length === 0) {
     return (
-      <div className="p-6">
+      <div className="h-full overflow-y-auto p-6">
         <h1 className="mb-6 text-2xl font-bold text-[var(--color-text)]">Review Queue</h1>
         <p className="font-mono text-sm text-[var(--color-text-faint)]">
           No documents pending human review.
@@ -25,7 +29,7 @@ export default function ReviewQueuePage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="h-full overflow-y-auto p-6">
       <h1 className="mb-1 text-2xl font-bold text-[var(--color-text)]">Review Queue</h1>
       <p className="mb-6 font-mono text-sm text-[var(--color-text-faint)]">
         {data.length} document{data.length === 1 ? "" : "s"} awaiting human classification

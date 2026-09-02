@@ -1,9 +1,12 @@
+import logging
+import os
 from functools import cache
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from typing_extensions import override
 
 from classiflow.injections import configure_container
 from classiflow.observability import init_tracing
@@ -21,10 +24,37 @@ def _add_log_file_sink() -> None:
     # cached and tests call it multiple times per process (once per module-scoped
     # `client` fixture) -- this guards against stacking duplicate sinks, which would
     # write every log line N times over.
+    #
+    # Loguru's default sink (id 0) captured sys.stderr at import time, which under
+    # `poe serve` is W&B's console-capture wrapper around a handle inherited from the
+    # parent process -- writing to it raises OSError [WinError 1] in this subprocess.
+    # Swap it for a fresh fd-backed stream; errors="replace" also stops loguru's own
+    # error interceptor from dying on cp1252-unencodable characters.
+    logger.remove()
+    stderr = os.fdopen(os.dup(2), "w", encoding="utf-8", errors="replace", buffering=1)
+    logger.add(stderr, level="INFO")
     # mode="w": overwrite on every process start, so the file always reflects only the
     # current run -- makes it easy to grep a stuck job's timeline without scrolling
     # back through the terminal (or a previous run's output).
-    logger.add(_LOG_FILE, mode="w", level="INFO")
+    logger.add(_LOG_FILE, mode="w", level="INFO", encoding="utf-8")
+    # Bridge stdlib logging → loguru for the classiflow package. Attaching to the
+    # named "classiflow" logger (not root) means uvicorn's own logging setup can't
+    # clobber our handler — uvicorn only touches the root logger and its own named
+    # loggers ("uvicorn", "uvicorn.access", "uvicorn.error").
+    cf_log = logging.getLogger("classiflow")
+    cf_log.handlers = [_LoguruHandler()]
+    cf_log.setLevel(logging.INFO)
+    cf_log.propagate = False  # don't double-emit via root
+
+
+class _LoguruHandler(logging.Handler):
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            level = logger.level(record.levelname).name
+        except ValueError:
+            level = str(record.levelno)
+        logger.opt(depth=6, exception=record.exc_info).log(level, record.getMessage())
 
 
 def create_app() -> FastAPI:
