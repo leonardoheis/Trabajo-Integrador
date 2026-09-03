@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator, Iterator
 from functools import lru_cache
 
 from llama_cpp import Llama
+from loguru import logger
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
 from classiflow.ingesta.llm_provider import n_gpu_layers
@@ -49,7 +50,20 @@ def _begin_generation() -> None:
 
 def _end_generation() -> None:
     with _active_generations.lock:
-        _active_generations.count -= 1
+        _active_generations.count = max(0, _active_generations.count - 1)
+
+
+def reset_active_generations() -> None:
+    """Clear the in-flight counter.
+
+    An abandoned SSE stream leaves its generator un-exhausted, so its `finally` never
+    runs and the count stays above zero forever -- after which every unload silently
+    no-ops. Called on logout, where no generation can legitimately be running.
+    """
+    with _active_generations.lock:
+        if _active_generations.count:
+            logger.warning("resetting stale generation count: {}", _active_generations.count)
+        _active_generations.count = 0
 
 
 def is_chat_llm_busy() -> bool:
@@ -78,13 +92,16 @@ def get_chat_llm(model_path: str, n_ctx: int) -> Llama:
 
 
 def unload_chat_llm() -> None:
-    # Same reasoning as ingesta.llm_provider.unload_slm(): drop the lru_cache's reference
-    # so gc can collect the Llama instance and its __del__ frees the GGUF's CUDA context.
-    # Skipped (not awaited) while a generation is in flight -- see _active_generations'
-    # docstring above. The model simply stays resident until the next eligible call.
+    # Drops the lru_cache reference so gc can collect the Llama instance, whose __del__
+    # frees the CUDA context. Skipped while a generation is in flight.
     if is_chat_llm_busy():
+        logger.warning(
+            "unload_chat_llm skipped: {} generation(s) still in flight",
+            _active_generations.count,
+        )
         return
     evict_lru_cache(get_chat_llm)
+    logger.info("unload_chat_llm: evicted")
 
 
 class LlamaCppChatLlm(ChatLlm):

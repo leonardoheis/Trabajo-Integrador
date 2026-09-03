@@ -2,14 +2,17 @@ import { useState } from "react";
 import { NavLink } from "react-router";
 import { useAuth } from "../auth/AuthContext";
 
-const LINK_BASE = "flex items-center gap-3 rounded-md px-3 py-2 text-base border-l-2";
+const LINK_BASE = "flex items-center gap-3 rounded-md py-2 text-base border-l-2";
 const ACTIVE_CLASSES =
   "border-[var(--color-accent)] bg-[var(--color-surface)] text-[var(--color-text)]";
 const INACTIVE_CLASSES =
   "border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]";
 
-function linkClass({ isActive }: { isActive: boolean }): string {
-  return `${LINK_BASE} ${isActive ? ACTIVE_CLASSES : INACTIVE_CLASSES}`;
+function linkClass(collapsed: boolean) {
+  return ({ isActive }: { isActive: boolean }): string =>
+    `${LINK_BASE} ${collapsed ? "justify-center" : "px-3"} ${
+      isActive ? ACTIVE_CLASSES : INACTIVE_CLASSES
+    }`;
 }
 
 function initials(email: string): string {
@@ -31,7 +34,12 @@ type NavItemProps = {
 
 function NavItem({ to, label, end, collapsed, icon }: NavItemProps) {
   return (
-    <NavLink to={to} end={end} className={linkClass} title={collapsed ? label : undefined}>
+    <NavLink
+      to={to}
+      end={end}
+      className={linkClass(collapsed)}
+      title={collapsed ? label : undefined}
+    >
       <span className="flex-shrink-0">{icon}</span>
       {!collapsed && <span>{label}</span>}
     </NavLink>
@@ -150,13 +158,17 @@ export default function Sidebar() {
   return (
     <nav
       className="flex h-full flex-col justify-between border-r border-[var(--color-border)] bg-[var(--color-bg-inset)] p-3 transition-all duration-200"
-      style={{ width: collapsed ? "56px" : "224px", minWidth: collapsed ? "56px" : "224px" }}
+      style={{ width: collapsed ? "64px" : "224px", minWidth: collapsed ? "64px" : "224px" }}
     >
       <div className="flex flex-col gap-1">
-        {/* Logo + collapse toggle */}
-        <div className="mb-3 flex items-center justify-between px-1">
+        {/* Stacked when collapsed -- no room for both side by side. */}
+        <div
+          className={`mb-3 flex items-center ${
+            collapsed ? "flex-col gap-2" : "justify-between px-1"
+          }`}
+        >
           {collapsed ? (
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--color-accent)] font-mono text-xs font-bold text-white">
+            <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-[var(--color-accent)] font-mono text-xs font-bold text-white">
               CF
             </span>
           ) : (
@@ -208,7 +220,9 @@ export default function Sidebar() {
       <div className="flex flex-col gap-1 border-t border-[var(--color-border)] pt-3">
         {user && (
           <div
-            className="flex items-center gap-3 rounded-md px-3 py-2"
+            className={`flex items-center gap-3 rounded-md py-2 ${
+              collapsed ? "justify-center" : "px-3"
+            }`}
             title={collapsed ? user.email : undefined}
           >
             {user.picture ? (
@@ -230,7 +244,9 @@ export default function Sidebar() {
         )}
         <button
           onClick={logout}
-          className="flex items-center gap-3 rounded-md border-l-2 border-transparent px-3 py-2 text-base text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+          className={`flex items-center gap-3 rounded-md border-l-2 border-transparent py-2 text-base text-[var(--color-text-muted)] hover:text-[var(--color-text)] ${
+            collapsed ? "justify-center" : "px-3"
+          }`}
           title={collapsed ? "Sign out" : undefined}
         >
           <svg

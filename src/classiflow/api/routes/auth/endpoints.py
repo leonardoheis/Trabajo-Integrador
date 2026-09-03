@@ -16,7 +16,7 @@ from classiflow.ingesta.llm_provider import unload_slm
 from classiflow.ingesta.nodes.node4_duplicate_control import unload_duplicate_control_embedder
 from classiflow.injections.production import Container
 from classiflow.knowledge.embeddings.embedder import unload_kb_embedder
-from classiflow.knowledge.llm.llama import unload_chat_llm
+from classiflow.knowledge.llm.llama import reset_active_generations, unload_chat_llm
 from classiflow.services.auth.oauth import exchange_code, get_authorization_url
 from classiflow.services.pipeline.service import is_pipeline_busy
 
@@ -69,6 +69,9 @@ async def auth_logout(_current_user: CurrentUser) -> None:
     # The chat GGUF is never used by the pipeline, so it always goes. The other four
     # (SLM, BETO, duplicate-control and KB embedders) belong to the pipeline graph --
     # unloading them out from under an in-flight job would fail it.
+    # Signing out means no chat can be in flight; clears a counter leaked by any
+    # abandoned SSE stream, which would otherwise block every unload.
+    reset_active_generations()
     await asyncio.to_thread(unload_chat_llm)
     if is_pipeline_busy():
         return

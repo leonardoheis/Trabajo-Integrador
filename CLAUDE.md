@@ -186,6 +186,9 @@ Apply this structure to every new LangGraph agent added to the project.
 
 - Package source lives in `src/classiflow/`.
 - All comments, docstrings, and commit messages are in English.
+- **Keep comments minimal.** A comment explains *why* in one or two lines, never a paragraph.
+  Do not narrate what a change does or recount the bug that motivated it — that belongs in the
+  commit message, not the code.
 - Line length: 100. Quote style: double. (Configured in `[tool.ruff]`.)
 - Type annotations required on all functions in `src/` (mypy strict).
 - **Never use `from __future__ import annotations`** — quote forward references explicitly
