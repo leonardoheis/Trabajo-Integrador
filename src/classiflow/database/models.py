@@ -194,6 +194,13 @@ class ClassificationRecord(Base):
     stored_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Set by the human-decision endpoint (Decision 9).
     human_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # The machine's own prediction, preserved when a human overrides `label`. A correction
+    # is free ground truth -- the reviewer's `label` is the truth, this was the miss --
+    # but only if the original survives the overwrite.
+    original_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Corpus ground truth, when the source corpus knows it (see classification/ground_truth.py).
+    # NULL means "unknown", which excludes the record from accuracy denominators entirely.
+    expected_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

@@ -28,6 +28,8 @@ from classiflow.domain.repositories.job import IJobRepository
 from classiflow.pipeline.context import JobContext
 from classiflow.services.audit.service import AuditService
 from classiflow.services.job.exceptions import JobNotFoundError
+from classiflow.services.metrics.domain import AccuracyReport
+from classiflow.services.metrics.service import MetricsService
 
 router = APIRouter(
     prefix="/classification", tags=["classification"], dependencies=[Depends(get_current_user)]
@@ -42,6 +44,16 @@ async def review_queue(
 ) -> list[ReviewQueueItem]:
     records = await classification_repo.list_needing_human_review()
     return [ReviewQueueItem.from_model(r) for r in records]
+
+
+@router.get("/metrics")
+async def accuracy_metrics(
+    classification_repo: Annotated[
+        IClassificationRecordRepository, Depends(get_classification_record_repo)
+    ],
+    job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
+) -> AccuracyReport:
+    return await MetricsService(classification_repo, job_repo).accuracy_report()
 
 
 @router.post("/{job_id}/decision")
@@ -101,6 +113,12 @@ async def submit_classification_decision(
         foreign_municipality=record.foreign_municipality,
         judged_by_llm=record.judged_by_llm,
         human_overridden=True,
+        # record.label still holds the machine's prediction here -- routing.run() below
+        # overwrites it with body.label. Capturing it makes every correction a labeled
+        # example. `or` keeps the FIRST machine prediction across repeated overrides,
+        # rather than recording the previous reviewer's choice as if it were the model's.
+        original_label=record.original_label or record.label,
+        expected_label=record.expected_label,
     )
     ctx = JobContext(job_id=job_id, filename=job.filename)
     await routing.run(ctx, routing_input)

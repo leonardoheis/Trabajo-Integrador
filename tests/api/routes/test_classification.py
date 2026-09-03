@@ -9,6 +9,9 @@ from classiflow.injections.test import TestContainer
 
 pytestmark = pytest.mark.usefixtures("_jwt_secret")
 
+_EXPECTED_LABELLED = 2
+_EXPECTED_HALF = 0.5
+
 
 async def _seed_human_review_job(
     test_container: TestContainer,
@@ -51,6 +54,39 @@ async def _seed_human_review_job(
     await storage.move_to_final(job_id, filename, "review/human_review")
 
 
+async def _seed_classified_job(
+    test_container: TestContainer,
+    job_id: str,
+    filename: str,
+    *,
+    label: str = "ordenanzas",
+    expected_label: str | None = None,
+) -> None:
+    await test_container.job_repo().create(
+        Job(job_id=job_id, filename=filename, status="classified")
+    )
+    await test_container.classification_record_repo().save(
+        ClassificationRecord(
+            job_id=job_id,
+            enriched_id=1,
+            label=label,
+            confidence=0.95,
+            all_scores={label: 0.95},
+            second_opinion_confidence=0.0,
+            classifier_disagreement=False,
+            svm_scores={},
+            svm_agrees_with_prediction=True,
+            review_route="accept",
+            smells=[],
+            risk_score=0,
+            smell_review_suggested=False,
+            judged_by_llm=False,
+            human_overridden=False,
+            expected_label=expected_label,
+        )
+    )
+
+
 class TestReviewQueueEndpoint:
     def test_requires_auth(self, client: TestClient) -> None:
         response = client.get("/classification/review-queue")
@@ -86,6 +122,32 @@ class TestReviewQueueEndpoint:
         assert item["judgedByLlm"] is True
         assert item["judgeFinalLabel"] == "resoluciones_concejo_municipal"
         assert item["judgeReasoning"] == "second opinion's evidence is stronger here"
+
+
+class TestAccuracyMetricsEndpoint:
+    def test_requires_auth(self, client: TestClient) -> None:
+        assert client.get("/classification/metrics").status_code == HTTPStatus.UNAUTHORIZED
+
+    async def test_reports_accuracy_over_labelled_records(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        await _seed_classified_job(
+            test_container, "metrics-hit", "ordenanza_1_2020.pdf", expected_label="ordenanzas"
+        )
+        await _seed_classified_job(
+            test_container, "metrics-miss", "boletin_1_2020.pdf", expected_label="boletines"
+        )
+
+        response = client.get("/classification/metrics", headers=auth_headers)
+
+        assert response.status_code == HTTPStatus.OK
+        body = response.json()
+        assert body["labelled"] == _EXPECTED_LABELLED
+        assert body["correct"] == 1
+        assert body["strictAccuracy"] == pytest.approx(_EXPECTED_HALF)
+        assert body["misses"][0]["expected"] == "boletines"
+        assert body["misses"][0]["predicted"] == "ordenanzas"
+        assert "compendios_de_boletines" in body["unevaluatedCategories"]
 
 
 class TestClassificationDecisionEndpoint:
@@ -143,3 +205,50 @@ class TestClassificationDecisionEndpoint:
 
         queue = client.get("/classification/review-queue", headers=auth_headers).json()
         assert "decide-me-001" not in [item["jobId"] for item in queue]
+
+    async def test_override_preserves_the_machine_prediction(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        # A correction is free ground truth: the reviewer's label is the truth and the
+        # machine's original is the miss -- but only if the original survives being
+        # overwritten by routing.
+        await _seed_human_review_job(test_container, "capture-001", "doc.pdf")
+
+        client.post(
+            "/classification/capture-001/decision",
+            json={"label": "decretos"},
+            headers=auth_headers,
+        )
+
+        record = await test_container.classification_record_repo().find_by_job_id("capture-001")
+        assert record is not None
+        assert record.label == "decretos"  # the human's choice
+        assert record.original_label == "ordenanzas"  # what the model actually said
+
+    async def test_second_override_attempt_is_rejected(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        # Overriding flips review_route to accept, and the endpoint only accepts records
+        # still in human_review -- so a record can be corrected exactly once. This is what
+        # makes original_label stable; the `or` guard in the endpoint is belt-and-braces
+        # for any future caller that doesn't go through this route.
+        await _seed_human_review_job(test_container, "capture-002", "doc.pdf")
+
+        first = client.post(
+            "/classification/capture-002/decision",
+            json={"label": "decretos"},
+            headers=auth_headers,
+        )
+        assert first.status_code == HTTPStatus.OK
+
+        second = client.post(
+            "/classification/capture-002/decision",
+            json={"label": "boletines"},
+            headers=auth_headers,
+        )
+        assert second.status_code == HTTPStatus.CONFLICT
+
+        record = await test_container.classification_record_repo().find_by_job_id("capture-002")
+        assert record is not None
+        assert record.label == "decretos"
+        assert record.original_label == "ordenanzas"

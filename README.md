@@ -351,6 +351,9 @@ question ──► embed ──► similarity search ◄────────
     `POST /pipeline/warmup` (releasing the chat GGUF), and opening Chat calls
     `POST /knowledge/chat/warmup` (releasing the pipeline's models first). Both no-op while a
     job is running.
+  - **Metrics page** (`/metrics`) — strict vs. safeguarded accuracy, per-category
+    precision/recall/F1, a confusion matrix, and the list of wrong labels that reached
+    storage without review. Served by `GET /classification/metrics`.
   - **Light/dark theme toggle** and a reworked collapsible sidebar with Google profile pictures.
 
 ## Build Status

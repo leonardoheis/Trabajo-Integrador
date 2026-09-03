@@ -120,3 +120,22 @@ class TestRoutingNodeRun:
         assert record is not None
         assert record.judge_final_label == "resoluciones_concejo_municipal"
         assert record.judge_reasoning == "second opinion's evidence is stronger here"
+
+    async def test_expected_label_survives_a_second_routing_pass(self) -> None:
+        # The human-decision endpoint re-runs this node without the corpus label. An
+        # unconditional assign would erase what the first (automatic) pass stored.
+        repo = InMemoryClassificationRecordRepository()
+        node = RoutingNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            storage=_FakeStorage(),
+            classification_repo=repo,
+        )
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+
+        await node.run(ctx, _routing_input(expected_label="ordenanzas"))
+        await node.run(ctx, _routing_input(label="decretos", human_overridden=True))
+
+        record = await repo.find_by_job_id(_JOB_ID)
+        assert record is not None
+        assert record.expected_label == "ordenanzas"

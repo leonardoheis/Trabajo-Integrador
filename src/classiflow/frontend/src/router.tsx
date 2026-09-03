@@ -11,6 +11,7 @@ import DocumentDetailPage from "./pages/DocumentDetailPage";
 import UsersPage from "./pages/UsersPage";
 import AuditLogPage from "./pages/AuditLogPage";
 import ReviewQueuePage from "./pages/ReviewQueuePage";
+import MetricsPage from "./pages/MetricsPage";
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },
@@ -26,6 +27,7 @@ export const router = createBrowserRouter([
           { path: "/documents/:jobId", element: <DocumentDetailPage /> },
           { path: "/chat", element: <ChatPage /> },
           { path: "/review", element: <ReviewQueuePage /> },
+          { path: "/metrics", element: <MetricsPage /> },
           {
             element: <RequireAdmin />,
             children: [

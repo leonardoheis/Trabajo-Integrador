@@ -38,6 +38,8 @@ class RoutingInput(BaseEntity):
     judge_final_label: str | None = None
     judge_reasoning: str | None = None
     human_overridden: bool = False
+    original_label: str | None = None
+    expected_label: str | None = None
 
 
 class RoutingResult(BaseEntity):

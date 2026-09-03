@@ -6,6 +6,7 @@ from classiflow.classification.bert.ood_scorer import OodMetrics
 from classiflow.classification.domain.results import RoutingInput
 from classiflow.classification.domain.review_route import ReviewRoute
 from classiflow.classification.domain.state import ClassificationState, ClassificationUpdate
+from classiflow.classification.ground_truth import expected_label
 from classiflow.classification.nodes.confidence_gate import ConfidenceGateNode
 from classiflow.classification.nodes.foreign_municipality import ForeignMunicipalityNode
 from classiflow.classification.nodes.llm_judge import LlmJudgeNode
@@ -169,6 +170,10 @@ def build_classification_coordinator(
             judged_by_llm=state.get("judged_by_llm", False),
             judge_final_label=state.get("judge_final_label"),
             judge_reasoning=state.get("judge_reasoning"),
+            # Weak label from the corpus filing convention, recorded alongside the
+            # prediction so accuracy can be measured later without a manual pass.
+            # None for anything the convention doesn't cover -- see ground_truth.py.
+            expected_label=expected_label(state["filename"]),
         )
         result = await routing.run(ctx, routing_input)
         return _dump(ClassificationUpdate(stored_path=result.stored_path))

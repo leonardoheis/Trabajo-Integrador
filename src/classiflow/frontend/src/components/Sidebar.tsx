@@ -115,6 +115,21 @@ const IconAudit = () => (
     <path d="M5 5h6M5 8h6M5 11h3" />
   </svg>
 );
+const IconMetrics = () => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 16 16"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.5"
+  >
+    <path d="M2 14V2" />
+    <path d="M2 14h12" />
+    <rect x="4.5" y="8" width="2.5" height="4" />
+    <rect x="9" y="5" width="2.5" height="7" />
+  </svg>
+);
 const IconCollapse = ({ collapsed }: { collapsed: boolean }) => (
   <svg
     width="16"
@@ -169,6 +184,7 @@ export default function Sidebar() {
           icon={<IconClassification />}
         />
         <NavItem to="/review" label="Review Queue" collapsed={collapsed} icon={<IconReview />} />
+        <NavItem to="/metrics" label="Metrics" collapsed={collapsed} icon={<IconMetrics />} />
         {!collapsed && (
           <span className="mt-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-[var(--color-text-faint)]">
             Knowledge

@@ -47,6 +47,8 @@ export interface JobDetailResponse {
     judgeReasoning: string | null;
     storedPath: string | null;
     humanOverridden: boolean;
+    originalLabel: string | null;
+    expectedLabel: string | null;
   } | null;
   audit: {
     jobId: string;

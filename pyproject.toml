@@ -164,6 +164,9 @@ line-ending = "auto"
     "PLR6301", # pytest class methods don't need to use self
     "PLR0914", # test fixtures wiring many nodes/repos legitimately need more locals
 ]
+# A CLI's whole purpose is writing to stdout -- same rationale as the playground
+# notebooks above.
+"src/classiflow/scripts/*.py" = ["T201"]
 # Scoped to this one file (not the project-wide `ignore` list above) so any other
 # subprocess call added elsewhere in the codebase still gets flagged and reviewed on
 # its own merits. This file's only call resolves the executable via shutil.which,
@@ -413,6 +416,7 @@ test = "pytest tests"
 coverage = { shell = "pytest tests -v --override-ini=addopts= --log-level=CRITICAL --cov=. --cov-branch --cov-report=xml --cov-report=html --cov-report=term-missing:skip-covered --junitxml=tests/reports/pytest-report.xml" }
 check = ["lint", "typecheck", "coverage", "precommit-reloaded"]
 serve = "python -m classiflow"
+accuracy = "python -m classiflow.scripts.accuracy"
 serve-api = { shell = "uvicorn classiflow.api.app:create_app --factory --port 8000" }
 serve-ui = { shell = "npm run dev", cwd = "src/classiflow/frontend" }
 precommit = "uv run pre-commit run --all-files --verbose"
