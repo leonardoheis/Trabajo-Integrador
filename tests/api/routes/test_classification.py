@@ -47,6 +47,7 @@ async def _seed_human_review_job(
             judge_reasoning=judge_reasoning,
             stored_path=None,
             human_overridden=False,
+            machine_review_route="human_review",
         )
     )
     storage = test_container.document_storage()
@@ -224,6 +225,24 @@ class TestClassificationDecisionEndpoint:
         assert record is not None
         assert record.label == "decretos"  # the human's choice
         assert record.original_label == "ordenanzas"  # what the model actually said
+
+    async def test_override_preserves_the_original_machine_route(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        # The workflow route becomes accept, but the safety net's original decision must
+        # survive it or a caught miss is later scored as uncaught.
+        await _seed_human_review_job(test_container, "route-001", "doc.pdf")
+
+        client.post(
+            "/classification/route-001/decision",
+            json={"label": "decretos"},
+            headers=auth_headers,
+        )
+
+        record = await test_container.classification_record_repo().find_by_job_id("route-001")
+        assert record is not None
+        assert record.review_route == "accept"
+        assert record.machine_review_route == "human_review"
 
     async def test_second_override_attempt_is_rejected(
         self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer

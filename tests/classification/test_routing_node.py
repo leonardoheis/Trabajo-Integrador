@@ -121,6 +121,26 @@ class TestRoutingNodeRun:
         assert record.judge_final_label == "resoluciones_concejo_municipal"
         assert record.judge_reasoning == "second opinion's evidence is stronger here"
 
+    async def test_machine_review_route_is_set_once_and_never_replaced(self) -> None:
+        # The human-decision endpoint re-runs this node with review_route=accept. The
+        # machine's original route is history and must not follow it.
+        repo = InMemoryClassificationRecordRepository()
+        node = RoutingNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            storage=_FakeStorage(),
+            classification_repo=repo,
+        )
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+
+        await node.run(ctx, _routing_input(review_route="human_review"))
+        await node.run(ctx, _routing_input(review_route="accept", human_overridden=True))
+
+        record = await repo.find_by_job_id(_JOB_ID)
+        assert record is not None
+        assert record.review_route == "accept"
+        assert record.machine_review_route == "human_review"
+
     async def test_expected_label_survives_a_second_routing_pass(self) -> None:
         # The human-decision endpoint re-runs this node without the corpus label. An
         # unconditional assign would erase what the first (automatic) pass stored.

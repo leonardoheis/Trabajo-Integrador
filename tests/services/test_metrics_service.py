@@ -20,6 +20,7 @@ def _record(
     label: str,
     expected_label: str | None = None,
     review_route: str = "accept",
+    machine_review_route: str | None = None,
     human_overridden: bool = False,
     original_label: str | None = None,
 ) -> ClassificationRecord:
@@ -34,6 +35,7 @@ def _record(
         svm_scores={},
         svm_agrees_with_prediction=True,
         review_route=review_route,
+        machine_review_route=machine_review_route or review_route,
         smells=[],
         risk_score=0,
         smell_review_suggested=False,
@@ -109,6 +111,47 @@ class TestGroundTruthSources:
 
         assert report.labelled == 0
 
+    async def test_override_without_a_prediction_is_excluded_despite_expected_label(
+        self,
+    ) -> None:
+        # expected_label must not rescue an unrecoverable prediction: `label` holds the
+        # reviewer's answer, so scoring it against the filename measures a human, not the
+        # classifier. Affects all 13 corrections made before original_label existed.
+        service = await _service(
+            _record(
+                "a",
+                label="convenios",
+                expected_label="convenios",
+                human_overridden=True,
+                original_label=None,
+            )
+        )
+
+        report = await service.accuracy_report()
+
+        assert report.labelled == 0
+        assert report.correct == 0
+
+    async def test_human_correction_outranks_the_filename_label(self) -> None:
+        # A reviewer adjudicated this document; the filename convention is a weak label
+        # and must not override them.
+        service = await _service(
+            _record(
+                "a",
+                label="convenios",
+                expected_label="ordenanzas",
+                human_overridden=True,
+                original_label="ordenanzas",
+            )
+        )
+
+        report = await service.accuracy_report()
+
+        assert report.labelled == 1
+        assert report.correct == 0
+        assert report.misses[0].expected == "convenios"
+        assert report.misses[0].predicted == "ordenanzas"
+
 
 class TestSafetyNet:
     async def test_a_miss_routed_to_review_counts_as_caught(self) -> None:
@@ -124,6 +167,27 @@ class TestSafetyNet:
         # Neither is correct, but one never reached a filing cabinet unreviewed.
         assert report.strict_accuracy == pytest.approx(0.0)
         assert report.safeguarded_accuracy == pytest.approx(_EXPECTED_HALF)
+
+    async def test_a_resolved_miss_still_counts_as_caught(self) -> None:
+        # review_route is mutated to accept when the reviewer resolves the item, so the
+        # safety net's original decision has to come from machine_review_route -- reading
+        # the mutable field scores a caught miss as uncaught.
+        service = await _service(
+            _record(
+                "a",
+                label="convenios",
+                review_route="accept",
+                machine_review_route="human_review",
+                human_overridden=True,
+                original_label="ordenanzas",
+            )
+        )
+
+        report = await service.accuracy_report()
+
+        assert report.wrong_caught == 1
+        assert report.wrong_uncaught == 0
+        assert report.misses[0].caught_by_safety_net is True
 
 
 class TestPerCategory:
