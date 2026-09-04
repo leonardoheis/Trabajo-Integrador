@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -94,12 +95,17 @@ async def chat_stream(
         sources: list[SourceRef] = []
         answer_parts: list[str] = []
         try:
-            async for token, current_sources in chat_service.astream(
-                _to_query(body), history=history
-            ):
-                sources = current_sources
-                answer_parts.append(token)
-                yield _sse("token", {"text": token})
+            # aclosing, not a bare `async for`: Starlette does not aclose() a body
+            # iterator when the client disconnects, so without this the inner generator
+            # is never finalized and its in-flight counter is held forever, silently
+            # blocking every later model unload.
+            async with contextlib.aclosing(
+                chat_service.astream(_to_query(body), history=history)
+            ) as tokens:
+                async for token, current_sources in tokens:
+                    sources = current_sources
+                    answer_parts.append(token)
+                    yield _sse("token", {"text": token})
         except Exception:
             logger.exception("chat_stream generation error user=%s", current_user.email)
             yield _sse("error", {"message": "Generation failed"})

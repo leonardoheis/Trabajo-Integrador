@@ -101,4 +101,10 @@ class RoutingNode(BaseNode):
         # assign would erase what the first call stored.
         if routing_input.expected_label is not None:
             record.expected_label = routing_input.expected_label
+        # Write-once history: the first (machine) pass records its route; the
+        # human-decision pass must not overwrite it with the resolved route.
+        if record.machine_review_route is None:
+            record.machine_review_route = (
+                routing_input.machine_review_route or routing_input.review_route
+            )
         await self.classification_repo.save(record)

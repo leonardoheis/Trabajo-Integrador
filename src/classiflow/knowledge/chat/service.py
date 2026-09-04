@@ -1,5 +1,6 @@
+import contextlib
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 
 import weave
 
@@ -38,7 +39,7 @@ class ChatService:
     @weave.op()
     async def astream(
         self, query: ChatQuery, history: ConversationHistory | None = None
-    ) -> AsyncIterator[tuple[str, list[SourceRef]]]:
+    ) -> AsyncGenerator[tuple[str, list[SourceRef]], None]:
         # Yields (token, sources) pairs. Sources are resolved before generation starts
         # and repeated on every yield, so a consumer can render citations immediately
         # instead of waiting for the answer to finish.
@@ -48,7 +49,13 @@ class ChatService:
         sources = [chunk.to_source() for chunk in chunks]
         user_prompt = build_user_prompt(query.question, chunks, history=history)
         token_count = 0
-        async for token in self._chat_llm.astream(SYSTEM_PROMPT, user_prompt):
-            token_count += 1
-            yield token, sources
+        # aclosing: when this generator is closed early (client disconnect), GeneratorExit
+        # lands on the yield below and the inner stream would otherwise never be
+        # finalized, holding its in-flight counter and blocking every later unload.
+        async with contextlib.aclosing(
+            self._chat_llm.astream(SYSTEM_PROMPT, user_prompt)
+        ) as tokens:
+            async for token in tokens:
+                token_count += 1
+                yield token, sources
         logger.info("chat.stream done tokens=%d", token_count)

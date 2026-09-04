@@ -174,6 +174,7 @@ def build_classification_coordinator(
             # prediction so accuracy can be measured later without a manual pass.
             # None for anything the convention doesn't cover -- see ground_truth.py.
             expected_label=expected_label(state["filename"]),
+            machine_review_route=state["review_route"],
         )
         result = await routing.run(ctx, routing_input)
         return _dump(ClassificationUpdate(stored_path=result.stored_path))

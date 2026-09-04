@@ -1,4 +1,5 @@
 from collections import Counter, defaultdict
+from typing import NamedTuple
 
 from classiflow.classification.domain.categories import DocumentCategory
 from classiflow.classification.domain.review_route import ReviewRoute
@@ -8,40 +9,41 @@ from classiflow.domain.repositories.job import IJobRepository
 from classiflow.services.metrics.domain import AccuracyReport, CategoryMetrics, Miss
 
 
-def _ground_truth(record: ClassificationRecord) -> str | None:
-    """The known-correct label for a record, or None when it has no ground truth.
+class ScoredRecord(NamedTuple):
+    """One record reduced to the pair accuracy is computed from."""
 
-    Two independent sources, in priority order:
+    record: ClassificationRecord
+    truth: str
+    prediction: str
 
-    1. `expected_label` -- the corpus filing convention (see classification/ground_truth.py).
-    2. A human correction -- when a reviewer overrode the classification, THEIR label is
-       the truth and `original_label` holds the machine's miss. Only trusted when
-       `original_label` is actually populated: corrections made before that column
-       existed set human_overridden without preserving what the model had said, and for
-       those `label` is the human's answer with nothing to score it against.
+
+def _score(record: ClassificationRecord) -> ScoredRecord | None:
+    """Pair a record's ground truth with the machine prediction to judge it against.
 
     Returns:
-        The ground-truth label, or None when the record carries none.
+        None when the record cannot be scored, which excludes it from every rate.
     """
-    if record.expected_label is not None:
-        return record.expected_label
-    if record.human_overridden and record.original_label is not None:
-        return record.label
+    if record.human_overridden:
+        # A reviewer adjudicated this document, which outranks the weak filename label.
+        # Without original_label the machine's prediction is unrecoverable -- `label` is
+        # the reviewer's own answer, so the only available comparison would score a human
+        # against a filename.
+        if record.original_label is None or record.label is None:
+            return None
+        return ScoredRecord(record, truth=record.label, prediction=record.original_label)
+    if record.expected_label is not None and record.label is not None:
+        return ScoredRecord(record, truth=record.expected_label, prediction=record.label)
     return None
 
 
-def _prediction(record: ClassificationRecord) -> str | None:
-    """What the machine predicted, which is not always `label`.
-
-    After a human override `label` holds the reviewer's choice; the machine's own
-    prediction moved to `original_label`.
+def _was_escalated(record: ClassificationRecord) -> bool:
+    """Whether the safety net caught this prediction when it was first made.
 
     Returns:
-        The machine's predicted label, or None if the record has none.
+        False when unknown: `machine_review_route` is NULL for rows written before it
+        existed, and counting those as caught would overstate the safeguard.
     """
-    if record.human_overridden and record.original_label is not None:
-        return record.original_label
-    return record.label
+    return record.machine_review_route == ReviewRoute.HUMAN_REVIEW
 
 
 def _safe_divide(numerator: int, denominator: int) -> float:
@@ -67,33 +69,27 @@ class MetricsService:
             job.status for job in jobs if job.job_id not in classified_job_ids
         )
 
-        scored: list[tuple[ClassificationRecord, str, str]] = []
-        for record in records:
-            expected = _ground_truth(record)
-            predicted = _prediction(record)
-            if expected is None or predicted is None:
-                continue
-            scored.append((record, expected, predicted))
+        scored = [scored for record in records if (scored := _score(record)) is not None]
 
-        support = Counter(expected for _, expected, _ in scored)
-        predicted_counts = Counter(predicted for _, _, predicted in scored)
-        hits = Counter(expected for _, expected, predicted in scored if expected == predicted)
+        support = Counter(entry.truth for entry in scored)
+        predicted_counts = Counter(entry.prediction for entry in scored)
+        hits = Counter(entry.truth for entry in scored if entry.truth == entry.prediction)
 
         confusion: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
-        for _, expected, predicted in scored:
-            confusion[expected][predicted] += 1
+        for entry in scored:
+            confusion[entry.truth][entry.prediction] += 1
 
         misses = [
             Miss(
-                job_id=record.job_id,
-                filename=filenames.get(record.job_id, ""),
-                expected=expected,
-                predicted=predicted,
-                review_route=record.review_route,
-                caught_by_safety_net=record.review_route == ReviewRoute.HUMAN_REVIEW,
+                job_id=entry.record.job_id,
+                filename=filenames.get(entry.record.job_id, ""),
+                expected=entry.truth,
+                predicted=entry.prediction,
+                review_route=entry.record.review_route,
+                caught_by_safety_net=_was_escalated(entry.record),
             )
-            for record, expected, predicted in scored
-            if expected != predicted
+            for entry in scored
+            if entry.truth != entry.prediction
         ]
 
         labelled = len(scored)

@@ -192,6 +192,11 @@ class ClassificationRecord(Base):
     judge_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Set by RoutingNode once the file has been moved to its final location (Decision 8).
     stored_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # The route the confidence gate chose for the machine's own prediction. review_route
+    # above is mutated to "accept" when a reviewer resolves the item, which would
+    # otherwise erase whether the safety net had caught the miss. NULL for rows predating
+    # this column -- unknown, not "not escalated".
+    machine_review_route: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Set by the human-decision endpoint (Decision 9).
     human_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # The machine's own prediction, preserved when a human overrides `label`. A correction

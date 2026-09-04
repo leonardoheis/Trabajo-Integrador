@@ -49,6 +49,7 @@ export interface JobDetailResponse {
     humanOverridden: boolean;
     originalLabel: string | null;
     expectedLabel: string | null;
+    machineReviewRoute: string | null;
   } | null;
   audit: {
     jobId: string;

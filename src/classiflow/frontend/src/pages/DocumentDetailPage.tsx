@@ -241,6 +241,12 @@ export default function DocumentDetailPage() {
                   </span>,
                 ],
                 [
+                  "Machine route",
+                  <span key="machine-route" className="font-mono text-sm uppercase">
+                    {data.classification.machineReviewRoute ?? "—"}
+                  </span>,
+                ],
+                [
                   "Second opinion",
                   data.classification.secondOpinionLabel
                     ? `${data.classification.secondOpinionLabel} · ${data.classification.classifierDisagreement ? "disagrees" : "agrees"}`

@@ -94,6 +94,14 @@ class _Settings(BaseSettings):
     # use, so the chat model gets its own context size.
     CHAT_MODEL_N_CTX: int = int(os.getenv("CHAT_MODEL_N_CTX", "3072"))
 
+    # Conversation turns kept verbatim in the prompt. Bounded by CHAT_MODEL_N_CTX: this
+    # many exchanges plus retrieved passages plus the question must fit.
+    RAW_WINDOW_SIZE: int = int(os.getenv("RAW_WINDOW_SIZE", "6"))
+    # Aged-out turns are folded into the summary in batches. Each fold is a full 8B
+    # generation that serializes against the user's next chat, so folding one turn at a
+    # time spends ~10x the GPU for a marginally fresher summary.
+    SUMMARY_BATCH_SIZE: int = int(os.getenv("SUMMARY_BATCH_SIZE", "10"))
+
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
     # Points at the frontend's OAuth popup route, not this backend's own /auth/callback

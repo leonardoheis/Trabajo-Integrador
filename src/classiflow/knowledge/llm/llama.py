@@ -1,7 +1,8 @@
 import asyncio
+import contextlib
 import queue
 import threading
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncGenerator, Iterable, Iterator
 from functools import lru_cache
 
 from llama_cpp import Llama
@@ -42,6 +43,11 @@ class _ActiveGenerations:
 
 _active_generations = _ActiveGenerations()
 
+# llama.cpp's C bindings are not safe for concurrent use of one model handle: two
+# generations interleaved on the same Llama object corrupt each other's KV cache and
+# surface as IndexError deep inside llama_cpp. Every generation serializes on this.
+_generation_lock = threading.Lock()
+
 
 def _begin_generation() -> None:
     with _active_generations.lock:
@@ -50,20 +56,24 @@ def _begin_generation() -> None:
 
 def _end_generation() -> None:
     with _active_generations.lock:
-        _active_generations.count = max(0, _active_generations.count - 1)
+        if _active_generations.count <= 0:
+            # Double-finalization: a stream released the counter twice. Logged rather
+            # than clamped silently, since it means a lifecycle path is wrong and would
+            # otherwise let a model be evicted mid-generation.
+            logger.error("generation counter underflow -- a stream finalized twice")
+            _active_generations.count = 0
+            return
+        _active_generations.count -= 1
 
 
-def reset_active_generations() -> None:
-    """Clear the in-flight counter.
-
-    An abandoned SSE stream leaves its generator un-exhausted, so its `finally` never
-    runs and the count stays above zero forever -- after which every unload silently
-    no-ops. Called on logout, where no generation can legitimately be running.
-    """
-    with _active_generations.lock:
-        if _active_generations.count:
-            logger.warning("resetting stale generation count: {}", _active_generations.count)
-        _active_generations.count = 0
+@contextlib.contextmanager
+def generation_in_flight() -> Iterator[None]:
+    """Hold the unload guard for the duration of one generation."""
+    _begin_generation()
+    try:
+        yield
+    finally:
+        _end_generation()
 
 
 def is_chat_llm_busy() -> bool:
@@ -114,58 +124,82 @@ class LlamaCppChatLlm(ChatLlm):
 
     def _complete(self, system: str, user: str) -> str:
         llm = get_chat_llm(self._model_path, self._n_ctx)
-        _begin_generation()
-        try:
-            response = llm.create_chat_completion(
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                max_tokens=self._max_tokens,
-                temperature=Settings.slm_temperature,
-                top_p=Settings.slm_top_p,
-            )
-        except Exception as exc:
-            raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
-        finally:
-            _end_generation()
+        with _generation_lock:
+            _begin_generation()
+            try:
+                response = llm.create_chat_completion(
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    max_tokens=self._max_tokens,
+                    temperature=Settings.slm_temperature,
+                    top_p=Settings.slm_top_p,
+                )
+            except Exception as exc:
+                raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
+            finally:
+                _end_generation()
         return _first_message_content(response)
 
-    def _stream_tokens(self, system: str, user: str) -> Iterator[str]:
+    @staticmethod
+    def _tokens_until_stopped(stream: object, stop: threading.Event | None) -> Iterator[str]:
+        # `stream=True` always yields an iterator, but create_chat_completion's return
+        # type is a union with the non-streaming response, which mypy cannot narrow.
+        if not isinstance(stream, Iterable):
+            return
+        # stop is checked between tokens: llama.cpp's loop cannot be interrupted from
+        # outside, so an abandoned stream would otherwise generate to the end while
+        # holding the in-flight counter.
+        for chunk in stream:
+            if stop is not None and stop.is_set():
+                return
+            token = _delta_content(chunk)
+            if token:
+                yield token
+
+    def _stream_tokens(
+        self, system: str, user: str, stop: threading.Event | None = None
+    ) -> Iterator[str]:
         llm = get_chat_llm(self._model_path, self._n_ctx)
-        _begin_generation()
-        try:
-            stream = llm.create_chat_completion(
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                max_tokens=self._max_tokens,
-                temperature=Settings.slm_temperature,
-                top_p=Settings.slm_top_p,
-                stream=True,
-            )
-            for chunk in stream:
-                token = _delta_content(chunk)
-                if token:
-                    yield token
-        except Exception as exc:
-            raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
-        finally:
-            _end_generation()
+        # The lock spans the whole stream, not just its creation: llama.cpp advances its
+        # KV cache on every token, so a second generation starting mid-stream corrupts
+        # both. Background summarization overlapping a chat is the common case.
+        with _generation_lock:
+            _begin_generation()
+            try:
+                stream = llm.create_chat_completion(
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user},
+                    ],
+                    max_tokens=self._max_tokens,
+                    temperature=Settings.slm_temperature,
+                    top_p=Settings.slm_top_p,
+                    stream=True,
+                )
+                yield from self._tokens_until_stopped(stream, stop)
+            except Exception as exc:
+                raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
+            finally:
+                _end_generation()
 
     def _produce_tokens(
-        self, system: str, user: str, token_queue: "queue.Queue[str | ChatLlmError | None]"
+        self,
+        system: str,
+        user: str,
+        token_queue: "queue.Queue[str | ChatLlmError | None]",
+        stop: threading.Event,
     ) -> None:
         try:
-            for token in self._stream_tokens(system, user):
+            for token in self._stream_tokens(system, user, stop):
                 token_queue.put(token)
         except ChatLlmError as exc:
             token_queue.put(exc)
         finally:
             token_queue.put(None)
 
-    async def astream(self, system: str, user: str) -> AsyncIterator[str]:
+    async def astream(self, system: str, user: str) -> AsyncGenerator[str, None]:
         # llama.cpp generation is blocking and CPU/GPU bound; running it inline would
         # freeze every other request (other jobs, health checks, open SSE streams) for
         # its whole duration. A background thread produces tokens from the blocking
@@ -173,8 +207,9 @@ class LlamaCppChatLlm(ChatLlm):
         # drains that queue on the event loop, so each token reaches the caller as soon
         # as llama.cpp emits it instead of waiting for the whole completion.
         token_queue: queue.Queue[str | ChatLlmError | None] = queue.Queue()
+        stop = threading.Event()
         thread = threading.Thread(
-            target=self._produce_tokens, args=(system, user, token_queue), daemon=True
+            target=self._produce_tokens, args=(system, user, token_queue, stop), daemon=True
         )
         thread.start()
         try:
@@ -183,6 +218,9 @@ class LlamaCppChatLlm(ChatLlm):
                     raise item
                 yield item
         finally:
+            # Set unconditionally: on a normal finish the producer has already exited, on
+            # an early close this is what lets it stop instead of generating to the end.
+            stop.set()
             # thread.join() is blocking; if the caller disconnects early (a dropped SSE
             # stream) this cleanup path must not freeze the event loop waiting for
             # llama.cpp's uninterruptible generation to finish on its own.

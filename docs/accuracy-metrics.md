@@ -2,7 +2,7 @@
 
 A snapshot of classification performance, and a guide to reading the numbers.
 
-Measured from `data/classiflow.db` on 2026-09-02, over **67 labelled documents**.
+Measured from `data/classiflow.db` on 2026-09-04, after migration `0015`.
 
 > This file is a point-in-time picture. The live figures are on the **Metrics** page in
 > the app (`/metrics`), or from `uv run poe accuracy`. Expect the numbers below to drift
@@ -12,21 +12,25 @@ Measured from `data/classiflow.db` on 2026-09-02, over **67 labelled documents**
 
 ## The pipeline funnel
 
-Accuracy is measured over classified documents only, so the drop from ingested has to be
-accounted for first:
+Accuracy is measured over scoreable documents only, so two reductions have to be accounted
+for first:
 
 | Stage | Count |
 |---|---|
-| Ingested | 76 |
+| Ingested | 77 |
 | Rejected in Stage 1 (exact duplicates, node4) | −8 |
 | Failed during processing | −1 |
-| **Reached the classifier** | **67** |
-| With a ground-truth label | 67 |
+| **Reached the classifier** | **68** |
+| Corrected before the machine's prediction was preserved | −13 |
+| **Scoreable** | **55** |
 
 The 9 that never reached the classifier are **not** classification errors — a duplicate
-correctly rejected is the pipeline working — so they are excluded from every rate below.
-Counting them as misses would understate the classifier; ignoring the gap entirely would
-leave a reader wondering where 9 documents went.
+correctly rejected is the pipeline working.
+
+The 13 excluded corrections are a data-loss artefact, not a judgement: a reviewer changed
+the label before `original_label` existed, so `label` now holds the reviewer's answer and
+the machine's prediction is gone. Scoring them would compare a human against a filename.
+Corrections made from now on preserve both and *are* scoreable.
 
 ---
 
@@ -34,26 +38,27 @@ leave a reader wondering where 9 documents went.
 
 | Metric | Value |
 |---|---|
-| **Strict accuracy** | **56 / 67 = 83,6 %** |
-| **Safeguarded accuracy** | **66 / 67 = 98,5 %** |
+| **Strict accuracy** | **45 / 55 = 81,8 %** |
+| **Safeguarded accuracy** | **55 / 55 = 100 %** |
 | Wrong, escalated to human review | 10 |
-| **Wrong, filed without review** | **1** |
+| **Wrong, filed without review** | **0** |
 
 **Strict accuracy** — the model's label matched the truth. This is what "accuracy" normally
 means, and it is the number to quote when asked how good the classifier is.
 
 **Safeguarded accuracy** — correct, *or* wrong but escalated to a human before anything was
-filed. This is a claim about the **safety net**, not the classifier. Of 11 wrong
-predictions, 10 were caught. Only one wrong label reached storage unreviewed.
+filed. This is a claim about the **safety net**, not the classifier. Every one of the 10
+wrong predictions was escalated; none reached storage unreviewed.
 
-Report both, labelled. Quoting only 98,5 % invites the reading that the classifier is that
-accurate; it is not. Quoting only 83,6 % hides that the system rarely lets a mistake
-through.
+Report both, labelled. Quoting only 100 % invites the reading that the classifier is
+perfect, which it is not. Quoting only 81,8 % hides that no mistake was ever filed.
 
-> The presentation's **58,3 % / 91,7 %** came from a 12-file sample. Over 67 documents the
-> figures are **83,6 % / 98,5 %**. The old numbers understated the system: a 12-document
-> sample moves 8,3 points per miss, and it scored `A0470.pdf` as wrong when the pipeline
-> had actually handled it correctly.
+> **These figures supersede the 58,3 % / 91,7 % on the MVP slide, and an earlier 83,6 % /
+> 98,5 % measured from this same database.** The earlier pair was computed before
+> `machine_review_route` existed: it read the *current* workflow route, which a reviewer's
+> resolution rewrites to `accept`, so escalated misses were miscounted as filed. It also
+> included the 13 unscoreable corrections. Both defects are fixed; see
+> [How ground truth is obtained](#how-ground-truth-is-obtained).
 
 ---
 
@@ -64,25 +69,25 @@ model either says it is or doesn't:
 
 |  | Model says `boletines` | Model says something else |
 |---|---|---|
-| **Actually a boletín** | true positive (10) | false negative (2) |
+| **Actually a boletín** | true positive (9) | false negative (2) |
 | **Actually something else** | false positive (0) | true negative |
 
 **Recall = found ÷ actually there.** Of all real boletines, what share did the model catch?
-`boletines` recall is 10/12 = **0.83** — it missed 2. Low recall means documents of this
-type are being filed under the wrong category. *"Are we finding them?"*
+`boletines` recall is 9/11 = **0.82** — it missed 2. Low recall means documents of this type
+are being filed under the wrong category. *"Are we finding them?"*
 
 **Precision = right ÷ claimed.** Of everything the model *called* a boletín, what share
-really was? `boletines` precision is 10/10 = **1.00** — when it says boletín, it is always
-right. Low precision means this category is a dumping ground catching documents that
-belong elsewhere. *"When it says this, can we believe it?"*
+really was? `boletines` precision is 9/9 = **1.00** — when it says boletín, it is always
+right. Low precision means this category is a dumping ground catching documents that belong
+elsewhere. *"When it says this, can we believe it?"*
 
 **F1 = the harmonic mean of the two.** A single number that is only high when *both* are
 high — it punishes lopsidedness. A model that labels everything `decretos` gets perfect
 recall on decretos and terrible precision; F1 exposes that, a raw accuracy figure doesn't.
 
 **Support = how many documents genuinely belong to the category.** The recall denominator,
-and the honesty check on the other three: recall 0.50 over 2 documents means one miss, not
-a measured weakness.
+and the honesty check on the other three: recall 0.00 over 1 document means one miss, not a
+measured weakness.
 
 ### Which one matters here
 
@@ -93,39 +98,44 @@ They fail differently, and for a municipal archive the costs are not symmetric:
 - **Low precision** means a folder is contaminated — you open `decretos` and find things
   that aren't decrees.
 
-Classiflow escalates on classifier disagreement, so most errors of either kind become a
-review-queue item rather than a misfiling. That is what the gap between 83,6 % and 98,5 %
-is measuring.
+Classiflow escalates on classifier disagreement, so an error of either kind becomes a
+review-queue item rather than a misfiling. That is what the gap between 81,8 % and 100 % is
+measuring.
 
 ---
 
 ## Per category
 
-| Category | Support | Predicted | Correct | Recall | Precision | F1 |
-|---|---|---|---|---|---|---|
-| `decretos_concejo_municipal` | 17 | 13 | 13 | 0.76 | 1.00 | 0.87 |
-| `decretos` | 14 | 22 | 14 | 1.00 | **0.64** | 0.78 |
-| `boletines` | 12 | 10 | 10 | 0.83 | 1.00 | 0.91 |
-| `ordenanzas` | 8 | 8 | 7 | 0.88 | 0.88 | 0.88 |
-| `resoluciones` | 5 | 5 | 4 | 0.80 | 0.80 | 0.80 |
-| `resoluciones_concejo_municipal` | 4 | 3 | 3 | 0.75 | 1.00 | 0.86 |
-| `convenios` | 3 | 2 | 2 | 0.67 | 1.00 | 0.80 |
-| `decreto_ordenanzas` | 2 | 1 | 1 | 0.50 | 1.00 | 0.67 |
-| `declaraciones_concejo_municipal` | 1 | 2 | 1 | 1.00 | 0.50 | 0.67 |
-| `otro` | 1 | 1 | 1 | 1.00 | 1.00 | 1.00 |
-| `compendios_de_boletines` | 0 | 0 | — | — | — | — |
+| Category | Support | Recall | Precision | F1 |
+|---|---|---|---|---|
+| `decretos_concejo_municipal` | 15 | 0.73 | 1.00 | 0.85 |
+| `decretos` | 14 | 1.00 | **0.64** | 0.78 |
+| `boletines` | 11 | 0.82 | 1.00 | 0.90 |
+| `ordenanzas` | 7 | 0.86 | 1.00 | 0.92 |
+| `resoluciones_concejo_municipal` | 3 | 0.67 | 1.00 | 0.80 |
+| `convenios` | 1 | 1.00 | 1.00 | 1.00 |
+| `declaraciones_concejo_municipal` | 1 | 1.00 | 0.50 | 0.67 |
+| `decreto_ordenanzas` | 1 | 0.00 | 0.00 | 0.00 |
+| `otro` | 1 | 1.00 | 1.00 | 1.00 |
+| `resoluciones` | 1 | 0.00 | 0.00 | 0.00 |
+| `compendios_de_boletines` | 0 | — | — | — |
 
-Read the **Support** column first. Only the top four rows (8+ documents) carry enough weight
-to draw conclusions from; below that, one document swings recall by 25–50 points.
+Read the **Support** column first. Only the top four rows (7+ documents) carry enough weight
+to draw conclusions from. The five categories at 1–3 documents are indicative only — a
+single miss takes `decreto_ordenanzas` and `resoluciones` to 0.00, which says nothing about
+those categories in general.
+
+Excluding the 13 corrections thinned the rare categories most: `convenios` dropped from 3
+labelled examples to 1, `resoluciones` from 5 to 1.
 
 ---
 
 ## What the numbers say
 
-### `decretos` is a sink — this is the one real finding
+### `decretos` is a sink — the one real finding
 
-Recall **1.00**, precision **0.64**. It never misses a decree, but 8 of its 22 predictions
-were something else. Every miss in the corpus except three landed here:
+Recall **1.00**, precision **0.64**. It never misses a decree, but a third of its
+predictions were something else. Of 10 misses, **8 land on `decretos`**:
 
 | Truth | Predicted `decretos` |
 |---|---|
@@ -135,30 +145,33 @@ were something else. Every miss in the corpus except three landed here:
 | `ordenanzas` | 1 |
 | `decreto_ordenanzas` | 1 |
 
-**8 of 11 total misses are documents absorbed into `decretos`.** The model's failure mode is
-not random confusion — it defaults to the largest category when uncertain. This is also the
-mechanism behind the other categories' recall gaps: `decretos_concejo_municipal` at 0.76 and
-`boletines` at 0.83 are low *because* their misses went to `decretos`, not because those
-categories are intrinsically hard.
+The failure mode is not random confusion — the model defaults to the largest category when
+uncertain. This also explains the other categories' recall gaps:
+`decretos_concejo_municipal` at 0.73 and `boletines` at 0.82 are low *because* their misses
+went to `decretos`, not because those categories are intrinsically hard.
 
 The primary-classification prompt already warns about the `decretos` /
 `decretos_concejo_municipal` / `decreto_ordenanzas` trio. The data confirms the warning is
 warranted and not yet sufficient.
 
-### The one uncaught miss is structural
+The two remaining misses are single instances:
+`decretos_concejo_municipal → declaraciones_concejo_municipal` and
+`resoluciones_concejo_municipal → resoluciones` — both the council/non-council distinction.
 
-| Expected | Predicted | Route |
-|---|---|---|
-| `convenios` | `ordenanzas` | `accept` — filed unreviewed |
+### The safety net caught everything
 
-`convenios` is one of two categories **BETO v2 was never trained on**. The second-opinion
-classifier cannot predict it, so it could not disagree, so the confidence gate never fired
-and the document was auto-accepted with a wrong label.
+All 10 wrong predictions were escalated to `human_review`. Zero wrong labels reached storage
+unreviewed.
 
-This is a hole in the safety net, not bad luck: every `convenios` and
-`compendios_de_boletines` document is unprotected by the second opinion. It is the single
-most actionable finding here — 10 of 11 misses were caught, and the one that escaped did so
-through a known, fixable gap.
+An earlier version of this document reported one uncaught `convenios` miss and called it a
+structural hole, reasoning that BETO v2 was never trained on `convenios` so the second
+opinion could not disagree. **That conclusion was wrong** — an artefact of reading the
+mutable `review_route` after a reviewer had resolved the item. The document *was* escalated.
+
+The underlying observation still holds and is worth watching: `convenios` and
+`compendios_de_boletines` are LLM-only labels, so the second opinion cannot contradict the
+primary classifier on them. That is a real gap in the disagreement signal — it simply has
+not produced an uncaught miss in this corpus.
 
 ### Confidence does not separate right from wrong
 
@@ -168,17 +181,17 @@ through a known, fixable gap.
 | `human_review` | 0.941 |
 
 Escalated documents are, on average, as confident as accepted ones. The model reports high
-confidence whether or not it is correct, so routing is driven almost entirely by
-**classifier disagreement and OOD signals** — not by the confidence score.
+confidence whether or not it is correct, so routing is driven almost entirely by **classifier
+disagreement and OOD signals** — not by the confidence score.
 
 This is the empirical justification for BETO v2 existing at all. A confidence-threshold gate
-would have accepted nearly everything, including the 10 misses that were caught.
+would have accepted nearly everything, including all 10 misses.
 
 ### `compendios_de_boletines` is untested
 
 A real category — 27 documents in the source corpus, its own prompt anchor ("covers a RANGE
 of boletín numbers, not one issue") — but none ingested locally. Worth closing, because a
-compendio is exactly what a boletín gets confused with: `boletines` recall of 0.83 is
+compendio is exactly what a boletín gets confused with: `boletines` recall of 0.82 is
 measured without its nearest confusable neighbour present, so it is probably optimistic.
 
 ---
@@ -193,23 +206,32 @@ names every file after the category it was filed under (`ordenanza_9964_2019.pdf
 prefix wins, so `decreto_cm_` and `decreto_ordenanza_` are matched before the bare
 `decreto_` they both start with. Documents that aren't municipal acts follow no naming
 convention and are listed explicitly as `otro`. Applied automatically at classification
-time, so the labelled set grows with the corpus.
+time, and backfilled for historical rows by migration `0015`.
 
 **`original_label` — human corrections.**
 When a reviewer overrides a classification, the machine's prediction is preserved rather
-than overwritten. Each correction is then a labelled example: the reviewer's label is the
-truth, `original_label` is the miss.
+than overwritten. The reviewer's label is then the truth and `original_label` the miss. This
+outranks the filename convention: a human adjudicated the document, the filename is a guess.
 
-### Caveats on both
+**`machine_review_route` — the safety net's original decision.**
+`review_route` is mutated to `accept` when a reviewer resolves an item, which would erase
+whether the miss had been caught. `machine_review_route` freezes the route chosen for the
+machine's own prediction and is never updated by a human decision.
 
-- **These are weak labels.** The filename reflects how the archive filed a document, not an
-  independent adjudication. Good enough for per-category rates at this scale; not a
+### Caveats
+
+- **These are weak labels.** The filename reflects how the source archive filed a document,
+  not an independent adjudication. Good enough for per-category rates at this scale; not a
   substitute for expert review on a contested document.
 - **Corrections are a biased sample.** They only exist for documents the system already
   escalated — the hard ones. Metrics from corrections alone describe the review queue, not
   overall performance.
-- **13 corrections predate the fix** and have no `original_label`. That data is
-  unrecoverable; capture begins with the next correction.
+- **13 corrections predate `original_label`** and are excluded entirely. Migration `0015`
+  reconstructed their `machine_review_route` (an override proves escalation, since the
+  decision endpoint rejects anything not in `human_review`), but a lost prediction cannot be
+  recovered.
+- **Historical `machine_review_route` is derived, not recorded.** Rows classified after the
+  migration carry the real value; the 68 existing rows carry an inference.
 
 ---
 

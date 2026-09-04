@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 
 
 class ChatLlm(ABC):
@@ -14,9 +14,11 @@ class ChatLlm(ABC):
     """
 
     @abstractmethod
-    def astream(self, system: str, user: str) -> AsyncIterator[str]:
+    def astream(self, system: str, user: str) -> AsyncGenerator[str, None]:
         """Stream the completion for one system/user prompt pair.
 
         Returns:
-            An async iterator over response text fragments.
+            An async generator over response text fragments. Generator, not iterator, so
+            callers can aclose() it -- an abandoned stream must release provider
+            resources rather than wait for garbage collection.
         """

@@ -57,20 +57,20 @@ For historical rows, `machine_review_route` can be reconstructed as follows:
 - Modify: `tests/services/test_metrics_service.py`
 - Modify: `tests/api/routes/test_classification.py`
 
-- [ ] Add a service test where a machine miss originally used `human_review`, was later
+- [x] Add a service test where a machine miss originally used `human_review`, was later
   resolved to `accept`, and still contributes to `wrong_caught` rather than
   `wrong_uncaught`.
-- [ ] Add a service test where a record contains `expected_label`, `human_overridden=true`,
+- [x] Add a service test where a record contains `expected_label`, `human_overridden=true`,
   and `original_label`; assert that the current human label is truth and
   `original_label` is the prediction.
-- [ ] Add a service test where a record has `human_overridden=true`, `original_label=NULL`
+- [x] Add a service test where a record has `human_overridden=true`, `original_label=NULL`
   and a non-null `expected_label`; assert it is excluded from `labelled` and every rate.
   This currently passes wrongly -- the record is included and scored reviewer-vs-filename.
-- [ ] Add an endpoint test proving that submitting a human decision preserves the first
+- [x] Add an endpoint test proving that submitting a human decision preserves the first
   machine route and first machine prediction.
-- [ ] Add a repeated-update test proving neither immutable historical field can be
+- [x] Add a repeated-update test proving neither immutable historical field can be
   overwritten.
-- [ ] Run the focused tests and record the expected failures:
+- [x] Run the focused tests and record the expected failures:
 
 ```bash
 uv run pytest tests/services/test_metrics_service.py tests/api/routes/test_classification.py -v
@@ -91,20 +91,20 @@ uv run pytest tests/services/test_metrics_service.py tests/api/routes/test_class
 - Modify: `src/classiflow/frontend/src/api/documents.ts`
 - Modify: repository fixtures/builders that construct `ClassificationRecord`
 
-- [ ] Add nullable `machine_review_route` to `ClassificationRecord`. The migration is
+- [x] Add nullable `machine_review_route` to `ClassificationRecord`. The migration is
   created in Task 4; keeping it nullable allows safe rollout and honest representation of
   unrecoverable data.
-- [ ] Add `machine_review_route: ReviewRoute | None` to `RoutingInput`.
-- [ ] On initial classification, populate both `review_route` and
+- [x] Add `machine_review_route: ReviewRoute | None` to `RoutingInput`.
+- [x] On initial classification, populate both `review_route` and
   `machine_review_route` from the machine-selected route.
-- [ ] In `RoutingNode`, set `machine_review_route` only when the stored record does not
+- [x] In `RoutingNode`, set `machine_review_route` only when the stored record does not
   already have one. Never clear or replace it during human review.
-- [ ] In the human-decision endpoint, pass through the stored historical route while
+- [x] In the human-decision endpoint, pass through the stored historical route while
   updating only the current route.
-- [ ] Expose the field through document-detail schemas only if it is useful for audit or
+- [x] Expose the field through document-detail schemas only if it is useful for audit or
   debugging; otherwise keep it internal and remove the frontend-document change from this
   task.
-- [ ] Run focused routing and endpoint tests:
+- [x] Run focused routing and endpoint tests:
 
 ```bash
 uv run pytest tests/classification/test_routing_node.py tests/api/routes/test_classification.py -v
@@ -120,7 +120,7 @@ uv run pytest tests/classification/test_routing_node.py tests/api/routes/test_cl
 - Modify: `src/classiflow/services/metrics/domain.py`
 - Modify: `tests/services/test_metrics_service.py`
 
-- [ ] Change `_ground_truth()` precedence:
+- [x] Change `_ground_truth()` precedence:
   1. If `human_overridden` and `original_label` are present, use the current human label.
   2. If `human_overridden` and `original_label` is missing, exclude the record entirely --
      the machine prediction is unrecoverable and `label` holds the reviewer's answer, so
@@ -128,15 +128,15 @@ uv run pytest tests/classification/test_routing_node.py tests/api/routes/test_cl
      behaviour for all 13 historical corrections and is contaminating strict accuracy.
   3. Otherwise use `expected_label` when present.
   4. Otherwise exclude the record from scoring.
-- [ ] Make `_prediction()` return `original_label` for a usable human correction and the
+- [x] Make `_prediction()` return `original_label` for a usable human correction and the
   current label otherwise. It must never fall through to `label` for an overridden record.
-- [ ] Determine `caught_by_safety_net` from `machine_review_route`, never the mutable
+- [x] Determine `caught_by_safety_net` from `machine_review_route`, never the mutable
   `review_route`.
-- [ ] Validate category and route strings as `DocumentCategory` and `ReviewRoute` at the
+- [x] Validate category and route strings as `DocumentCategory` and `ReviewRoute` at the
   service boundary. Decide explicitly how corrupt/unknown database values are surfaced;
   do not silently count them as valid categories.
-- [ ] Keep API serialization compatible with the existing camel-case response.
-- [ ] Run focused tests and confirm the Task 1 failures are now green:
+- [x] Keep API serialization compatible with the existing camel-case response.
+- [x] Run focused tests and confirm the Task 1 failures are now green:
 
 ```bash
 uv run pytest tests/services/test_metrics_service.py tests/api/routes/test_classification.py -v
@@ -152,24 +152,24 @@ uv run pytest tests/services/test_metrics_service.py tests/api/routes/test_class
 - Add or modify: migration tests under `tests/`
 - Modify only if necessary: `docs/accuracy-metrics.md`
 
-- [ ] Create revision `0015` with `down_revision = "0014"`.
-- [ ] Add `classification_records.machine_review_route` as nullable.
-- [ ] Backfill `machine_review_route`:
+- [x] Create revision `0015` with `down_revision = "0014"`.
+- [x] Add `classification_records.machine_review_route` as nullable.
+- [x] Backfill `machine_review_route`:
   - `human_overridden = true` -> `human_review`.
   - otherwise -> the row's current `review_route`.
   - preserve any pre-existing non-null value if the migration is written to be rerunnable.
-- [ ] Join classification records to jobs by `job_id` and backfill `expected_label` only
+- [x] Join classification records to jobs by `job_id` and backfill `expected_label` only
   when it is null.
-- [ ] Encode the filename mapping inside the migration rather than importing application
+- [x] Encode the filename mapping inside the migration rather than importing application
   code, so future refactors cannot change old migration behavior.
-- [ ] Match filenames case-insensitively, apply longer prefixes before shorter prefixes,
+- [x] Match filenames case-insensitively, apply longer prefixes before shorter prefixes,
   preserve explicit `otro` mappings, and leave unknown filenames null.
-- [ ] Make downgrade remove only `machine_review_route`; document that data backfills are
+- [x] Make downgrade remove only `machine_review_route`; document that data backfills are
   not reversed because clearing previously null `expected_label` values cannot be done
   reliably after later writes.
-- [ ] Add an upgrade test starting from an `0013`-shaped fixture. Assert recognized,
+- [x] Add an upgrade test starting from an `0013`-shaped fixture. Assert recognized,
   explicit-`otro`, unknown, pre-populated, and human-overridden cases.
-- [ ] Run migration tests against a temporary database, not `data/classiflow.db`:
+- [x] Run migration tests against a temporary database, not `data/classiflow.db`:
 
 ```bash
 uv run pytest tests -k "migration or accuracy" -v
@@ -187,28 +187,28 @@ uv run pytest tests -k "migration or accuracy" -v
 - Modify: `tests/knowledge/test_llama.py`
 - Modify if lifecycle cleanup is incomplete: `src/classiflow/api/routes/knowledge/endpoints.py`
 
-- [ ] Add a failing test with an active generation proving logout does not evict the
+- [x] Add a failing test with an active generation proving logout does not evict the
   shared chat model.
-- [ ] Add tests for normal completion, provider failure, and consumer cancellation;
+- [x] Add tests for normal completion, provider failure, and consumer cancellation;
   activity must increment once and decrement once in every path.
-- [ ] Remove `reset_active_generations()` and its logout call.
-- [ ] Keep `unload_chat_llm()` as a guarded eviction request: it must no-op while the real
+- [x] Remove `reset_active_generations()` and its logout call.
+- [x] Keep `unload_chat_llm()` as a guarded eviction request: it must no-op while the real
   active count is non-zero.
-- [ ] Repair the leak at the stream boundary. `_stream_tokens()` runs in a daemon thread,
+- [x] Repair the leak at the stream boundary. `_stream_tokens()` runs in a daemon thread,
   so its `finally` does fire once llama.cpp's blocking loop ends -- but on a client
   disconnect that loop runs to completion, holding the counter for the full generation.
   Starlette's `StreamingResponse` does not `aclose()` its body iterator on disconnect.
-  - [ ] Wrap the SSE generator in `contextlib.aclosing` and close it in a response-level
+  - [x] Wrap the SSE generator in `contextlib.aclosing` and close it in a response-level
     `finally` in `api/routes/knowledge/endpoints.py`.
-  - [ ] Add a `threading.Event` stop signal, checked between emitted tokens in
+  - [x] Add a `threading.Event` stop signal, checked between emitted tokens in
     `_stream_tokens()`, set when the consumer goes away.
-  - [ ] Do not use `request.is_disconnected()` alone (polling, observes the disconnect
+  - [x] Do not use `request.is_disconnected()` alone (polling, observes the disconnect
     late) or a timestamp reaper (cannot distinguish stale from slow; recreates the
     live-eviction race).
-- [ ] Do not force the counter to zero or clamp away underflow. If underflow is possible,
+- [x] Do not force the counter to zero or clamp away underflow. If underflow is possible,
   raise/log an invariant failure in tests and fix the double-finalization path.
-- [ ] Keep logout successful even when model eviction is deferred.
-- [ ] Run focused concurrency tests repeatedly:
+- [x] Keep logout successful even when model eviction is deferred.
+- [x] Run focused concurrency tests repeatedly:
 
 ```bash
 uv run pytest tests/knowledge/test_llama.py tests/api/routes/test_auth_oauth.py -v

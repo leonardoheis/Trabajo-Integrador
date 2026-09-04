@@ -1,7 +1,7 @@
 # Accuracy Metrics Review Remediation
 
-**Date:** 2026-09-03  
-**Branch reviewed:** `docs/accuracy-measurement-plan`  
+**Date:** 2026-09-03
+**Branch reviewed:** `docs/accuracy-measurement-plan`
 **Review base:** `origin/main` at `01f1cbc86053cac49cd889038e386a3321179a43`
 
 ## Context

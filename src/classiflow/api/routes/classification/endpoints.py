@@ -119,6 +119,9 @@ async def submit_classification_decision(
         # rather than recording the previous reviewer's choice as if it were the model's.
         original_label=record.original_label or record.label,
         expected_label=record.expected_label,
+        # Pass the stored value through; RoutingNode only writes it when unset, so this
+        # resolution cannot rewrite the machine's original route.
+        machine_review_route=record.machine_review_route,
     )
     ctx = JobContext(job_id=job_id, filename=job.filename)
     await routing.run(ctx, routing_input)

@@ -189,6 +189,14 @@ Apply this structure to every new LangGraph agent added to the project.
 - **Keep comments minimal.** A comment explains *why* in one or two lines, never a paragraph.
   Do not narrate what a change does or recount the bug that motivated it — that belongs in the
   commit message, not the code.
+- **Names carry the explanation; comments are the fallback.** Follow Clean Code (Robert C.
+  Martin): intention-revealing names, no single-letter or abbreviated identifiers outside a
+  tight loop index, functions that do one thing at one level of abstraction, no redundant
+  comment restating what a well-named symbol already says. A comment is warranted only for
+  the *why* a name cannot carry — a non-obvious constraint, a rejected alternative, an
+  external quirk. If a comment explains *what* the code does, rename until it doesn't.
+  References: [Clean Code summary](https://gist.github.com/cedrickchee/55ecfbaac643bf0c24da6874bf4feb08) ·
+  [cheat sheet](https://cheatography.com/costemaxime/cheat-sheets/summary-of-clean-code-by-robert-c-martin/)
 - Line length: 100. Quote style: double. (Configured in `[tool.ruff]`.)
 - Type annotations required on all functions in `src/` (mypy strict).
 - **Never use `from __future__ import annotations`** — quote forward references explicitly

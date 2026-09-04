@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from classiflow.database.models import AllowedUser
 from classiflow.database.repositories.user import InMemoryUserRepository
 from classiflow.domain.user import AuthToken
+from classiflow.knowledge.llm.llama import generation_in_flight, get_chat_llm
 from classiflow.services.auth import decode_token, encode_token
 from classiflow.services.auth.exceptions import NotAllowedError, OAuthError
 from classiflow.services.auth.oauth import exchange_code, get_authorization_url
@@ -262,3 +263,24 @@ class TestAuthLogoutEndpoint:
         response = client.post("/auth/logout", headers=auth_headers)
         assert response.status_code == HTTPStatus.NO_CONTENT
         mock_unload.assert_called_once()
+
+    def test_does_not_evict_a_model_another_user_is_generating_with(
+        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # One user signing out must not disturb another user's in-flight chat: the
+        # process shares one llama.cpp handle, and evicting it mid-generation hangs it.
+        mock_llama = MagicMock(side_effect=lambda **_kwargs: object())
+        monkeypatch.setattr("classiflow.knowledge.llm.llama.Llama", mock_llama)
+        get_chat_llm.cache_clear()
+        try:
+            with generation_in_flight():
+                get_chat_llm("fake/model.gguf", 8192)
+
+                assert client.post("/auth/logout", headers=auth_headers).status_code == (
+                    HTTPStatus.NO_CONTENT
+                )
+
+                get_chat_llm("fake/model.gguf", 8192)
+                assert mock_llama.call_count == 1  # still cached: nothing was evicted
+        finally:
+            get_chat_llm.cache_clear()

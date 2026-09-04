@@ -40,6 +40,9 @@ class RoutingInput(BaseEntity):
     human_overridden: bool = False
     original_label: str | None = None
     expected_label: str | None = None
+    # Historical: the route chosen for the machine's own prediction, never updated by a
+    # human decision. None means "leave whatever is stored".
+    machine_review_route: str | None = None
 
 
 class RoutingResult(BaseEntity):
