@@ -1,8 +1,8 @@
 import asyncio
-import contextlib
 import queue
 import threading
 from collections.abc import AsyncGenerator, Iterable, Iterator
+from contextlib import AbstractContextManager
 from functools import lru_cache
 
 from llama_cpp import Llama
@@ -13,35 +13,15 @@ from classiflow.ingesta.llm_provider import n_gpu_layers
 from classiflow.knowledge.llm.chat_llm import ChatLlm
 from classiflow.knowledge.llm.exceptions import ChatLlmError
 from classiflow.model_cache import evict_lru_cache
+from classiflow.model_lifecycle import InFlightCounter
 from classiflow.settings import Settings
 
 _PROVIDER = "llama"
 
 
-class _ActiveGenerations:
-    """Mutable box around the in-flight-generation count.
-
-    A plain module-level int would need `global` to mutate (PLW0603); mutating an
-    attribute on a single shared instance instead avoids rebinding the module name
-    (same pattern as PipelineService's _JobsInFlight). The lock matters here in a
-    way it doesn't for that job counter: this one is mutated from the background
-    thread astream() spawns, not just the event-loop thread.
-
-    unload_chat_llm() (called by PipelineService before every ingestion job, to
-    free VRAM for the SLM/BERT models) must never evict the handle while a
-    generation is in flight: llama.cpp's C bindings are not safe for concurrent
-    use of one handle from two threads, and forcing gc.collect()/
-    torch.cuda.empty_cache() concurrently with an active generate call can hang
-    the whole process -- observed in production as a pipeline job stuck forever
-    at "processing" with zero steps recorded.
-    """
-
-    def __init__(self) -> None:
-        self.count = 0
-        self.lock = threading.Lock()
-
-
-_active_generations = _ActiveGenerations()
+# Evicting the chat model while it is generating hangs llama.cpp -- observed as a
+# pipeline job stuck forever at "processing" with zero steps recorded.
+_active_generations = InFlightCounter("chat generation")
 
 # llama.cpp's C bindings are not safe for concurrent use of one model handle: two
 # generations interleaved on the same Llama object corrupt each other's KV cache and
@@ -49,36 +29,17 @@ _active_generations = _ActiveGenerations()
 _generation_lock = threading.Lock()
 
 
-def _begin_generation() -> None:
-    with _active_generations.lock:
-        _active_generations.count += 1
+def generation_in_flight() -> AbstractContextManager[None]:
+    """Hold the unload guard for the duration of one generation.
 
-
-def _end_generation() -> None:
-    with _active_generations.lock:
-        if _active_generations.count <= 0:
-            # Double-finalization: a stream released the counter twice. Logged rather
-            # than clamped silently, since it means a lifecycle path is wrong and would
-            # otherwise let a model be evicted mid-generation.
-            logger.error("generation counter underflow -- a stream finalized twice")
-            _active_generations.count = 0
-            return
-        _active_generations.count -= 1
-
-
-@contextlib.contextmanager
-def generation_in_flight() -> Iterator[None]:
-    """Hold the unload guard for the duration of one generation."""
-    _begin_generation()
-    try:
-        yield
-    finally:
-        _end_generation()
+    Returns:
+        A context manager that blocks chat-model eviction while held.
+    """
+    return _active_generations.in_flight()
 
 
 def is_chat_llm_busy() -> bool:
-    with _active_generations.lock:
-        return _active_generations.count > 0
+    return _active_generations.is_busy()
 
 
 @lru_cache(maxsize=2)
@@ -101,16 +62,23 @@ def get_chat_llm(model_path: str, n_ctx: int) -> Llama:
         raise ModelLoadError(path=model_path, cause=str(exc)) from exc
 
 
+def evict_chat_llm_cache() -> None:
+    """Drop the cached handle so gc can free the GGUF's CUDA context.
+
+    Unguarded: callers must establish that no generation is in flight. GpuResidency does
+    that under a lock it also holds across this call.
+    """
+    evict_lru_cache(get_chat_llm)
+
+
 def unload_chat_llm() -> None:
-    # Drops the lru_cache reference so gc can collect the Llama instance, whose __del__
-    # frees the CUDA context. Skipped while a generation is in flight.
+    # Guarded convenience wrapper for callers that are not GpuResidency.
     if is_chat_llm_busy():
         logger.warning(
-            "unload_chat_llm skipped: {} generation(s) still in flight",
-            _active_generations.count,
+            "unload_chat_llm skipped: {} generation(s) in flight", _active_generations.count
         )
         return
-    evict_lru_cache(get_chat_llm)
+    evict_chat_llm_cache()
     logger.info("unload_chat_llm: evicted")
 
 
@@ -124,8 +92,7 @@ class LlamaCppChatLlm(ChatLlm):
 
     def _complete(self, system: str, user: str) -> str:
         llm = get_chat_llm(self._model_path, self._n_ctx)
-        with _generation_lock:
-            _begin_generation()
+        with _generation_lock, _active_generations.in_flight():
             try:
                 response = llm.create_chat_completion(
                     messages=[
@@ -138,8 +105,6 @@ class LlamaCppChatLlm(ChatLlm):
                 )
             except Exception as exc:
                 raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
-            finally:
-                _end_generation()
         return _first_message_content(response)
 
     @staticmethod
@@ -165,8 +130,7 @@ class LlamaCppChatLlm(ChatLlm):
         # The lock spans the whole stream, not just its creation: llama.cpp advances its
         # KV cache on every token, so a second generation starting mid-stream corrupts
         # both. Background summarization overlapping a chat is the common case.
-        with _generation_lock:
-            _begin_generation()
+        with _generation_lock, _active_generations.in_flight():
             try:
                 stream = llm.create_chat_completion(
                     messages=[
@@ -181,8 +145,6 @@ class LlamaCppChatLlm(ChatLlm):
                 yield from self._tokens_until_stopped(stream, stop)
             except Exception as exc:
                 raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
-            finally:
-                _end_generation()
 
     def _produce_tokens(
         self,

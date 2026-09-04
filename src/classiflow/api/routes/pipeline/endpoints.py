@@ -29,11 +29,11 @@ from classiflow.domain.repositories.document_steps import IDocumentStepsReposito
 from classiflow.domain.repositories.job import IJobRepository
 from classiflow.events.broadcaster import EventBroadcaster
 from classiflow.injections.production import Container
-from classiflow.knowledge.llm.llama import unload_chat_llm
+from classiflow.model_lifecycle.residency import build_default_residency
 from classiflow.services.audit.repository import IAuditRepository
 from classiflow.services.job.exceptions import JobNotFoundError
 from classiflow.services.job.service import JobService
-from classiflow.services.pipeline.service import PipelineService, is_pipeline_busy
+from classiflow.services.pipeline.service import PipelineService
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"], dependencies=[Depends(get_current_user)])
 
@@ -47,8 +47,7 @@ sse_router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 @router.post("/warmup", status_code=HTTPStatus.NO_CONTENT)
 async def pipeline_warmup() -> None:
     """Unload the chat LLM so pipeline models have VRAM headroom."""
-    if not is_pipeline_busy():
-        unload_chat_llm()
+    await build_default_residency().reserve_for_pipeline()
 
 
 @router.post("/ingest", status_code=202)

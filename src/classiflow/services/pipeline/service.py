@@ -7,7 +7,6 @@ from fastapi import BackgroundTasks
 from langgraph.graph.state import CompiledStateGraph
 from loguru import logger
 
-from classiflow.classification.nodes.second_opinion import unload_bert
 from classiflow.database.models import DocumentKb, DocumentStep, EnrichedRecord, Job
 from classiflow.domain.job import JobStatus, NodeEvent
 from classiflow.domain.repositories import (
@@ -29,12 +28,10 @@ from classiflow.ingesta.domain import (
     FormatValidationResult,
     JobState,
 )
-from classiflow.ingesta.llm_provider import unload_slm
-from classiflow.ingesta.nodes.node4_duplicate_control import unload_duplicate_control_embedder
-from classiflow.knowledge.embeddings.embedder import unload_kb_embedder
 from classiflow.knowledge.exceptions import KnowledgeError
 from classiflow.knowledge.indexing.indexer import IndexerService, IndexResult
-from classiflow.knowledge.llm.llama import unload_chat_llm
+from classiflow.model_lifecycle import InFlightCounter
+from classiflow.model_lifecycle.residency import build_default_residency
 from classiflow.storage.document_storage import IDocumentStorage
 
 if TYPE_CHECKING:
@@ -58,38 +55,16 @@ _StepResult = (
 )
 
 
-class _JobsInFlight:
-    """Mutable box around the running-job count.
-
-    A plain module-level int would need `global` to mutate (PLW0603); mutating an
-    attribute on a single shared instance instead avoids rebinding the module name.
-    """
-
-    def __init__(self) -> None:
-        self.count = 0
-
-
-_jobs_in_flight = _JobsInFlight()
-
-
-def _begin_job() -> None:
-    _jobs_in_flight.count += 1
-
-
-def _end_job() -> None:
-    _jobs_in_flight.count -= 1
+# Guards the pipeline's models from eviction while a job is using them.
+_jobs_in_flight = InFlightCounter("pipeline job")
 
 
 def is_pipeline_busy() -> bool:
-    return _jobs_in_flight.count > 0
+    return _jobs_in_flight.is_busy()
 
 
-def _release_gpu_models() -> None:
-    unload_slm()
-    unload_bert()
-    unload_chat_llm()
-    unload_kb_embedder()
-    unload_duplicate_control_embedder()
+async def _release_gpu_models() -> None:
+    await build_default_residency().release_for_owner()
 
 
 def _build_document_kb(indexed: IndexResult, record: EnrichedRecord, sha256: str) -> DocumentKb:
@@ -158,13 +133,13 @@ class PipelineService:
 
     async def _run(self, job_id: str, filename: str, file_bytes: bytes) -> None:
         async with self._job_semaphore:
-            _begin_job()
+            _jobs_in_flight.acquire()
             try:
                 # Evicted here too (not just in `finally`): a chat warmup that ran
                 # just before this job started may have left its own GPU models
                 # resident, and this job's nodes need that VRAM back before they load
                 # theirs.
-                _release_gpu_models()
+                await _release_gpu_models()
                 await self._job_repo.update_status(job_id, "processing")
                 # _run is a FastAPI BackgroundTask -- it keeps writing through this same
                 # DB session long after the request that resolved it has already returned
@@ -210,14 +185,13 @@ class PipelineService:
                         await self._job_repo.update_status(job_id, "classified")
                         await self._job_repo.commit()
             finally:
+                # Released before the unloads: a raise inside _release_gpu_models must
+                # not leak the counter, which would block every later eviction.
+                _jobs_in_flight.release()
                 # Guaranteed even when a node raises mid-pipeline -- without this,
                 # a crashed job would leave its GPU models resident, denying VRAM
                 # to every job (and chat warmup) that runs afterward.
-                # _end_job() runs first: it's a simple counter decrement that cannot
-                # raise, so the in-flight counter is always released even if one of
-                # the unload calls inside _release_gpu_models() raises.
-                _end_job()
-                _release_gpu_models()
+                await _release_gpu_models()
 
             await self._broadcaster.emit(
                 NodeEvent(job_id=job_id, node=_PIPELINE_NODE, status=JobStatus.DONE)

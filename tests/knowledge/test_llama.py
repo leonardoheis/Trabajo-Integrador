@@ -193,35 +193,39 @@ class TestGenerationSerialization:
         assert is_chat_llm_busy() is False
 
 
+@pytest.fixture
+def _isolated_chat_llm_cache() -> Iterator[None]:
+    # The lru_cache is process-global; without clearing on both sides these tests leak
+    # a cached handle into each other.
+    get_chat_llm.cache_clear()
+    yield
+    get_chat_llm.cache_clear()
+
+
+@pytest.mark.usefixtures("_isolated_chat_llm_cache")
 class TestUnloadChatLlm:
     def test_is_skipped_while_a_generation_is_active(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # Evicting the handle mid-generation hangs llama.cpp; the guard must hold even
         # when the eviction request comes from an unrelated user's logout.
         mock_llama = MagicMock(side_effect=lambda **_kwargs: object())
         monkeypatch.setattr("classiflow.knowledge.llm.llama.Llama", mock_llama)
-        get_chat_llm.cache_clear()
-        try:
+
+        get_chat_llm("fake/model.gguf", 8192)
+        with generation_in_flight():
+            unload_chat_llm()
             get_chat_llm("fake/model.gguf", 8192)
-            with generation_in_flight():
-                unload_chat_llm()
-                get_chat_llm("fake/model.gguf", 8192)
-                assert mock_llama.call_count == 1  # still cached: no eviction happened
-        finally:
-            get_chat_llm.cache_clear()
+            assert mock_llama.call_count == 1  # still cached: no eviction happened
 
     def test_forces_a_reload_on_the_next_call(self, monkeypatch: pytest.MonkeyPatch) -> None:
         EXPECTED_CALL_COUNT_AFTER_FIRST_CALL = 1
         EXPECTED_CALL_COUNT_AFTER_RELOAD = 2
         mock_llama = MagicMock(side_effect=lambda **_kwargs: object())
         monkeypatch.setattr("classiflow.knowledge.llm.llama.Llama", mock_llama)
-        get_chat_llm.cache_clear()
-        try:
-            get_chat_llm("fake/model.gguf", 8192)
-            assert mock_llama.call_count == EXPECTED_CALL_COUNT_AFTER_FIRST_CALL
 
-            unload_chat_llm()
-            get_chat_llm("fake/model.gguf", 8192)
+        get_chat_llm("fake/model.gguf", 8192)
+        assert mock_llama.call_count == EXPECTED_CALL_COUNT_AFTER_FIRST_CALL
 
-            assert mock_llama.call_count == EXPECTED_CALL_COUNT_AFTER_RELOAD
-        finally:
-            get_chat_llm.cache_clear()
+        unload_chat_llm()
+        get_chat_llm("fake/model.gguf", 8192)
+
+        assert mock_llama.call_count == EXPECTED_CALL_COUNT_AFTER_RELOAD

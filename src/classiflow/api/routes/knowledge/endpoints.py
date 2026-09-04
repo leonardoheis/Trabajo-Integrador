@@ -35,16 +35,15 @@ from classiflow.classification.exceptions import (
     ClassificationNotAcceptedError,
     ClassificationRecordNotFoundError,
 )
-from classiflow.classification.nodes.second_opinion import unload_bert
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
 from classiflow.domain.repositories.conversation import IConversationRepository
 from classiflow.domain.repositories.document_kb import IDocumentKbRepository
 from classiflow.domain.repositories.enriched_record import IEnrichedRecordRepository
-from classiflow.ingesta.llm_provider import unload_slm
 from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.domain.chat import ChatQuery, SourceRef
 from classiflow.knowledge.llm.llama import get_chat_llm
 from classiflow.knowledge.memory.service import MemoryService
+from classiflow.model_lifecycle.residency import build_default_residency
 from classiflow.services.pipeline.service import PipelineService, is_pipeline_busy
 from classiflow.settings import Settings
 
@@ -131,10 +130,11 @@ async def chat_stream(
 
 @router.post("/chat/warmup", status_code=HTTPStatus.NO_CONTENT)
 async def chat_warmup() -> None:
+    # reserve_for_chat only evicts; loading the chat model stays here, since residency
+    # manages what is resident, not what is constructed.
+    await build_default_residency().reserve_for_chat()
     if is_pipeline_busy():
         return
-    await asyncio.to_thread(unload_slm)
-    await asyncio.to_thread(unload_bert)
     await asyncio.to_thread(get_chat_llm, Settings.chat_model_path, Settings.chat_model_n_ctx)
 
 

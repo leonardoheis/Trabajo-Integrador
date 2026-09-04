@@ -255,14 +255,21 @@ class TestAuthLogoutEndpoint:
         response = client.post("/auth/logout")
         assert response.status_code == HTTPStatus.UNAUTHORIZED
 
-    def test_unloads_the_chat_model(
+    def test_releases_resident_models(
         self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        mock_unload = MagicMock()
-        monkeypatch.setattr("classiflow.api.routes.auth.endpoints.unload_chat_llm", mock_unload)
+        released = AsyncMock()
+        residency = MagicMock()
+        residency.release_all = released
+        monkeypatch.setattr(
+            "classiflow.api.routes.auth.endpoints.build_default_residency",
+            lambda: residency,
+        )
+
         response = client.post("/auth/logout", headers=auth_headers)
+
         assert response.status_code == HTTPStatus.NO_CONTENT
-        mock_unload.assert_called_once()
+        released.assert_awaited_once()
 
     def test_does_not_evict_a_model_another_user_is_generating_with(
         self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch

@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
 
 from classiflow.classification.config_classification import ClassificationConfig
@@ -42,6 +44,54 @@ class TestLlmJudgeJudge:
         )
         with pytest.raises(LlmJudgeFailedError, match="No valid JSON object"):
             node.judge(_JUDGE_INPUT)
+
+
+class TestJudgeModelSwap:
+    """The SLM is evicted only when this node has to build its own chain.
+
+    An injected chain means the judge's model is already loaded; evicting then would
+    free a model nothing is about to replace.
+    """
+
+    async def test_does_not_evict_when_a_chain_was_injected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        reserved = AsyncMock()
+        monkeypatch.setattr(
+            "classiflow.classification.nodes.llm_judge.build_default_residency",
+            lambda: MagicMock(reserve_for_judge=reserved),
+        )
+        node = LlmJudgeNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            judge_chain=build_judge_chain(MockLlm(response=_VALID_RESPONSE)),
+        )
+
+        await node.run(JobContext(job_id=_JOB_ID, filename="doc.pdf"), _JUDGE_INPUT)
+
+        reserved.assert_not_awaited()
+
+    async def test_evicts_the_slm_before_building_its_own_chain(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        reserved = AsyncMock()
+        monkeypatch.setattr(
+            "classiflow.classification.nodes.llm_judge.build_default_residency",
+            lambda: MagicMock(reserve_for_judge=reserved),
+        )
+        monkeypatch.setattr(
+            "classiflow.classification.nodes.llm_judge.get_llm_langchain",
+            lambda _path: MockLlm(response=_VALID_RESPONSE),
+        )
+        node = LlmJudgeNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            judge_chain=None,
+        )
+
+        await node.run(JobContext(job_id=_JOB_ID, filename="doc.pdf"), _JUDGE_INPUT)
+
+        reserved.assert_awaited_once()
 
 
 class TestLlmJudgeRun:

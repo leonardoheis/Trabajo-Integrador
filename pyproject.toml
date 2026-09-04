@@ -167,6 +167,9 @@ line-ending = "auto"
 # A CLI's whole purpose is writing to stdout -- same rationale as the playground
 # notebooks above.
 "src/classiflow/scripts/*.py" = ["T201"]
+# build_default_residency() imports the model modules inside the function because
+# llm_judge imports this one back: at module scope they form an import cycle.
+"src/classiflow/model_lifecycle/residency.py" = ["PLC0415"]
 # Scoped to this one file (not the project-wide `ignore` list above) so any other
 # subprocess call added elsewhere in the codebase still gets flagged and reviewed on
 # its own merits. This file's only call resolves the executable via shutil.which,
