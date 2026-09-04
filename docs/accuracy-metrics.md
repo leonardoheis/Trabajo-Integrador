@@ -235,6 +235,21 @@ machine's own prediction and is never updated by a human decision.
 
 ---
 
+## Data-quality signals
+
+Two fields exist to make gaps visible rather than let them read as coverage:
+
+**`unevaluatedCategories`** — taxonomy members with zero labelled examples. Currently
+`compendios_de_boletines`. An unevaluated category is not a category scoring 1.0.
+
+**`unknownLabels`** — labels present in the database that are *not* `DocumentCategory`
+members. Such records are still scored (dropping them would hide data), but they signal
+stale or corrupt rows. Currently empty.
+
+Both appear in the CLI output and on the Metrics page.
+
+---
+
 ## Reproducing these numbers
 
 ```bash
@@ -244,3 +259,8 @@ uv run poe accuracy
 Prints the same figures and writes a timestamped markdown report to `storage/reports/`.
 Same `MetricsService` that backs the Metrics page, so the CLI, the API and this document
 cannot disagree about what a number means.
+
+**Verified 2026-09-04:** the CLI and the API were run against the same database and agree
+on every figure — 77 ingested, 9 never classified, 68 classified, 55 scoreable, 45 correct,
+10 escalated, 0 filed, 81,8 % / 100 %. Migration `0015` was verified separately against a
+fresh revision-0013 fixture database (`tests/test_migration_0015.py`), not this one.

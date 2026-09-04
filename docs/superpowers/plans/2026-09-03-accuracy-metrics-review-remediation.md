@@ -277,26 +277,26 @@ npm run test -- --run
 - Modify: `docs/accuracy-metrics.md`
 - Generated output: `storage/reports/accuracy_*.md` according to repository policy
 
-- [ ] Run all migrations against a copy of an `0013` database and verify the backfilled
+- [x] Run all migrations against a copy of an `0013` database and verify the backfilled
   totals before using the current development database.
-- [ ] Run `uv run poe accuracy` and compare CLI output with
+- [x] Run `uv run poe accuracy` and compare CLI output with
   `GET /classification/metrics` from the same database.
-- [ ] Confirm the Metrics page shows the same totals, per-category values, confusion
+- [x] Confirm the Metrics page shows the same totals, per-category values, confusion
   matrix, and miss classifications.
-- [ ] Update the point-in-time document only if the corrected semantics change its
+- [x] Update the point-in-time document only if the corrected semantics change its
   numbers. Explain changes without preserving obsolete figures as if still current.
-- [ ] Do not commit incidental database mutations or timestamped reports unless they are
+- [x] Do not commit incidental database mutations or timestamped reports unless they are
   intentional project artifacts.
 
 **Suggested commit boundary:** refresh accuracy evidence and documentation.
 
 ## Final verification
 
-- [ ] Review `git diff origin/main...HEAD` for unrelated logout/UI/database artifacts and
+- [x] Review `git diff origin/main...HEAD` for unrelated logout/UI/database artifacts and
   split them where practical.
-- [ ] Confirm every new migration has upgrade and downgrade coverage.
-- [ ] Confirm the checked-in database is not the only place where historical labels exist.
-- [ ] Run the complete backend gate:
+- [x] Confirm every new migration has upgrade and downgrade coverage.
+- [x] Confirm the checked-in database is not the only place where historical labels exist.
+- [x] Run the complete backend gate:
 
 ```bash
 uv run poe lint
@@ -304,7 +304,7 @@ uv run poe typecheck
 uv run poe test
 ```
 
-- [ ] Run the complete frontend gate:
+- [x] Run the complete frontend gate:
 
 ```bash
 cd src/classiflow/frontend
@@ -312,9 +312,9 @@ npm run build
 npm run test -- --run
 ```
 
-- [ ] Manually exercise two simultaneous authenticated sessions: start streaming in one,
+- [x] Manually exercise two simultaneous authenticated sessions: start streaming in one,
   sign out in the other, and confirm the stream finishes without model eviction.
-- [ ] Verify the final diff contains no accidental `data/classiflow.db`, generated report,
+- [x] Verify the final diff contains no accidental `data/classiflow.db`, generated report,
   frontend build output, or cache changes.
 
 ## Recommended execution order
