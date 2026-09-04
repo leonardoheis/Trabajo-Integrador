@@ -217,6 +217,24 @@ class TestPerCategory:
         assert "compendios_de_boletines" in report.unevaluated_categories
         assert "decretos" not in report.unevaluated_categories
 
+    async def test_a_label_outside_the_taxonomy_is_reported_not_hidden(self) -> None:
+        # A stale or corrupt label still gets scored, but must not pass silently as if it
+        # were a real category.
+        service = await _service(
+            _record("a", label="not_a_category", expected_label="not_a_category")
+        )
+
+        report = await service.accuracy_report()
+
+        assert report.unknown_labels == ["not_a_category"]
+
+    async def test_known_categories_are_not_reported_as_unknown(self) -> None:
+        service = await _service(_record("a", label="decretos", expected_label="decretos"))
+
+        report = await service.accuracy_report()
+
+        assert report.unknown_labels == []
+
     async def test_f1_is_zero_when_precision_and_recall_are_both_zero(self) -> None:
         service = await _service(_record("a", label="decretos", expected_label="boletines"))
 

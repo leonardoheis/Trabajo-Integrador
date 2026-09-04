@@ -113,10 +113,8 @@ async def submit_classification_decision(
         foreign_municipality=record.foreign_municipality,
         judged_by_llm=record.judged_by_llm,
         human_overridden=True,
-        # record.label still holds the machine's prediction here -- routing.run() below
-        # overwrites it with body.label. Capturing it makes every correction a labeled
-        # example. `or` keeps the FIRST machine prediction across repeated overrides,
-        # rather than recording the previous reviewer's choice as if it were the model's.
+        # record.label still holds the machine's prediction; routing.run() below
+        # overwrites it. `or` keeps the first prediction across repeated overrides.
         original_label=record.original_label or record.label,
         expected_label=record.expected_label,
         # Pass the stored value through; RoutingNode only writes it when unset, so this

@@ -65,13 +65,8 @@ async def auth_me(current_user: CurrentUser) -> CurrentUserSchema:
 
 @router.post("/logout", status_code=HTTPStatus.NO_CONTENT)
 async def auth_logout(_current_user: CurrentUser) -> None:
-    # The JWT itself is stateless and cleared client-side; this only releases VRAM.
-    # The chat GGUF is never used by the pipeline, so it always goes. The other four
-    # (SLM, BETO, duplicate-control and KB embedders) belong to the pipeline graph --
-    # unloading them out from under an in-flight job would fail it.
-    # A request to evict, not an assertion that nothing is running: another user may be
-    # mid-generation, and unload_chat_llm() no-ops in that case rather than hanging
-    # llama.cpp.
+    # The JWT is stateless and cleared client-side; this only releases VRAM. A request to
+    # evict, not an assertion of idleness -- each unloader no-ops if its model is in use.
     await asyncio.to_thread(unload_chat_llm)
     if is_pipeline_busy():
         return

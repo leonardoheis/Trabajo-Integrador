@@ -87,6 +87,13 @@ def _format_terminal(report: AccuracyReport) -> str:
             *(f"    {category}" for category in report.unevaluated_categories),
         ]
 
+    if report.unknown_labels:
+        lines += [
+            "",
+            "  labels outside the taxonomy (stale or corrupt data):",
+            *(f"    {label}" for label in report.unknown_labels),
+        ]
+
     uncaught = [miss for miss in report.misses if not miss.caught_by_safety_net]
     if uncaught:
         lines += ["", "Wrong labels filed without review", "-" * 60]

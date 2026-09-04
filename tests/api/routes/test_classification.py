@@ -150,6 +150,52 @@ class TestAccuracyMetricsEndpoint:
         assert body["misses"][0]["predicted"] == "ordenanzas"
         assert "compendios_de_boletines" in body["unevaluatedCategories"]
 
+    def test_response_schema_matches_the_frontend_contract(self, client: TestClient) -> None:
+        # The frontend's AccuracyReport interface is maintained by hand. This pins the
+        # field names and casing the API actually publishes; the matching frontend guard
+        # is metrics.fixture.ts. Neither test alone links the two contracts -- together
+        # they catch a rename on either side.
+        schema = client.app.openapi()["components"]["schemas"]["AccuracyReport"]
+
+        assert set(schema["properties"]) == {
+            "totalJobs",
+            "neverClassified",
+            "neverClassifiedByStatus",
+            "totalClassified",
+            "labelled",
+            "correct",
+            "wrongCaught",
+            "wrongUncaught",
+            "strictAccuracy",
+            "safeguardedAccuracy",
+            "perCategory",
+            "confusion",
+            "misses",
+            "unevaluatedCategories",
+            "unknownLabels",
+        }
+
+    def test_nested_schemas_match_the_frontend_contract(self, client: TestClient) -> None:
+        schemas = client.app.openapi()["components"]["schemas"]
+
+        assert set(schemas["CategoryMetrics"]["properties"]) == {
+            "category",
+            "support",
+            "predicted",
+            "correct",
+            "precision",
+            "recall",
+            "f1",
+        }
+        assert set(schemas["Miss"]["properties"]) == {
+            "jobId",
+            "filename",
+            "expected",
+            "predicted",
+            "reviewRoute",
+            "caughtBySafetyNet",
+        }
+
 
 class TestClassificationDecisionEndpoint:
     def test_requires_auth(self, client: TestClient) -> None:

@@ -66,12 +66,20 @@ Sources (inputs)
 /
 ├── .claude/                        Claude Code project settings
 ├── documents/                      Reference documents and architecture diagrams
+├── docs/
+│   ├── accuracy-metrics.md         Classification accuracy snapshot + metric guide
+│   ├── chat-architecture.md        RAG pipeline, memory, model lifecycle
+│   ├── architecture-reviews/       Dated architecture review reports (HTML)
+│   └── superpowers/                Specs and implementation plans
 ├── src/
 │   └── classiflow/                 Main Python package
 ├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
 ├── uv.lock                         Locked dependency graph
 └── .pre-commit-config.yaml         Pre-commit hooks (ruff, mypy, gitleaks, uv-lock)
 ```
+
+Generated reports (architecture reviews, accuracy runs) go in `docs/`, not the OS temp
+directory — they are project artefacts and belong in version control.
 
 ## Environment setup
 

@@ -34,6 +34,7 @@ export interface AccuracyReport {
   confusion: Record<string, Record<string, number>>;
   misses: Miss[];
   unevaluatedCategories: string[];
+  unknownLabels: string[];
 }
 
 export async function fetchAccuracyMetrics(): Promise<AccuracyReport> {

@@ -141,11 +141,15 @@ function CategoryTable({ rows, unevaluated }: { rows: CategoryMetrics[]; unevalu
 }
 
 function ConfusionMatrix({ report }: { report: AccuracyReport }) {
-  const categories = report.perCategory.map((c) => c.category);
-  const max = Math.max(
+  const categories = report.perCategory.map((metric) => metric.category);
+  // Scale the heatmap against the largest *miss*, not the diagonal -- correct
+  // predictions dominate and would flatten every off-diagonal cell to invisible.
+  const busiestMiss = Math.max(
     1,
-    ...categories.flatMap((e) =>
-      categories.map((p) => (e === p ? 0 : (report.confusion[e]?.[p] ?? 0))),
+    ...categories.flatMap((expected) =>
+      categories.map((predicted) =>
+        expected === predicted ? 0 : (report.confusion[expected]?.[predicted] ?? 0),
+      ),
     ),
   );
 
@@ -155,14 +159,14 @@ function ConfusionMatrix({ report }: { report: AccuracyReport }) {
         <thead>
           <tr>
             <th className="px-2 py-1 text-left text-[var(--color-text-faint)]">expected \ got</th>
-            {categories.map((c) => (
+            {categories.map((category) => (
               <th
-                key={c}
+                key={category}
                 className="px-2 py-1 text-[var(--color-text-faint)]"
-                title={c}
+                title={category}
                 style={{ writingMode: "vertical-rl" }}
               >
-                {c}
+                {category}
               </th>
             ))}
           </tr>
@@ -184,7 +188,7 @@ function ConfusionMatrix({ report }: { report: AccuracyReport }) {
                       background: count
                         ? onDiagonal
                           ? "var(--color-accent-subtle)"
-                          : `color-mix(in srgb, var(--color-status-escalate) ${(count / max) * 60}%, transparent)`
+                          : `color-mix(in srgb, var(--color-status-escalate) ${(count / busiestMiss) * 60}%, transparent)`
                         : "transparent",
                       color: count ? "var(--color-text)" : "var(--color-text-faint)",
                     }}
@@ -256,6 +260,20 @@ export default function MetricsPage() {
       <div className="mb-6">
         <CategoryTable rows={report.perCategory} unevaluated={report.unevaluatedCategories} />
       </div>
+
+      {report.unknownLabels.length > 0 && (
+        <div className="mb-6 rounded-md border border-[var(--color-status-review)] bg-[var(--color-surface)] px-4 py-3">
+          <p className="font-mono text-[11px] uppercase tracking-wider text-[var(--color-status-review)]">
+            Labels outside the taxonomy
+          </p>
+          <p className="mt-1 font-mono text-sm text-[var(--color-text)]">
+            {report.unknownLabels.join(", ")}
+          </p>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+            Still scored, but these are not DocumentCategory members — stale or corrupt data.
+          </p>
+        </div>
+      )}
 
       <h2 className="mb-2 font-mono text-[11px] uppercase tracking-wider text-[var(--color-text-faint)]">
         Confusion — rows are the truth, columns what the model said

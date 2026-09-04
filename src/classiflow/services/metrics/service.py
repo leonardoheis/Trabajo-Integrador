@@ -8,6 +8,8 @@ from classiflow.domain.repositories.classification_record import IClassification
 from classiflow.domain.repositories.job import IJobRepository
 from classiflow.services.metrics.domain import AccuracyReport, CategoryMetrics, Miss
 
+_KNOWN_CATEGORIES = {category.value for category in DocumentCategory}
+
 
 class ScoredRecord(NamedTuple):
     """One record reduced to the pair accuracy is computed from."""
@@ -24,10 +26,8 @@ def _score(record: ClassificationRecord) -> ScoredRecord | None:
         None when the record cannot be scored, which excludes it from every rate.
     """
     if record.human_overridden:
-        # A reviewer adjudicated this document, which outranks the weak filename label.
-        # Without original_label the machine's prediction is unrecoverable -- `label` is
-        # the reviewer's own answer, so the only available comparison would score a human
-        # against a filename.
+        # A reviewer's adjudication outranks the weak filename label. Without
+        # original_label the machine's prediction is gone, leaving nothing to score.
         if record.original_label is None or record.label is None:
             return None
         return ScoredRecord(record, truth=record.label, prediction=record.original_label)
@@ -117,6 +117,9 @@ class MetricsService:
             # as scoring 1.0 on it -- surfacing the gap keeps it from reading as coverage.
             unevaluated_categories=sorted(
                 category.value for category in DocumentCategory if category.value not in support
+            ),
+            unknown_labels=sorted(
+                (set(support) | set(predicted_counts)) - _KNOWN_CATEGORIES,
             ),
         )
 

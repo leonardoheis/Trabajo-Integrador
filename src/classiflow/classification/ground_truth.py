@@ -27,11 +27,8 @@ _PREFIX_TO_CATEGORY: tuple[tuple[str, DocumentCategory], ...] = (
     ("decreto_", DocumentCategory.DECRETOS),
 )
 
-# Documents that are not municipal acts at all. These follow no naming convention -- a
-# Banco Central circular is named however that institution names things -- so they are
-# listed by name. OTRO is a real category the classifier predicts (and which the
-# confidence gate always routes to human_review), so these are genuine labelled
-# examples, not exclusions.
+# Non-municipal documents follow no naming convention, so they are listed by name.
+# OTRO is a real category the classifier predicts -- these are labelled examples.
 _EXPLICIT_LABELS: dict[str, DocumentCategory] = {
     "a0470.pdf": DocumentCategory.OTRO,  # Banco Central "Comunicación A 470"
     "informe_agosto_2021.pdf": DocumentCategory.OTRO,

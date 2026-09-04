@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Classiflow — Architecture Review</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "base", themeVariables: {
+    primaryColor: "#1e293b", primaryTextColor: "#e2e8f0", primaryBorderColor: "#475569",
+    lineColor: "#64748b", secondaryColor: "#334155", tertiaryColor: "#0f172a",
+    fontSize: "13px", fontFamily: "ui-monospace, monospace"
+  }});
+</script>
+<style>
+  body { background: #0f172a; }
+  .card { background: #1e293b; border: 1px solid #334155; }
+  .code { font-family: ui-monospace, SFMono-Regular, monospace; }
+  .badge-strong { background: #7f1d1d; color: #fecaca; border: 1px solid #b91c1c; }
+  .badge-worth { background: #78350f; color: #fed7aa; border: 1px solid #d97706; }
+  .badge-spec { background: #1e3a5f; color: #bfdbfe; border: 1px solid #3b82f6; }
+  .mermaid { background: #0f172a; border-radius: 6px; padding: 12px; }
+  .box { border: 1px solid #475569; border-radius: 4px; padding: 6px 10px; font-size: 12px; }
+  .box-bad { border-color: #b91c1c; background: #450a0a; color: #fecaca; }
+  .box-good { border-color: #15803d; background: #052e16; color: #bbf7d0; }
+  .box-neutral { background: #1e293b; color: #cbd5e1; }
+</style>
+</head>
+<body class="text-slate-300 antialiased">
+
+<div class="max-w-6xl mx-auto px-6 py-10">
+
+  <header class="mb-12 border-b border-slate-700 pb-8">
+    <p class="text-xs uppercase tracking-[0.2em] text-amber-500 mb-3">Architecture Review</p>
+    <h1 class="text-4xl font-bold text-slate-100 mb-3">Classiflow — Model Lifecycle &amp; Streaming</h1>
+    <p class="text-slate-400 max-w-3xl leading-relaxed">
+      Scoped to the codebase's hot spot: <span class="code text-amber-400">llama.py</span>,
+      <span class="code text-amber-400">auth/endpoints.py</span>,
+      <span class="code text-amber-400">knowledge/endpoints.py</span> and
+      <span class="code text-amber-400">chat/service.py</span> account for 21 of the last 40 commits' file
+      touches. That churn is the signal — this subsystem keeps needing changes, so deepening it pays back.
+    </p>
+    <div class="mt-6 flex gap-6 text-sm">
+      <div><span class="text-slate-500">Candidates</span> <span class="text-slate-200 font-semibold ml-2">4</span></div>
+      <div><span class="text-slate-500">No</span> <span class="code text-slate-400">CONTEXT.md</span> <span class="text-slate-500">or ADRs found</span></div>
+    </div>
+  </header>
+
+  <!-- ============ CANDIDATE 1 ============ -->
+  <section class="card rounded-lg p-8 mb-8">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Candidate 1</p>
+        <h2 class="text-2xl font-bold text-slate-100">A <span class="text-amber-400">GPU residency</span> module behind one seam</h2>
+      </div>
+      <span class="badge-strong text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">Strong</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-8">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Files</h3>
+        <ul class="text-sm space-y-1 code text-slate-400">
+          <li>model_cache.py <span class="text-slate-600">(19 lines)</span></li>
+          <li>knowledge/llm/llama.py</li>
+          <li>ingesta/llm_provider.py</li>
+          <li>classification/nodes/second_opinion.py</li>
+          <li>ingesta/nodes/node4_duplicate_control.py</li>
+          <li>knowledge/embeddings/embedder.py</li>
+          <li class="text-slate-500">+ 4 call-site modules</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Problem</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          There are <strong class="text-slate-200">five unloader functions</strong> in five modules, each
+          imported individually by whoever needs them. <span class="code text-amber-400">services/pipeline/service.py</span>
+          imports all five; <span class="code text-amber-400">auth/endpoints.py</span> imports five;
+          <span class="code text-amber-400">knowledge/endpoints.py</span> imports two.
+          Every caller must know <em>which models exist</em>, <em>which are safe to evict</em>, and
+          <em>what guard to check first</em> — knowledge that should live in one place.
+        </p>
+      </div>
+    </div>
+
+    <div class="bg-red-950/40 border border-red-900 rounded p-4 mb-6">
+      <p class="text-sm text-red-200 mb-3">
+        <strong>Three live defects this shape produces</strong> — each one a symptom of the guard being a
+        convention rather than part of an interface:
+      </p>
+      <ol class="text-sm text-red-200/90 space-y-2 list-decimal ml-5">
+        <li><strong>Four of five unloaders have no busy guard.</strong> Only <span class="code">unload_chat_llm()</span>
+        checks. The rest evict unconditionally.</li>
+        <li><strong>TOCTOU race in the one guard that exists.</strong>
+        <span class="code">is_chat_llm_busy()</span> takes the lock, releases it, <em>then</em>
+        <span class="code">evict_lru_cache()</span> runs unlocked — a generation can begin in that window.
+        <span class="code">unload_chat_llm</span> never holds <span class="code">_generation_lock</span>.</li>
+        <li><strong>Four call sites, four different guard policies.</strong>
+        <span class="code">pipeline_warmup</span> suppresses on busy-pipeline;
+        <span class="code">auth_logout</span> uses busy-pipeline to gate a <em>different</em> set;
+        <span class="code">_release_gpu_models</span> checks nothing;
+        <span class="code">llm_judge.py:80</span> unloads mid-node with no guard at all.</li>
+      </ol>
+    </div>
+
+    <h3 class="text-sm font-semibold text-slate-200 mb-3">Before — knowledge scattered across callers</h3>
+    <div class="mermaid mb-6">
+graph LR
+  PS["pipeline/service.py<br/>all 5 · NO guard · blocks loop"] --> U1
+  PS --> U2
+  PS --> U3
+  PS --> U4
+  PS --> U5
+  AU["auth/endpoints.py<br/>all 5 · gated on is_pipeline_busy"] --> U1
+  AU --> U2
+  AU --> U3
+  AU --> U4
+  AU --> U5
+  KN["knowledge/endpoints.py<br/>2 of 4 pipeline models"] --> U2
+  KN --> U3
+  PE["pipeline/endpoints.py<br/>inverted guard"] --> U1
+  LJ["llm_judge.py:80<br/>mid-node · NO guard"] --> U2
+  U1["unload_chat_llm<br/>guard ✓ but TOCTOU"]
+  U2["unload_slm<br/>no guard"]
+  U3["unload_bert<br/>no guard"]
+  U4["unload_kb_embedder<br/>no guard"]
+  U5["unload_dup_embedder<br/>no guard"]
+    </div>
+
+    <h3 class="text-sm font-semibold text-slate-200 mb-3">After — one interface, guards enforced inside</h3>
+    <div class="mermaid mb-6">
+graph LR
+  PS["pipeline/service.py"] --> R
+  AU["auth/endpoints.py"] --> R
+  KN["knowledge/endpoints.py"] --> R
+  PE["pipeline/endpoints.py"] --> R
+  R["GpuResidency<br/>reserve_for_chat()<br/>reserve_for_pipeline()<br/>release_all()"]
+  R --> M["5 model caches<br/>+ their busy guards<br/>(implementation detail)"]
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Solution</h3>
+        <p class="text-sm text-slate-400 leading-relaxed mb-3">
+          One module owning GPU residency. Its interface is intent-shaped, not mechanism-shaped:
+          <span class="code text-amber-400">reserve_for_chat()</span>,
+          <span class="code text-amber-400">reserve_for_pipeline()</span>,
+          <span class="code text-amber-400">release_all()</span>.
+        </p>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Which five models exist, which are pipeline-owned, and which are busy becomes implementation.
+          <span class="code">model_cache.py</span> already exists as a seam but sits one level too low — it knows
+          how to evict <em>a</em> cache, not which caches there are or when eviction is safe.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Benefits</h3>
+        <ul class="text-sm text-slate-400 space-y-2">
+          <li><strong class="text-slate-200">Locality:</strong> adding a sixth model touches one module, not five call sites. The busy-guard bug gets fixed once.</li>
+          <li><strong class="text-slate-200">Leverage:</strong> callers learn three verbs instead of five functions plus two guard predicates.</li>
+          <li><strong class="text-slate-200">Tests:</strong> today they monkeypatch <span class="code">Llama</span> and call <span class="code">get_chat_llm.cache_clear()</span> by hand in a try/finally, repeated per test with no fixture. Through this interface, an in-memory adapter records reserve/release calls — no CUDA, no lru_cache poking.</li>
+          <li><strong class="text-slate-200">Also fixes:</strong> <span class="code">_release_gpu_models()</span> runs 5×(<span class="code">gc.collect()</span> + <span class="code">empty_cache()</span>) <em>synchronously on the event loop</em>, twice per job — while <span class="code">auth_logout</span> correctly wraps the same calls in <span class="code">asyncio.to_thread</span>. One module makes that decision once.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-6 pt-6 border-t border-slate-700">
+      <p class="text-xs text-slate-500"><strong class="text-slate-400">Deletion test:</strong> delete this module and the five-model list, the pipeline-vs-chat ownership rule, and the busy-check discipline all reappear in four route modules. Complexity concentrates — it earns its keep.</p>
+    </div>
+  </section>
+
+  <!-- ============ CANDIDATE 2 ============ -->
+  <section class="card rounded-lg p-8 mb-8">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Candidate 2</p>
+        <h2 class="text-2xl font-bold text-slate-100">The duplicated <span class="text-amber-400">in-flight counter</span></h2>
+      </div>
+      <span class="badge-strong text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">Strong</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Files</h3>
+        <ul class="text-sm space-y-1 code text-slate-400">
+          <li>knowledge/llm/llama.py <span class="text-slate-600">(_ActiveGenerations)</span></li>
+          <li>services/pipeline/service.py <span class="text-slate-600">(_JobsInFlight)</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Problem</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Two modules implement the same "mutable box around a count" pattern — with near-identical docstrings
+          explaining the same <span class="code">PLW0603</span> workaround. They have <em>diverged</em>:
+          <span class="code">_ActiveGenerations</span> has a lock and underflow detection,
+          <span class="code">_JobsInFlight</span> has neither, despite being mutated from background tasks.
+        </p>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4 mb-6">
+      <div class="border border-red-900 rounded p-4 bg-red-950/20">
+        <p class="text-xs uppercase tracking-wider text-red-400 mb-3">Before — diverged twins</p>
+        <div class="space-y-2 text-xs code">
+          <div class="box box-bad">_ActiveGenerations<br/><span class="text-red-300">lock ✓ · underflow log ✓</span></div>
+          <div class="box box-bad">_JobsInFlight<br/><span class="text-red-300">lock ✗ · underflow log ✗</span></div>
+          <p class="text-slate-500 pt-2">Same pattern, same rationale, different safety.</p>
+        </div>
+      </div>
+      <div class="border border-green-900 rounded p-4 bg-green-950/20">
+        <p class="text-xs uppercase tracking-wider text-green-400 mb-3">After — one adapter, two instances</p>
+        <div class="space-y-2 text-xs code">
+          <div class="box box-good">InFlightCounter<br/><span class="text-green-300">lock ✓ · underflow log ✓</span></div>
+          <div class="flex gap-2">
+            <div class="box box-neutral flex-1">generations</div>
+            <div class="box box-neutral flex-1">jobs</div>
+          </div>
+          <p class="text-slate-500 pt-2">Two adapters ⇒ the seam is real, not hypothetical.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Solution</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          One <span class="code text-amber-400">InFlightCounter</span> module with a context-manager interface
+          (<span class="code">generation_in_flight()</span> already has this shape). Two instances replace the
+          two hand-rolled boxes. Thread-safety and underflow detection become properties of the type, not of
+          whoever wrote it that day.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Benefits</h3>
+        <ul class="text-sm text-slate-400 space-y-2">
+          <li><strong class="text-slate-200">Locality:</strong> the "counter leaked ⇒ unload silently no-ops" failure mode gets one place to be fixed and tested.</li>
+          <li><strong class="text-slate-200">Leverage:</strong> a third counter (indexing? OCR?) costs one line.</li>
+          <li><strong class="text-slate-200">Tests:</strong> counter semantics test once, directly — currently only reachable through a full streaming test with a mocked <span class="code">Llama</span>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CANDIDATE 3 ============ -->
+  <section class="card rounded-lg p-8 mb-8">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Candidate 3</p>
+        <h2 class="text-2xl font-bold text-slate-100">The three-layer <span class="text-amber-400">aclosing chain</span></h2>
+      </div>
+      <span class="badge-worth text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">Worth exploring</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Files</h3>
+        <ul class="text-sm space-y-1 code text-slate-400">
+          <li>api/routes/knowledge/endpoints.py:102</li>
+          <li>knowledge/chat/service.py:55</li>
+          <li>knowledge/memory/service.py:53</li>
+          <li>knowledge/llm/llama.py <span class="text-slate-600">(astream)</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Problem</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Correct cleanup requires <em>every</em> layer to wrap the one below in
+          <span class="code">contextlib.aclosing</span>. Miss one and the counter leaks silently — which is
+          precisely what happened twice this session. The requirement is real but invisible: nothing in any
+          interface says "you must close me".
+        </p>
+      </div>
+    </div>
+
+    <h3 class="text-sm font-semibold text-slate-200 mb-3">The fragile chain</h3>
+    <div class="mermaid mb-6">
+sequenceDiagram
+  participant C as Client
+  participant E as _stream()
+  participant S as ChatService.astream
+  participant L as LlamaCppChatLlm.astream
+  participant T as producer thread
+  C->>E: disconnect
+  Note over E: aclosing ✓ (layer 1)
+  E->>S: GeneratorExit
+  Note over S: aclosing ✓ (layer 2)
+  S->>L: GeneratorExit
+  Note over L: finally → stop.set()
+  L->>T: stop event
+  Note over T: releases counter
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Solution</h3>
+        <p class="text-sm text-slate-400 leading-relaxed mb-3">
+          Two options, materially different in cost:
+        </p>
+        <p class="text-sm text-slate-400 leading-relaxed mb-2">
+          <strong class="text-slate-200">(a) Cheap:</strong> a test that asserts the invariant end-to-end —
+          abandon at each layer, assert the counter released. Makes the requirement enforced rather than
+          documented.
+        </p>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          <strong class="text-slate-200">(b) Deeper:</strong> collapse the chain. If <span class="code">ChatService</span>
+          returned a single <em>closable stream object</em> rather than a nested generator, there would be one
+          layer to close instead of three.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Benefits</h3>
+        <ul class="text-sm text-slate-400 space-y-2">
+          <li><strong class="text-slate-200">Locality:</strong> option (b) makes it impossible to add a fourth layer that forgets to close.</li>
+          <li><strong class="text-slate-200">Tests:</strong> the abandonment case is currently tested only at the llama layer — the two upper layers have no coverage for it.</li>
+          <li class="text-amber-400/80"><strong>Caveat:</strong> option (b) is a real redesign of the streaming interface. Start with (a).</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CANDIDATE 4 ============ -->
+  <section class="card rounded-lg p-8 mb-10">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Candidate 4</p>
+        <h2 class="text-2xl font-bold text-slate-100"><span class="text-amber-400">Settings</span> read at call time</h2>
+      </div>
+      <span class="badge-spec text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">Speculative</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Files</h3>
+        <ul class="text-sm space-y-1 code text-slate-400">
+          <li>knowledge/llm/llama.py:95,121,122,136,137,177,178</li>
+          <li>knowledge/retrieval/retriever.py:40</li>
+          <li>api/routes/knowledge/endpoints.py:140</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Problem</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          <span class="code">LlamaCppChatLlm</span> takes config in its constructor but then reads
+          <span class="code">Settings.slm_temperature</span> and <span class="code">Settings.slm_top_p</span>
+          directly at generation time. Half the configuration is injected, half is ambient — so a test that
+          constructs the object still can't fully control it.
+        </p>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Solution</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Move the remaining <span class="code">Settings</span> reads into <span class="code">__init__</span>,
+          matching the pattern the same class already uses for <span class="code">model_path</span> and
+          <span class="code">n_ctx</span>. Consistency, not a new abstraction.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Benefits</h3>
+        <ul class="text-sm text-slate-400 space-y-2">
+          <li><strong class="text-slate-200">Tests:</strong> sampling params become settable without monkeypatching a global.</li>
+          <li class="text-slate-500"><strong>Why speculative:</strong> no bug has come from this, and nothing currently varies these per-instance. One adapter ⇒ hypothetical seam.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TOP RECOMMENDATION ============ -->
+  <section class="border-2 border-amber-600 rounded-lg p-8 bg-amber-950/20">
+    <p class="text-xs uppercase tracking-[0.2em] text-amber-500 mb-3">Top recommendation</p>
+    <h2 class="text-2xl font-bold text-slate-100 mb-4">Start with Candidate 1 — the GPU residency module</h2>
+
+    <div class="grid md:grid-cols-3 gap-6 mb-6">
+      <div>
+        <p class="text-sm font-semibold text-amber-400 mb-2">It fixes a live bug</p>
+        <p class="text-sm text-slate-400">Four of five unloaders have no busy guard. That is the same defect
+        class that caused the stuck counter, the hung pipeline job, and three failed fix attempts — currently
+        unfixed in four places.</p>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-amber-400 mb-2">It's where the churn is</p>
+        <p class="text-sm text-slate-400">The files it touches are the top of the commit-frequency list.
+        Deepening pays back on future change, and this is where future change lands.</p>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-amber-400 mb-2">It subsumes Candidate 2</p>
+        <p class="text-sm text-slate-400">The residency module needs an in-flight counter as its guard —
+        building it forces the counter seam into existence naturally.</p>
+      </div>
+    </div>
+
+    <div class="border-t border-amber-800/50 pt-5">
+      <p class="text-sm text-slate-400 leading-relaxed">
+        <strong class="text-slate-200">Sequence:</strong> Candidate 1 (with 2 folded in) → Candidate 3(a),
+        the cheap invariant test → revisit 3(b) and 4 only if further friction appears.
+        Candidate 4 fails the "two adapters" rule today; leave it.
+      </p>
+    </div>
+  </section>
+
+  <footer class="mt-10 pt-6 border-t border-slate-800 text-xs text-slate-600">
+    <p>No <span class="code">CONTEXT.md</span> or <span class="code">docs/adr/</span> found — no ADR conflicts to flag.
+    If Candidate 1 proceeds, "GPU residency" is a term worth adding to a domain glossary.</p>
+  </footer>
+
+</div>
+</body>
+</html>

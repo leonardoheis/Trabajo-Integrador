@@ -96,9 +96,7 @@ async def chat_stream(
         answer_parts: list[str] = []
         try:
             # aclosing, not a bare `async for`: Starlette does not aclose() a body
-            # iterator when the client disconnects, so without this the inner generator
-            # is never finalized and its in-flight counter is held forever, silently
-            # blocking every later model unload.
+            # iterator on disconnect, leaking the generator's in-flight counter.
             async with contextlib.aclosing(
                 chat_service.astream(_to_query(body), history=history)
             ) as tokens:

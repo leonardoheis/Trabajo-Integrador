@@ -66,6 +66,9 @@ class AccuracyReport(BaseEntity):
     misses: list[Miss] = Field(default_factory=list)
     # Categories in the taxonomy with zero labelled examples -- unevaluated, not perfect.
     unevaluated_categories: list[str] = Field(default_factory=list)
+    # Labels found in the database that are not DocumentCategory members. Surfaced rather
+    # than dropped: they are still scored, but they signal corrupt or stale data.
+    unknown_labels: list[str] = Field(default_factory=list)
     # Job status -> count, for the documents that never reached the classifier (rejected
     # duplicates, failed extraction). Explains the gap between total_jobs and
     # total_classified without implying the classifier got anything wrong.

@@ -228,13 +228,13 @@ Code generation is deferred: one endpoint does not justify a generator, a lockfi
 and a staleness check. The residual risk is named rather than eliminated -- these two tests
 catch a rename on either side, but not a coordinated drift on both.
 
-- [ ] Add a backend test asserting the `/classification/metrics` OpenAPI schema: field
+- [x] Add a backend test asserting the `/classification/metrics` OpenAPI schema: field
   names, required set, and camelCase aliases.
-- [ ] Add a fixture built from a real API response, typed `satisfies AccuracyReport`, so a
+- [x] Add a fixture built from a real API response, typed `satisfies AccuracyReport`, so a
   renamed or removed field fails `tsc`.
-- [ ] Keep the handwritten `AccuracyReport` interface as the single frontend transport type.
-- [ ] Revisit generation only if the metrics API surface grows beyond this endpoint.
-- [ ] Run:
+- [x] Keep the handwritten `AccuracyReport` interface as the single frontend transport type.
+- [x] Revisit generation only if the metrics API surface grows beyond this endpoint.
+- [x] Run:
 
 ```bash
 cd src/classiflow/frontend
@@ -260,13 +260,13 @@ npm run test -- --run
 - Modify: `src/classiflow/frontend/src/pages/MetricsPage.tsx`
 - Modify: affected tests containing long implementation narratives
 
-- [ ] Reduce implementation-history comments to one- or two-line invariants.
-- [ ] Keep extended discussion of weak labels, safety-net meaning, and metric caveats in
+- [x] Reduce implementation-history comments to one- or two-line invariants.
+- [x] Keep extended discussion of weak labels, safety-net meaning, and metric caveats in
   `docs/accuracy-metrics.md`.
-- [ ] Rename `c`, `e`, and `p` callbacks/loop variables in confusion-matrix code to
+- [x] Rename `c`, `e`, and `p` callbacks/loop variables in confusion-matrix code to
   `category`, `expected`, and `predicted`.
-- [ ] Do not suppress lint rules to avoid the cleanup.
-- [ ] Run lint and focused frontend checks.
+- [x] Do not suppress lint rules to avoid the cleanup.
+- [x] Run lint and focused frontend checks.
 
 **Suggested commit boundary:** align accuracy code with comment and naming conventions.
 
