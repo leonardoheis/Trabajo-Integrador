@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from classiflow.classification.exceptions import (
     ClassificationNotAcceptedError,
+    ClassificationNotDecidedError,
     ClassificationNotInReviewError,
     ClassificationRecordNotFoundError,
 )
@@ -22,4 +23,9 @@ def handle_classification_not_in_review_error(_request: Request, exc: Exception)
 
 def handle_classification_not_accepted_error(_request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, ClassificationNotAcceptedError)
+    return JSONResponse(status_code=HTTPStatus.CONFLICT, content={"detail": str(exc)})
+
+
+def handle_classification_not_decided_error(_request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, ClassificationNotDecidedError)
     return JSONResponse(status_code=HTTPStatus.CONFLICT, content={"detail": str(exc)})

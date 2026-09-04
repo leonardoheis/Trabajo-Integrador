@@ -15,6 +15,18 @@ export async function submitReclassification(
   }
 }
 
+export async function reopenClassification(jobId: string, reason: string): Promise<void> {
+  const response = await apiFetch(`/classification/${jobId}/reopen`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
+  if (!response.ok) {
+    // The status carries the meaning: 403 not an admin, 409 not currently decided.
+    throw new Error(`POST /classification/${jobId}/reopen failed: ${response.status}`);
+  }
+}
+
 export const DOCUMENT_CATEGORIES = [
   "boletines",
   "compendios_de_boletines",

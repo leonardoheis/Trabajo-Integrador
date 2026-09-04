@@ -245,6 +245,33 @@ Rules:
 - Use `try/except SpecificInfraError` (never bare `except` or `except Exception`).
 - Full rationale: `.claude/learnings.md`
 
+### GPU model residency
+
+Never call an `unload_*` function directly. `model_lifecycle/residency.py` owns which
+models are resident and when it is safe to evict them; callers state intent
+(`reserve_for_chat`, `reserve_for_pipeline`, `reserve_for_judge`, `release_all`,
+`release_for_owner`) and the module resolves that to guarded evictions.
+
+The guard and the eviction must stay under one lock — checking first and evicting after
+leaves a window in which a generation can start, and freeing a model mid-generation hangs
+llama.cpp. `InFlightCounter` (`model_lifecycle/counter.py`) backs both the chat-generation
+and pipeline-job guards.
+
+### Immutable classification history
+
+Three fields on `ClassificationRecord` are written once and never rewritten:
+
+| Field | Meaning |
+|---|---|
+| `original_label` | The machine's prediction, preserved when a human overrides `label` |
+| `machine_review_route` | The route the confidence gate chose, before any human resolved it |
+| `expected_label` | Corpus ground truth derived from the filename |
+
+`review_route` and `label` are mutable workflow state. Reading them to answer a historical
+question ("did the safety net catch this?") is a bug — that is what `machine_review_route`
+is for. Anything that re-runs `RoutingNode` over an existing record must pass these through
+unchanged.
+
 ### `__init__.py` content
 
 `__init__.py` files may only contain `__version__`, re-exports, and `__all__`.
@@ -281,7 +308,8 @@ across PRs #25–#30). There is no active per-stage integration branch anymore �
 is a short-lived feature branch cut directly from `main` (e.g. `feat/chat-vram-isolation`,
 `feat/archive-daylight-theme`, `feat/inspectable-pipeline-steps`,
 `feat/chat-streaming-and-autoscroll`, `feat/chat-markdown-and-memory`,
-`feat/classification-search-and-sort`), PR'd back into `main` once done. Same authorization rule applies: implement on the branch, verify,
+`feat/classification-search-and-sort`, `docs/accuracy-measurement-plan`), PR'd back into
+`main` once done. Same authorization rule applies: implement on the branch, verify,
 present the summary, wait for explicit "authorize"/"yes"/"go ahead" before pushing or
 opening the PR.
 

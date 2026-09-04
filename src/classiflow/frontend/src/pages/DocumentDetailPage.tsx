@@ -7,6 +7,8 @@ import { fetchDocumentKb, indexDocument } from "../api/knowledge";
 import KeyValueGrid from "../components/KeyValueGrid";
 import PdfViewer from "../components/PdfViewer";
 import ReclassifyPanel from "../components/ReclassifyPanel";
+import ReopenPanel from "../components/ReopenPanel";
+import { useAuth } from "../auth/AuthContext";
 import StepTimeline from "../components/StepTimeline";
 
 type Tab = "extraction" | "enrichment" | "classification" | "knowledge" | "audit";
@@ -90,6 +92,7 @@ function MoreDetails({ pairs }: { pairs: [string, React.ReactNode][] }) {
 export default function DocumentDetailPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [tab, setTab] = useState<Tab>("classification");
+  const { isAdmin } = useAuth();
   const [find, setFind] = useState("");
   const [activeMatch, setActiveMatch] = useState(0);
   const markRefs = useRef<(HTMLElement | null)[]>([]);
@@ -331,6 +334,21 @@ export default function DocumentDetailPage() {
                 />
               </div>
             )}
+
+            {/* Only a decision a human actually made can be contested. */}
+            {isAdmin &&
+              data.classification.reviewRoute === "accept" &&
+              data.classification.humanOverridden && (
+                <div className="mt-6">
+                  <ReopenPanel
+                    jobId={jobId!}
+                    onReopened={() => {
+                      queryClient.invalidateQueries({ queryKey: ["job-detail", jobId] });
+                      queryClient.invalidateQueries({ queryKey: ["review-queue"] });
+                    }}
+                  />
+                </div>
+              )}
           </div>
         )}
         {tab === "classification" && !data.classification && (
