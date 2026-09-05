@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Classiflow — Architecture Review</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "base", themeVariables: {
+    primaryColor: "#1e293b", primaryTextColor: "#e2e8f0", primaryBorderColor: "#475569",
+    lineColor: "#64748b", secondaryColor: "#334155", tertiaryColor: "#0f172a",
+    fontSize: "13px", fontFamily: "ui-monospace, monospace"
+  }});
+</script>
+<style>
+  body { background: #0f172a; }
+  .card { background: #1e293b; border: 1px solid #334155; }
+  .code { font-family: ui-monospace, SFMono-Regular, monospace; }
+  .badge-strong { background: #7f1d1d; color: #fecaca; border: 1px solid #b91c1c; }
+  .badge-worth { background: #78350f; color: #fed7aa; border: 1px solid #d97706; }
+  .badge-spec { background: #1e3a5f; color: #bfdbfe; border: 1px solid #3b82f6; }
+  .mermaid { background: #0f172a; border-radius: 6px; padding: 12px; }
+  .box { border: 1px solid #475569; border-radius: 4px; padding: 6px 10px; font-size: 12px; }
+  .box-bad { border-color: #b91c1c; background: #450a0a; color: #fecaca; }
+  .box-good { border-color: #15803d; background: #052e16; color: #bbf7d0; }
+  .box-neutral { background: #1e293b; color: #cbd5e1; }
+  .field { font-size: 11px; padding: 3px 7px; border-radius: 3px; display: block; margin-bottom: 2px; }
+  .f-pass { background: #1e293b; color: #64748b; border: 1px solid #334155; }
+  .f-live { background: #052e16; color: #86efac; border: 1px solid #15803d; }
+  .f-lost { background: #450a0a; color: #fca5a5; border: 1px solid #b91c1c; }
+</style>
+</head>
+<body class="text-slate-300 antialiased">
+
+<div class="max-w-6xl mx-auto px-6 py-10">
+
+  <header class="mb-12 border-b border-slate-700 pb-8">
+    <p class="text-xs uppercase tracking-[0.2em] text-amber-500 mb-3">Architecture Review · 2026-09-04</p>
+    <h1 class="text-4xl font-bold text-slate-100 mb-3">Classiflow — Classification &amp; Accuracy</h1>
+    <p class="text-slate-400 max-w-3xl leading-relaxed">
+      Scoped to the subsystem the last 45 commits kept touching:
+      <span class="code text-amber-400">classification/endpoints.py</span>,
+      <span class="code text-amber-400">metrics/service.py</span>,
+      <span class="code text-amber-400">database/models.py</span> and
+      <span class="code text-amber-400">nodes/routing.py</span>. The previous review covered model
+      lifecycle and streaming; this is the other half of the churn, and it contains a
+      <strong class="text-red-400">live data-loss defect</strong> found during the walk.
+    </p>
+    <div class="mt-6 flex gap-6 text-sm flex-wrap">
+      <div><span class="text-slate-500">Candidates</span> <span class="text-slate-200 font-semibold ml-2">4</span></div>
+      <div><span class="text-slate-500">Live defects found</span> <span class="text-red-400 font-semibold ml-2">1</span></div>
+      <div><span class="text-slate-500">No</span> <span class="code text-slate-400">CONTEXT.md</span> <span class="text-slate-500">or ADRs</span></div>
+    </div>
+  </header>
+
+  <!-- ============ DEFECT BANNER ============ -->
+  <section class="border-2 border-red-700 rounded-lg p-8 mb-10 bg-red-950/30">
+    <p class="text-xs uppercase tracking-[0.2em] text-red-400 mb-3">Live defect — found during exploration</p>
+    <h2 class="text-2xl font-bold text-slate-100 mb-4">Every human decision silently erases the LLM judge's verdict</h2>
+
+    <p class="text-slate-300 leading-relaxed mb-5">
+      <span class="code text-amber-400">_reroute()</span>
+      (<span class="code">classification/endpoints.py:82-108</span>) copies 20 of
+      <span class="code">RoutingInput</span>'s 22 fields. The two it omits are
+      <span class="code text-red-300">judge_final_label</span> and
+      <span class="code text-red-300">judge_reasoning</span>. Both have pydantic defaults of
+      <span class="code">None</span>, so nothing raises — and
+      <span class="code">routing.py:95-96</span> assigns them unconditionally. The judge's verdict and
+      its reasoning are overwritten with <span class="code">NULL</span> on every human decision.
+    </p>
+
+    <div class="grid md:grid-cols-3 gap-4 mb-5">
+      <div class="bg-slate-900/60 border border-red-900 rounded p-4">
+        <p class="text-3xl font-bold text-red-300">23</p>
+        <p class="text-xs text-slate-400 mt-1">records judged by the LLM</p>
+      </div>
+      <div class="bg-slate-900/60 border border-red-900 rounded p-4">
+        <p class="text-3xl font-bold text-red-300">12</p>
+        <p class="text-xs text-slate-400 mt-1">still hold <span class="code">judge_final_label</span></p>
+      </div>
+      <div class="bg-slate-900/60 border border-red-900 rounded p-4">
+        <p class="text-3xl font-bold text-red-300">11</p>
+        <p class="text-xs text-slate-400 mt-1">judged <em>and</em> overridden — reasoning gone</p>
+      </div>
+    </div>
+
+    <p class="text-sm text-slate-400 leading-relaxed">
+      The arithmetic closes exactly: 23 judged − 11 overridden = 12 surviving. Note
+      <span class="code">judged_by_llm</span> <em>is</em> copied, so these records still claim the judge
+      ran while carrying no trace of what it said — the worst of both states for an audit trail.
+      <strong class="text-slate-200">This is not a hypothetical.</strong> It is the failure mode
+      Candidate 1 exists to make impossible, and it is why that candidate is rated Strong rather than
+      Worth exploring.
+    </p>
+  </section>
+
+  <!-- ============ CANDIDATE 1 ============ -->
+  <section class="card rounded-lg p-8 mb-8">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Candidate 1</p>
+        <h2 class="text-2xl font-bold text-slate-100">Routing should expose an <span class="text-amber-400">operation</span>, not a 22-field struct</h2>
+      </div>
+      <span class="badge-strong text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">Strong</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-8">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Files</h3>
+        <ul class="text-sm space-y-1 code text-slate-400">
+          <li>classification/domain/results.py:19-45 <span class="text-slate-600">(22 fields)</span></li>
+          <li>classification/nodes/routing.py:70-110</li>
+          <li>classification/coordinator.py:152-178 <span class="text-slate-600">(construction #1)</span></li>
+          <li>api/routes/classification/endpoints.py:82-108 <span class="text-slate-600">(construction #2)</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Problem</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          <span class="code">RoutingNode</span> is a <strong class="text-slate-200">shallow module</strong>:
+          its interface (22 fields a caller must supply) is <em>larger</em> than its implementation
+          (a subdirectory <span class="code">if</span>, a storage call, 25 lines of field assignment).
+          The human-decision endpoint has an opinion about <strong class="text-slate-200">three</strong>
+          of those fields and must correctly restate the other nineteen.
+        </p>
+      </div>
+    </div>
+
+    <h3 class="text-sm font-semibold text-slate-200 mb-3">What the endpoint actually owns vs what it must retype</h3>
+    <div class="grid md:grid-cols-3 gap-3 mb-6">
+      <div class="border border-green-900 rounded p-3 bg-green-950/20">
+        <p class="text-xs uppercase tracking-wider text-green-400 mb-2">Owned — 3 fields</p>
+        <span class="field f-live">label</span>
+        <span class="field f-live">review_route</span>
+        <span class="field f-live">human_overridden</span>
+      </div>
+      <div class="border border-slate-700 rounded p-3">
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Retyped verbatim — 17 fields</p>
+        <div class="grid grid-cols-2 gap-x-2">
+          <span class="field f-pass">enriched_id</span>
+          <span class="field f-pass">confidence</span>
+          <span class="field f-pass">all_scores</span>
+          <span class="field f-pass">second_opinion_label</span>
+          <span class="field f-pass">second_opinion_conf</span>
+          <span class="field f-pass">classifier_disagree</span>
+          <span class="field f-pass">ood_metrics</span>
+          <span class="field f-pass">svm_scores</span>
+          <span class="field f-pass">svm_agrees</span>
+          <span class="field f-pass">smells</span>
+          <span class="field f-pass">risk_score</span>
+          <span class="field f-pass">smell_review_sugg</span>
+          <span class="field f-pass">foreign_municipality</span>
+          <span class="field f-pass">judged_by_llm</span>
+          <span class="field f-pass">original_label</span>
+          <span class="field f-pass">expected_label</span>
+          <span class="field f-pass">machine_review_route</span>
+        </div>
+      </div>
+      <div class="border border-red-900 rounded p-3 bg-red-950/20">
+        <p class="text-xs uppercase tracking-wider text-red-400 mb-2">Forgotten — 2 fields</p>
+        <span class="field f-lost">judge_final_label</span>
+        <span class="field f-lost">judge_reasoning</span>
+        <p class="text-xs text-red-300/70 mt-3 leading-relaxed">
+          Nulled on every decision. 11 records already damaged.
+        </p>
+      </div>
+    </div>
+
+    <h3 class="text-sm font-semibold text-slate-200 mb-3">Before — the endpoint reconstructs the whole record</h3>
+    <div class="mermaid mb-6">
+graph LR
+  EP["decision endpoint<br/>knows 22 field names"] -->|"_reroute()<br/>20 of 22 copied"| RI["RoutingInput<br/>22 fields"]
+  CO["coordinator<br/>knows 22 field names"] -->|"22 state.get()"| RI
+  RI --> RN["RoutingNode.run<br/>25 lines of assignment<br/>+ 3 write-once guards"]
+  RN --> DB[("ClassificationRecord")]
+  X["judge_final_label<br/>judge_reasoning"] -.->|"dropped"| RI
+    </div>
+
+    <h3 class="text-sm font-semibold text-slate-200 mb-3">After — the endpoint states its intent</h3>
+    <div class="mermaid mb-6">
+graph LR
+  EP["decision endpoint"] -->|"apply_human_decision<br/>(job_id, label, route)"| RN
+  RP["reopen endpoint"] -->|"reopen_for_review<br/>(job_id, reason)"| RN
+  CO["coordinator"] -->|"route(RoutingInput)"| RN
+  RN["RoutingNode<br/>loads the record itself<br/>mutates only what it owns"]
+  RN --> DB[("ClassificationRecord")]
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Solution</h3>
+        <p class="text-sm text-slate-400 leading-relaxed mb-3">
+          Give <span class="code text-amber-400">RoutingNode</span> two named operations for the human
+          paths — <span class="code">apply_human_decision(job_id, label)</span> and
+          <span class="code">reopen_for_review(job_id)</span> — each loading the record and mutating
+          only the fields that path owns. <span class="code">RoutingInput</span> stays as the
+          <em>machine</em> pass's interface, where all 22 fields are genuinely new information.
+        </p>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Pass-through stops being something a caller performs and becomes something the module
+          <em>does by not touching</em>. The 2-field omission becomes unrepresentable.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Benefits</h3>
+        <ul class="text-sm text-slate-400 space-y-2">
+          <li><strong class="text-slate-200">Locality:</strong> adding a 23rd signal is a 2-file edit (model + machine pass), not 5. Today, forgetting one of the five silently zeroes the field on the next human decision.</li>
+          <li><strong class="text-slate-200">Leverage:</strong> the endpoint learns 2 verbs instead of 22 field names, and <span class="code">_reroute</span>'s 26 lines disappear.</li>
+          <li><strong class="text-slate-200">Tests:</strong> <span class="code">test_classification.py:136-144</span> currently hand-mutates 4 fields to fabricate a decided record — reaching <em>past</em> the interface because no operation for "decide" exists. With one, the setup becomes a single call, and the decision→reopen sequence gains coverage it has never had.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-6 pt-6 border-t border-slate-700">
+      <p class="text-xs text-slate-500"><strong class="text-slate-400">Deletion test:</strong> delete the pass-through half of <span class="code">RoutingInput</span> and the "restate 19 fields correctly" burden reappears in two call sites — but the <em>judge-field bug</em> does not, because there is nothing left to forget. Complexity concentrates. Earns its keep.</p>
+    </div>
+  </section>
+
+  <!-- ============ CANDIDATE 2 ============ -->
+  <section class="card rounded-lg p-8 mb-8">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Candidate 2</p>
+        <h2 class="text-2xl font-bold text-slate-100">One invariant, <span class="text-amber-400">three enforcement mechanisms</span>, fifteen sites</h2>
+      </div>
+      <span class="badge-strong text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">Strong</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Files</h3>
+        <ul class="text-sm space-y-1 code text-slate-400">
+          <li>classification/nodes/routing.py:97-109</li>
+          <li>api/routes/classification/endpoints.py:69-70, 102-107</li>
+          <li>database/models.py:195-205 <span class="text-slate-600">(comments only)</span></li>
+          <li>services/metrics/service.py:28-46 <span class="text-slate-600">(reader)</span></li>
+          <li class="text-slate-500">+ 11 more sites</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Problem</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          "<span class="code">original_label</span>, <span class="code">expected_label</span> and
+          <span class="code">machine_review_route</span> are write-once" is enforced three
+          <em>incompatible</em> ways in a single 13-line function — and for one of the three, not at
+          all. Nothing in the type system or the schema stops a sixteenth site from writing them.
+        </p>
+      </div>
+    </div>
+
+    <div class="bg-red-950/40 border border-red-900 rounded p-4 mb-6">
+      <p class="text-sm text-red-200 mb-3"><strong>Three fields, three different guard polarities</strong> — <span class="code">routing.py:97-109</span>:</p>
+<pre class="code text-xs text-red-100/90 overflow-x-auto leading-relaxed">record.original_label = routing_input.original_label          <span class="text-red-400">← no guard at all</span>
+
+if routing_input.expected_label is not None:                  <span class="text-amber-400">← guard on the INPUT</span>
+    record.expected_label = routing_input.expected_label
+
+if record.machine_review_route is None:                       <span class="text-green-400">← guard on the RECORD</span>
+    record.machine_review_route = (...)</pre>
+      <p class="text-sm text-red-200/90 mt-3">
+        <span class="code">original_label</span>'s write-once-ness is not enforced here at all — it is
+        delegated upward to whoever calls the node, which is exactly why Candidate 3's flag argument
+        had to be invented, and why it produced a bug during this feature's own implementation.
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4 mb-6">
+      <div class="border border-red-900 rounded p-4 bg-red-950/20">
+        <p class="text-xs uppercase tracking-wider text-red-400 mb-3">Before — the rule is a convention</p>
+        <div class="space-y-2 text-xs">
+          <div class="box box-bad">routing.py — 2 guards, opposite polarity</div>
+          <div class="box box-bad">endpoints.py — a ternary + a flag param</div>
+          <div class="box box-bad">models.py — a comment</div>
+          <div class="box box-bad">results.py — another comment</div>
+          <div class="box box-bad">metrics/service.py — must re-derive it to read</div>
+          <div class="box box-bad">0015 migration — infers it a 3rd way</div>
+          <div class="box box-bad">tests — one asserts it, one bypasses it</div>
+          <p class="text-slate-500 pt-2">15 sites. Adding a 16th costs nothing and breaks silently.</p>
+        </div>
+      </div>
+      <div class="border border-green-900 rounded p-4 bg-green-950/20">
+        <p class="text-xs uppercase tracking-wider text-green-400 mb-3">After — the rule is the interface</p>
+        <div class="space-y-2 text-xs">
+          <div class="box box-good">_save_record — one polarity:<br/>"set if currently NULL"</div>
+          <div class="box box-neutral">everything else — cannot reach the fields</div>
+          <p class="text-slate-500 pt-2">
+            The endpoint's ternary, the flag param, and the test helper's
+            <span class="code">or review_route</span> fallback all disappear.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Solution</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Move all three guards into <span class="code">_save_record</span> with one consistent
+          polarity — <em>set when the record's field is currently NULL, never otherwise</em>. This is
+          already how <span class="code">machine_review_route</span> works; the change is making the
+          other two match. Callers then cannot fabricate history whatever they pass.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Benefits</h3>
+        <ul class="text-sm text-slate-400 space-y-2">
+          <li><strong class="text-slate-200">Locality:</strong> one function to read, one to test, one to fix. Today a reader must hold five files in their head — <span class="code">_score()</span> in the metrics module needs exactly this knowledge and re-derives it.</li>
+          <li><strong class="text-slate-200">Leverage:</strong> the accuracy figures depend on these three fields being trustworthy. Every site that can write them is a site that can corrupt a metric — and two already did this session.</li>
+          <li><strong class="text-slate-200">Tests:</strong> the guards become testable in isolation instead of only through a full route→decide→reopen sequence.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-6 pt-6 border-t border-slate-700">
+      <p class="text-xs text-slate-500"><strong class="text-slate-400">Note:</strong> CLAUDE.md documents this invariant in prose (the "Immutable classification history" section added this session). That is the correct stopgap — but a convention that needs documenting in a second file is a convention the code should be enforcing.</p>
+    </div>
+  </section>
+
+  <!-- ============ CANDIDATE 3 ============ -->
+  <section class="card rounded-lg p-8 mb-8">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Candidate 3</p>
+        <h2 class="text-2xl font-bold text-slate-100">The <span class="text-amber-400">capture_prediction</span> flag argument</h2>
+      </div>
+      <span class="badge-worth text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">Worth exploring</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Files</h3>
+        <ul class="text-sm space-y-1 code text-slate-400">
+          <li>endpoints.py:70 <span class="text-slate-600">(param)</span></li>
+          <li>endpoints.py:103-105 <span class="text-slate-600">(use)</span></li>
+          <li>endpoints.py:153 <span class="text-slate-600">(True — decision)</span></li>
+          <li>endpoints.py:211 <span class="text-slate-600">(False — reopen)</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Problem</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          A boolean parameter selecting between two behaviours inside a shared helper — and its
+          <span class="code">False</span> branch is a <strong class="text-slate-200">no-op</strong>
+          (<span class="code">original_label=record.original_label</span> is what plain pass-through
+          already does). One live branch, one dead one, and a 6-line docstring explaining a boolean.
+        </p>
+      </div>
+    </div>
+
+    <div class="bg-amber-950/30 border border-amber-800 rounded p-4 mb-6">
+      <p class="text-sm text-amber-200/90 leading-relaxed">
+        <strong class="text-amber-300">This flag already caused a bug — during its own implementation.</strong>
+        The first version of <span class="code">_reroute</span> had no flag: reopening a legacy record
+        wrote the reviewer's label into <span class="code">original_label</span>, fabricating a machine
+        prediction that never happened. A failing test caught it. The flag is the <em>patch</em>, and
+        it works — but it places the decision-vs-reopen seam <em>inside</em> a shared helper, when the
+        two endpoints already differ in their guard, their exception, their audit event, and their
+        label source. There is a second, correlated flag beside it:
+        <span class="code">human_overridden</span> — and the signature permits the meaningless
+        combination <span class="code">capture_prediction=True, human_overridden=False</span>.
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Solution</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Subsumed by Candidates 1 and 2. If write-once is enforced record-side (C2), the flag has
+          nothing left to protect and deletes itself. If routing exposes two named operations (C1),
+          the two call sites stop sharing a helper at all. Standalone, the fix is to split
+          <span class="code">_reroute</span> in two — but that duplicates the pass-through block
+          rather than removing it.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Benefits</h3>
+        <ul class="text-sm text-slate-400 space-y-2">
+          <li><strong class="text-slate-200">Locality:</strong> "which operation am I in" stops being a parameter threaded through a helper.</li>
+          <li><strong class="text-slate-200">Leverage:</strong> two correlated booleans collapse into the choice of which method you call.</li>
+          <li class="text-amber-400/80"><strong>Why not Strong:</strong> the current code is <em>correct</em> and tested. This is a shape problem, not a defect — and doing C1 or C2 removes it for free.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CANDIDATE 4 ============ -->
+  <section class="card rounded-lg p-8 mb-10">
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Candidate 4</p>
+        <h2 class="text-2xl font-bold text-slate-100">Four <span class="text-amber-400">parallel field lists</span> for one concept</h2>
+      </div>
+      <span class="badge-spec text-xs font-semibold px-3 py-1.5 rounded-full whitespace-nowrap">Speculative</span>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Files</h3>
+        <ul class="text-sm space-y-1 code text-slate-400">
+          <li>database/models.py:164-208 <span class="text-slate-600">(ClassificationRecord)</span></li>
+          <li>classification/domain/results.py:19-45 <span class="text-slate-600">(RoutingInput)</span></li>
+          <li>classification/domain/state.py:14-45 <span class="text-slate-600">(ClassificationState)</span></li>
+          <li>classification/domain/state.py:48-81 <span class="text-slate-600">(ClassificationUpdate)</span></li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Problem</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          Four declarations of roughly the same ~18 fields, edited together on every change.
+          <span class="code">coordinator.py:29</span> (<span class="code">_dump</span>) exists solely to
+          bridge two of them. This is the structural reason a new signal costs five files.
+        </p>
+      </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Solution</h3>
+        <p class="text-sm text-slate-400 leading-relaxed">
+          No clean one. The four serve genuinely different roles — ORM row, LangGraph state,
+          LangGraph partial update, node input — and LangGraph's <span class="code">TypedDict</span>
+          state contract resists sharing a base with a pydantic model or a SQLAlchemy row.
+          A shared <span class="code">ClassificationSignals</span> value object nested inside each is
+          conceivable but would touch every node.
+        </p>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold text-slate-200 mb-2">Benefits</h3>
+        <ul class="text-sm text-slate-400 space-y-2">
+          <li><strong class="text-slate-200">Locality:</strong> a new signal would be one edit instead of four.</li>
+          <li class="text-slate-500"><strong>Why speculative:</strong> the blast radius is every classification node, the framework fights it, and Candidate 1 removes most of the <em>pain</em> without touching the structure. Listed so a future review knows it was considered and priced.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SMALLER ITEMS ============ -->
+  <section class="card rounded-lg p-6 mb-10">
+    <h3 class="text-sm font-semibold text-slate-200 mb-4 uppercase tracking-wider">Acknowledged, correctly priced</h3>
+    <div class="grid md:grid-cols-3 gap-5 text-sm">
+      <div>
+        <p class="text-slate-300 font-semibold mb-1">The frozen prefix table</p>
+        <p class="text-slate-500 leading-relaxed">
+          <span class="code">ground_truth.py:18-37</span> and <span class="code">0015:22-39</span> hold
+          the same map. The migration copy is <em>correctly</em> frozen. Missing: a back-reference from
+          the live table to the frozen one, so the copy is discoverable. One comment.
+        </p>
+      </div>
+      <div>
+        <p class="text-slate-300 font-semibold mb-1"><span class="code">list_all()</span>'s hidden ceiling</p>
+        <p class="text-slate-500 leading-relaxed">
+          <span class="code">classification_record.py:10</span> loads every record into memory for the
+          accuracy report. Fine at 70 records; the interface makes the unbounded fetch invisible.
+          Wants a <span class="code">ponytail:</span> comment naming the ceiling, not a fix.
+        </p>
+      </div>
+      <div>
+        <p class="text-slate-300 font-semibold mb-1"><span class="code">expected_label</span> wrapper</p>
+        <p class="text-slate-500 leading-relaxed">
+          <span class="code">ground_truth.py:61-68</span> — 8 lines, 6 of them docstring, one caller.
+          Deletion test says <em>moves</em>, not concentrates. The enum round-trip earns its keep in
+          tests. Leave it.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TOP RECOMMENDATION ============ -->
+  <section class="border-2 border-amber-600 rounded-lg p-8 bg-amber-950/20">
+    <p class="text-xs uppercase tracking-[0.2em] text-amber-500 mb-3">Top recommendation</p>
+    <h2 class="text-2xl font-bold text-slate-100 mb-4">Fix the judge-field loss first, then take Candidate 2</h2>
+
+    <div class="grid md:grid-cols-3 gap-6 mb-6">
+      <div>
+        <p class="text-sm font-semibold text-amber-400 mb-2">The defect is not a refactor</p>
+        <p class="text-sm text-slate-400">
+          Two missing lines in <span class="code">_reroute</span> stop the bleeding today. The 11
+          damaged records cannot be recovered — the judge's reasoning is gone. Do this before any
+          structural work, and independently of it.
+        </p>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-amber-400 mb-2">C2 is the cheapest structural win</p>
+        <p class="text-sm text-slate-400">
+          Moving three guards into <span class="code">_save_record</span> touches one function, deletes
+          the flag argument (C3) for free, and makes the class of bug that produced <em>both</em> this
+          session's history defects unrepresentable.
+        </p>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-amber-400 mb-2">C1 is the real fix, and it's bigger</p>
+        <p class="text-sm text-slate-400">
+          Only C1 makes the judge-field omission impossible rather than merely fixed. But it changes
+          <span class="code">RoutingNode</span>'s interface and touches the coordinator. Worth doing —
+          after C2, not instead of it.
+        </p>
+      </div>
+    </div>
+
+    <div class="border-t border-amber-800/50 pt-5">
+      <p class="text-sm text-slate-400 leading-relaxed mb-3">
+        <strong class="text-slate-200">Sequence:</strong> the 2-line defect fix (+ a regression test
+        asserting judge fields survive a decision) → Candidate 2, which absorbs Candidate 3 →
+        Candidate 1 when the next signal needs adding, since that is when its cost becomes visible.
+        Candidate 4 stays parked.
+      </p>
+      <p class="text-sm text-slate-400 leading-relaxed">
+        <strong class="text-slate-200">One caveat on scoring:</strong> the judge fields are not read by
+        <span class="code">MetricsService</span>, so the published accuracy figures are unaffected by
+        this defect. The loss is to the audit trail and to any future analysis of judge agreement.
+      </p>
+    </div>
+  </section>
+
+  <footer class="mt-10 pt-6 border-t border-slate-800 text-xs text-slate-600">
+    <p>
+      No <span class="code">CONTEXT.md</span> or <span class="code">docs/adr/</span> found — no ADR
+      conflicts to flag. Terms worth a glossary if one is started:
+      <span class="code">machine review route</span>, <span class="code">original label</span>,
+      <span class="code">expected label</span>, <span class="code">escalation</span> vs
+      <span class="code">override</span>, <span class="code">strict</span> vs
+      <span class="code">safeguarded accuracy</span>.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>
