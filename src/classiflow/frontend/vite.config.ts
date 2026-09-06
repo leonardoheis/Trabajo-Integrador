@@ -30,6 +30,7 @@ export default defineConfig({
       "/classification": apiOnly(),
       "/jobs": "http://127.0.0.1:8000",
       "/documents": "http://127.0.0.1:8000",
+      "/knowledge": "http://127.0.0.1:8000",
       "/users": apiOnly(),
       "/audit": apiOnly(),
     },

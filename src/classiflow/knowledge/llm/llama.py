@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from functools import lru_cache
 
 from llama_cpp import Llama
+from loguru import logger
 
 from classiflow.ingesta.exceptions import ModelLoadError, ModelNotFoundError
 from classiflow.ingesta.llm_provider import n_gpu_layers
@@ -42,8 +43,12 @@ class LlamaCppChatLlm(ChatLlm):
         self._max_tokens = max_tokens or Settings.chat_max_tokens
 
     def _complete(self, system: str, user: str) -> str:
-        llm = get_chat_llm(self._model_path, self._n_ctx)
+        # get_chat_llm is called inside this try/except (not before it) so a missing or
+        # unloadable model file -- ModelNotFoundError/ModelLoadError, neither a
+        # ChatLlmError subclass -- gets wrapped like every other failure here, matching
+        # the ChatLlm base class's "raises only ChatLlmError/ChatRefusalError" contract.
         try:
+            llm = get_chat_llm(self._model_path, self._n_ctx)
             response = llm.create_chat_completion(
                 messages=[
                     {"role": "system", "content": system},
@@ -54,6 +59,7 @@ class LlamaCppChatLlm(ChatLlm):
                 top_p=Settings.slm_top_p,
             )
         except Exception as exc:
+            logger.error("Llama chat completion failed (model_path={}): {}", self._model_path, exc)
             raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
         return _first_message_content(response)
 

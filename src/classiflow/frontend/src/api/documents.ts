@@ -8,6 +8,7 @@ export interface ClassificationSummary {
   confidence: number;
   judgedByLlm: boolean;
   createdAt: string;
+  indexedAt: string | null;
 }
 
 export interface JobsPage {

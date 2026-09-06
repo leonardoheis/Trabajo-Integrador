@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 
 import anthropic
+from loguru import logger
 
 from classiflow.knowledge.llm.chat_llm import ChatLlm
 from classiflow.knowledge.llm.exceptions import ChatLlmError, ChatRefusalError
@@ -40,6 +41,7 @@ class ClaudeChatLlm(ChatLlm):
                 else anthropic.AsyncAnthropic()
             )
         except Exception as exc:
+            logger.error("Claude chat client construction failed: {}", exc)
             raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
         return self._client
 
@@ -56,6 +58,7 @@ class ClaudeChatLlm(ChatLlm):
                     yield text
                 final = await stream.get_final_message()
         except anthropic.APIError as exc:
+            logger.error("Claude chat completion failed: {}", exc)
             raise ChatLlmError(provider=_PROVIDER, cause=str(exc)) from exc
 
         # A safety decline arrives as a successful response, not an exception, so it

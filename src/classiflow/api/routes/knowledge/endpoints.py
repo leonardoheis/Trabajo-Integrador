@@ -4,14 +4,23 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+from loguru import logger
 
-from classiflow.api.dependencies import get_chat_service, get_current_user, get_pipeline_service
+from classiflow.api.dependencies import (
+    get_chat_service,
+    get_current_user,
+    get_document_kb_repo,
+    get_pipeline_service,
+)
 from classiflow.api.routes.knowledge.schemas import (
     ChatRequest,
     ChatResponse,
+    DocumentKbResponse,
+    DocumentKbSchema,
     SourceSchema,
     SynchronizeKbResponse,
 )
+from classiflow.domain.repositories.document_kb import IDocumentKbRepository
 from classiflow.knowledge.chat.service import ChatService
 from classiflow.knowledge.domain.chat import ChatQuery, SourceRef
 from classiflow.services.pipeline.service import PipelineService
@@ -49,9 +58,21 @@ async def chat_stream(
 ) -> StreamingResponse:
     async def _stream() -> AsyncGenerator[str, None]:
         sources: list[SourceRef] = []
-        async for token, current_sources in chat_service.astream(_to_query(body)):
-            sources = current_sources
-            yield _sse("token", {"text": token})
+        try:
+            async for token, current_sources in chat_service.astream(_to_query(body)):
+                sources = current_sources
+                yield _sse("token", {"text": token})
+        except Exception as exc:  # noqa: BLE001
+            # Deliberately blind: StreamingResponse has already sent headers by the
+            # time this generator runs, so a registered exception handler can never
+            # fire for a failure here -- without this, the connection just dies with
+            # no payload and no log trace, regardless of what raised. Emit a terminal
+            # SSE frame instead, and keep the message generic (the real detail is only
+            # in this log line) since chat is used by non-technical municipal
+            # reviewers.
+            logger.exception("Chat stream failed: {}", exc)
+            yield _sse("error", {"message": "Something went wrong answering that question."})
+            return
         # Sources are emitted once at the end rather than per token: they are identical
         # on every yield, and repeating them would dominate the stream.
         yield _sse("sources", _sources_payload(sources))
@@ -66,3 +87,12 @@ async def synchronize_kb(
 ) -> SynchronizeKbResponse:
     indexed_job_ids, skipped_count = await pipeline.synchronize_kb()
     return SynchronizeKbResponse(indexed_job_ids=indexed_job_ids, skipped_count=skipped_count)
+
+
+@router.get("/documents/{job_id}")
+async def document_kb(
+    job_id: str,
+    document_kb_repo: Annotated[IDocumentKbRepository, Depends(get_document_kb_repo)],
+) -> DocumentKbResponse:
+    doc = await document_kb_repo.find_by_job_id(job_id)
+    return DocumentKbResponse(document_kb=DocumentKbSchema.from_model(doc) if doc else None)

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +35,10 @@ class SqlDocumentKbRepository:
         result = await self._session.execute(select(DocumentKb).where(DocumentKb.sha256 == sha256))
         return result.scalar_one_or_none()
 
+    async def find_by_job_id(self, job_id: str) -> DocumentKb | None:
+        result = await self._session.execute(select(DocumentKb).where(DocumentKb.job_id == job_id))
+        return result.scalar_one_or_none()
+
     async def list_all(self) -> list[DocumentKb]:
         result = await self._session.execute(select(DocumentKb))
         return list(result.scalars().all())
@@ -43,10 +49,18 @@ class InMemoryDocumentKbRepository:
         self._store: dict[str, DocumentKb] = {}
 
     async def save(self, document: DocumentKb) -> None:
+        # `indexed_at` relies on the DB column's server_default(now()) on a real INSERT
+        # -- this double never round-trips through SQL, so it has to stamp the same
+        # default itself, mirroring how AllowedUser seeding handles the same gap.
+        if document.indexed_at is None:
+            document.indexed_at = datetime.now(timezone.utc)
         self._store[document.sha256] = document
 
     async def find_by_sha256(self, sha256: str) -> DocumentKb | None:
         return self._store.get(sha256)
+
+    async def find_by_job_id(self, job_id: str) -> DocumentKb | None:
+        return next((doc for doc in self._store.values() if doc.job_id == job_id), None)
 
     async def list_all(self) -> list[DocumentKb]:
         return list(self._store.values())

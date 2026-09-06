@@ -2,7 +2,13 @@
 
 ## Status
 
-Draft — pending user review.
+Decisions 8-12 implemented (see
+`docs/superpowers/plans/2026-08-26-frontend-knowledge-base.md`, Tasks 1-6). Decision 13 was added
+after manual testing surfaced a real bug in the Chat page's error handling (Task 7 in that same
+plan). Decision 14 (below) was added after manual testing showed the Knowledge tab's municipal
+metadata fields are populated by a runtime dependency (the `scrapper/` CSV dataset) that isn't
+present in this checkout — see that decision for the root cause and the user's choice to defer
+the real fix and instead hide the affected fields for now (Task 8 in the plan).
 
 ## Context
 
@@ -204,6 +210,97 @@ A plain proxy target, not the `apiOnly()` wrapper used for `/classification`, `/
 `/audit` — there is no frontend SPA route at `/knowledge`, so there's no page-load-vs-API-call
 ambiguity to resolve for this prefix.
 
+### 13. Chat stream error handling and logging
+
+Found while manually verifying Decision 11: the Chat page accepted a question but never showed an
+answer, and there was no way to tell why — it just looked like it hung.
+
+**Root cause.** `POST /knowledge/chat/stream` is a `StreamingResponse`. Starlette sends the HTTP
+response headers before pulling the first chunk from the body generator. Any exception raised
+while streaming — an invalid/missing `ANTHROPIC_API_KEY`, a wrong `ANTHROPIC_MODEL`, a missing
+local `.gguf` model file, a Chroma/retrieval error, or anything else inside `ChatService.astream()`
+or either `ChatLlm` implementation — therefore happens *after* the response has already started.
+Starlette's registered exception handlers (`src/classiflow/api/error_handlers/knowledge.py`,
+`.../llm.py`) check `response_started` and cannot run once it's `True`; the connection just aborts
+with no `event: done`, no error payload, and — since there was no logging anywhere in the chat
+code path (`ChatService`, `RetrieverService`, `ClaudeChatLlm`, `LlamaCppChatLlm`, the route
+handler) — no trace in the server logs either. This reproduces identically regardless of which
+`CHAT_LLM_PROVIDER` is configured; it's a structural bug in how the endpoint handles mid-stream
+failures, not a one-off misconfiguration. Contributing, smaller defect: `LlamaCppChatLlm._complete()`
+(`src/classiflow/knowledge/llm/llama.py`) calls `get_chat_llm(...)` outside its own `try/except`,
+so a missing model file raises `ModelNotFoundError`/`ModelLoadError` unwrapped instead of the
+`ChatLlmError` the `ChatLlm` base class's contract promises — moot for the silent-hang symptom
+itself (every exception dies the same way today) but worth fixing while touching this code.
+
+**Fix.**
+- `POST /knowledge/chat/stream`'s generator (`api/routes/knowledge/endpoints.py`) wraps its main
+  loop in `try/except Exception`, logs the full exception via `logger.exception(...)`, and yields
+  a new terminal SSE frame, `event: error` with `{"message": "..."}`, instead of `sources`/`done`
+  — so the client gets a real terminal event instead of a dead connection.
+- Every step of the RAG chain gains `loguru` logging (matching the existing convention elsewhere
+  in the codebase, e.g. `services/pipeline/service.py`'s `logger.warning(...)` calls): retrieval
+  chunk counts in `ChatService.astream()`, and the underlying provider error in both
+  `ClaudeChatLlm` and `LlamaCppChatLlm` right before each is wrapped/re-raised as `ChatLlmError`.
+  `LlamaCppChatLlm._complete()`'s contract violation is fixed alongside this (moved inside the
+  `try/except`).
+- `ChatPage.tsx` handles the new `error` event type and logs to `console.error` (the codebase's
+  frontend had zero `console.*` usage anywhere before this — a deliberate, explicitly diagnostic
+  exception to that absence, not a new general convention).
+
+**UX decision (made with the user):** the chat bubble shown to the end user stays generic
+("Something went wrong answering that question.") regardless of the actual failure — the real
+exception detail goes only to server logs (`logger.exception`, full traceback) and the browser
+console (`console.error`). This matches the app's non-technical municipal-reviewer audience
+(per the visual redesign spec's Audience & Direction section) while still giving a developer a way
+to see exactly what failed, without exposing internal error strings (auth failures, model paths,
+provider stack traces) to end users. The non-streaming `POST /knowledge/chat` endpoint doesn't
+have this bug — its exceptions happen before any response starts, so the registered handlers
+already work correctly there — so it needed no equivalent fix.
+
+### 14. Knowledge tab: hide unpopulated metadata fields, add an Indexed column, show sync progress
+
+Found while manually testing the Knowledge Base tab (Decision 9): almost every field renders as
+"—" — Doc Type, Number, Year, Subject, Sanction Date, Publication Date, Bulletin Number.
+
+**Root cause.** These fields are resolved by `CsvDocumentMetadataRepository`
+(`src/classiflow/knowledge/indexing/csv_metadata.py`), which parses the filename against a
+`{tipo}_{numero}_{anio}.pdf` pattern and looks up a matching row across 9 CSVs
+(`boletines.csv`, `decretos.csv`, `ordenanzas.csv`, etc.) expected at `SCRAPPER_DIR`
+(`.env`: `./scrapper`). That directory doesn't exist in this checkout — it was intentionally
+removed in commit `60f1d64` ("Phase 1 ingestion already completed its job -- the downloaded
+documents live on Google Drive"). Every CSV lookup silently fails `path.exists()`, so
+`resolve()` degrades to `DocumentMetadata(filename=filename)` for every document — logged as a
+`logger.warning`, never surfaced as an error, which is why nothing caught this earlier. This is
+purely a missing-data problem, not a code defect: confirmed the `knowledge/` package never reads
+PDFs or does OCR (`IndexerService.index()` only consumes `record.cleaned_text`; the package's
+only file-open call is a CSV read) — the pipeline-stage separation this feature was built on is
+intact. Also confirmed no cleaner alternative metadata source exists yet elsewhere in the
+pipeline: `EnrichedRecord` carries no dedicated columns for this data, and its `entities` JSON
+only has a partial, LLM-guessed subset (no subject/dates/bulletin/URL, and a `year` type
+mismatch) — there's no municipal-dataset batch ingester in this codebase that captures this
+metadata at ingestion time either.
+
+**Decision made with the user:** defer the real fix (the CSVs are actually recoverable — they
+were committed to git before removal, at commit `0e27d4f`, the parent of `60f1d64` — restoring
+them plus backfilling already-indexed `document_kb` rows is a pure data/config fix with no
+pipeline code changes) and instead ship three smaller, immediate UI improvements:
+
+- **Hide the seven always-blank fields** (Doc Type, Number, Year, Subject, Sanction Date,
+  Publication Date, Bulletin Number) from the Knowledge tab for now, rather than showing a wall
+  of "—" placeholders. Filename, SHA-256, Chunk Count, Indexed At, and the already-conditional
+  Download URL are unaffected. This is a display-only change — `DocumentKbSchema`/
+  `DocumentKbResponse` keep returning these fields; when the metadata is eventually restored, the
+  UI rows come back with a small revert of this change.
+- **Add an "Indexed" column to the Classification grid**, showing `document_kb.indexed_at` per
+  row (blank for documents not yet indexed) — reuses the `IDocumentKbRepository.find_by_job_id`
+  method added for Decision 8, called once per row inside `GET /jobs`'s existing per-job loop
+  (which already does the same shape of lookup for classification data) — no new endpoint, no new
+  repository method.
+- **Show a visible in-progress state** while "Sync Knowledge Base" is running (a pulsing accent
+  dot + status text), reusing the same `animate-pulse`/`--color-accent` "live state" convention
+  already established by the visual redesign spec's Decision 7 rather than introducing a new
+  spinner pattern.
+
 ## Non-Goals
 
 - **No filter controls** (doc_type/year) in the Chat UI for v1.
@@ -220,6 +317,19 @@ ambiguity to resolve for this prefix.
   work and are out of scope. This spec is exposing existing data (the per-document KB record) and
   wiring already-existing, already-tested endpoints (`synchronize-kb`, `chat`, `chat/stream`)
   into the UI.
+- **No centralized logging infrastructure** (Decision 13 adds targeted `loguru` calls to the
+  existing default stderr sink only — no file sinks, log-level configuration, or structured JSON
+  logging).
+- **Not diagnosing or fixing the actual chat misconfiguration itself** (if any) — Decision 13
+  makes failures visible; whatever the logs turn out to say (missing API key, wrong model path,
+  etc.) is a separate follow-up once known.
+- **Not restoring the `scrapper/` CSVs or backfilling existing blank `document_kb` rows**
+  (Decision 14) — explicitly deferred by the user this pass; a separate follow-up once decided.
+- **No sortable "Indexed" column** — not requested; would also need extending the backend's
+  `SortField`/`_sort_summaries`.
+- **No changes to `CsvDocumentMetadataRepository`, `IndexerService`, or the metadata-resolution
+  logic itself** (Decision 14) — the existing filename+CSV lookup is correct, it just has no data
+  to read right now; this pass only changes what the UI shows, not how resolution works.
 
 ## Testing
 
@@ -235,3 +345,12 @@ ambiguity to resolve for this prefix.
   standard verification gate — hand these commands to the user to run rather than executing them
   directly, per this repo's execution-workflow rule (notebooks/test suites are always run by the
   user, never in the background by Claude).
+- **Decision 13** is verified manually rather than with new automated tests, since it's a
+  logging/observability change: reproduce a chat question with the backend running, confirm the
+  server's stderr shows the new `loguru` lines (retrieval chunk count, provider errors if any) and
+  — if the underlying provider still fails — that a generic `event: error` frame now reaches the
+  UI (a real error bubble, not a silent hang) with matching `console.error` output in the browser.
+- **Decision 14:** manual verification — confirm `GET /jobs` now includes `indexedAt` (null for
+  unindexed documents, a real timestamp for indexed ones); confirm the Classification grid renders
+  the new Indexed column; confirm the Knowledge tab no longer shows the seven blank metadata rows;
+  confirm clicking "Sync Knowledge Base" shows the pulsing in-progress indicator while running.

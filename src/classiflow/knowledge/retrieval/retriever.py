@@ -1,5 +1,7 @@
 import asyncio
 
+from loguru import logger
+
 from classiflow.knowledge.domain.chat import ChatQuery, RetrievedChunk
 from classiflow.knowledge.embeddings.embedder import SentenceTransformerEmbedder
 from classiflow.knowledge.vectordb.vector_store import VectorStore
@@ -26,7 +28,9 @@ class RetrieverService:
     async def retrieve(self, query: ChatQuery) -> list[RetrievedChunk]:
         top_k = query.top_k or self._top_k
         # Both the query embedding and the Chroma lookup are blocking calls.
-        return await asyncio.to_thread(self._retrieve_sync, query.question, top_k, query.filters)
+        chunks = await asyncio.to_thread(self._retrieve_sync, query.question, top_k, query.filters)
+        logger.info("retrieval | top_k={} filters={} chunks={}", top_k, query.filters, len(chunks))
+        return chunks
 
     def _retrieve_sync(
         self, question: str, top_k: int, filters: dict[str, str]

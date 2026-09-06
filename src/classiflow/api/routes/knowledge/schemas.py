@@ -1,6 +1,9 @@
+from datetime import datetime
+
 from pydantic import Field
 
 from classiflow.api.schemas import BaseSchema
+from classiflow.database.models import DocumentKb
 from classiflow.knowledge.domain.chat import ChatAnswer, SourceRef
 
 
@@ -42,3 +45,39 @@ class ChatResponse(BaseSchema):
 class SynchronizeKbResponse(BaseSchema):
     indexed_job_ids: list[str]
     skipped_count: int
+
+
+class DocumentKbSchema(BaseSchema):
+    sha256: str
+    filename: str
+    doc_type: str | None
+    number: str | None
+    year: str | None
+    subject: str | None
+    sanction_date: str | None
+    publication_date: str | None
+    bulletin_number: str | None
+    download_url: str | None
+    chunk_count: int
+    indexed_at: datetime
+
+    @classmethod
+    def from_model(cls, doc: DocumentKb) -> "DocumentKbSchema":
+        return cls(
+            sha256=doc.sha256,
+            filename=doc.filename,
+            doc_type=doc.doc_type,
+            number=doc.number,
+            year=doc.year,
+            subject=doc.subject,
+            sanction_date=doc.sanction_date,
+            publication_date=doc.publication_date,
+            bulletin_number=doc.bulletin_number,
+            download_url=doc.download_url,
+            chunk_count=doc.chunk_count,
+            indexed_at=doc.indexed_at,
+        )
+
+
+class DocumentKbResponse(BaseSchema):
+    document_kb: DocumentKbSchema | None

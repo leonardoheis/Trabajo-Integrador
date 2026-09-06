@@ -845,6 +845,17 @@ class TestSqlDocumentKbRepository:
         rows = await repo.list_all()
         assert len(rows) == _ROWS_2
 
+    async def test_find_by_job_id(self, session: AsyncSession) -> None:
+        repo = SqlDocumentKbRepository(session)
+        await repo.save(_document_kb())
+        found = await repo.find_by_job_id(_JOB)
+        assert found is not None
+        assert found.sha256 == _SHA
+
+    async def test_find_by_job_id_missing_returns_none(self, session: AsyncSession) -> None:
+        repo = SqlDocumentKbRepository(session)
+        assert await repo.find_by_job_id("no-such-job") is None
+
 
 class TestInMemoryDocumentKbRepository:
     async def test_save_and_find_by_sha256(self) -> None:
@@ -863,3 +874,14 @@ class TestInMemoryDocumentKbRepository:
         await repo.save(_document_kb(sha256="a" * 64))
         await repo.save(_document_kb(sha256="c" * 64))
         assert len(await repo.list_all()) == _ROWS_2
+
+    async def test_find_by_job_id(self) -> None:
+        repo = InMemoryDocumentKbRepository()
+        await repo.save(_document_kb())
+        found = await repo.find_by_job_id(_JOB)
+        assert found is not None
+        assert found.sha256 == _SHA
+
+    async def test_find_by_job_id_missing_returns_none(self) -> None:
+        repo = InMemoryDocumentKbRepository()
+        assert await repo.find_by_job_id("no-such-job") is None

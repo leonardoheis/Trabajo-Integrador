@@ -1,5 +1,7 @@
 from collections.abc import AsyncIterator
 
+from loguru import logger
+
 from classiflow.knowledge.domain.chat import ChatAnswer, ChatQuery, SourceRef
 from classiflow.knowledge.llm.chat_llm import ChatLlm
 from classiflow.knowledge.prompts.chat import SYSTEM_PROMPT, build_user_prompt
@@ -27,6 +29,7 @@ class ChatService:
     # instead of waiting for the answer to finish.
     async def astream(self, query: ChatQuery) -> AsyncIterator[tuple[str, list[SourceRef]]]:
         chunks = await self._retriever.retrieve(query)
+        logger.info("chat | question={!r} chunks={}", query.question, len(chunks))
         sources = [chunk.to_source() for chunk in chunks]
         user_prompt = build_user_prompt(query.question, chunks)
         async for token in self._chat_llm.astream(SYSTEM_PROMPT, user_prompt):

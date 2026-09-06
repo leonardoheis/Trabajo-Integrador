@@ -13,6 +13,7 @@ class ClassificationSummary(BaseSchema):
     confidence: float
     judged_by_llm: bool
     created_at: datetime
+    indexed_at: datetime | None
 
 
 class JobsPage(BaseSchema):

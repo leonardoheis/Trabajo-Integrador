@@ -100,3 +100,29 @@ class TestSynchronizeKbEndpoint:
         body = response.json()
         assert job_id in body["indexedJobIds"]
         assert isinstance(body["skippedCount"], int)
+
+
+class TestDocumentKbEndpoint:
+    def test_requires_auth(self, client: TestClient) -> None:
+        response = client.get("/knowledge/documents/some-job")
+        assert response.status_code == HTTPStatus.UNAUTHORIZED
+
+    def test_returns_null_when_not_indexed(
+        self, client: TestClient, auth_headers: dict[str, str]
+    ) -> None:
+        response = client.get("/knowledge/documents/no-such-job", headers=auth_headers)
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()["documentKb"] is None
+
+    def test_returns_the_kb_record_once_indexed(
+        self, client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        job_id = _ingest(client, auth_headers, monkeypatch, filename="kb-detail.pdf")
+        client.post("/knowledge/synchronize-kb", headers=auth_headers)
+
+        response = client.get(f"/knowledge/documents/{job_id}", headers=auth_headers)
+        assert response.status_code == HTTPStatus.OK
+        body = response.json()["documentKb"]
+        assert body is not None
+        assert body["filename"] == "kb-detail.pdf"
+        assert isinstance(body["chunkCount"], int)

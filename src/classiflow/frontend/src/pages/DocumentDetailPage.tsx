@@ -3,13 +3,14 @@ import { useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchJobDetail, documentFileUrl } from "../api/documents";
 import type { TimelineEntry } from "../api/jobs";
+import { fetchDocumentKb } from "../api/knowledge";
 import PdfViewer from "../components/PdfViewer";
 import ReclassifyPanel from "../components/ReclassifyPanel";
 import StepTimeline from "../components/StepTimeline";
 
-type Tab = "extraction" | "enrichment" | "classification" | "audit";
+type Tab = "extraction" | "enrichment" | "classification" | "knowledge" | "audit";
 
-const TABS: Tab[] = ["extraction", "enrichment", "classification", "audit"];
+const TABS: Tab[] = ["extraction", "enrichment", "classification", "knowledge", "audit"];
 
 function ConfidenceBar({ value }: { value: number }) {
   return (
@@ -68,6 +69,12 @@ export default function DocumentDetailPage() {
   const { data } = useQuery({
     queryKey: ["job-detail", jobId],
     queryFn: () => fetchJobDetail(jobId!),
+    enabled: !!jobId,
+  });
+
+  const { data: kbData } = useQuery({
+    queryKey: ["document-kb", jobId],
+    queryFn: () => fetchDocumentKb(jobId!),
     enabled: !!jobId,
   });
 
@@ -228,6 +235,41 @@ export default function DocumentDetailPage() {
         )}
         {tab === "classification" && !data.classification && (
           <p className="text-sm text-[var(--color-text-muted)]">No classification data</p>
+        )}
+
+        {tab === "knowledge" && kbData?.documentKb && (
+          <KeyValueGrid
+            pairs={[
+              ["Filename", kbData.documentKb.filename],
+              [
+                "SHA-256",
+                <span key="sha" className="font-mono text-xs">
+                  {kbData.documentKb.sha256}
+                </span>,
+              ],
+              ["Chunk count", String(kbData.documentKb.chunkCount)],
+              ["Indexed at", new Date(kbData.documentKb.indexedAt).toLocaleString()],
+              ...(kbData.documentKb.downloadUrl
+                ? ([
+                    [
+                      "Download URL",
+                      <a
+                        key="url"
+                        href={kbData.documentKb.downloadUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[var(--color-accent)] hover:underline"
+                      >
+                        {kbData.documentKb.downloadUrl}
+                      </a>,
+                    ],
+                  ] as [string, React.ReactNode][])
+                : []),
+            ]}
+          />
+        )}
+        {tab === "knowledge" && !kbData?.documentKb && (
+          <p className="text-sm text-[var(--color-text-muted)]">Not indexed yet</p>
         )}
 
         {tab === "audit" && <StepTimeline entries={auditEntries} mode="expanded" />}
