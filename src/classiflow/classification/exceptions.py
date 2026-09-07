@@ -76,3 +76,18 @@ class LlmJudgeFailedError(ClassificationError):
 
     def __str__(self) -> str:
         return f"LLM judge failed: {self.reason}"
+
+
+@dataclass
+class ClassificationNotDecidedError(ClassificationError):
+    job_id: str
+    review_route: str
+
+    def __post_init__(self) -> None:
+        super().__init__(str(self))
+
+    def __str__(self) -> str:
+        return (
+            f"Classification for job {self.job_id} has no decision to reopen "
+            f"(review_route={self.review_route})"
+        )

@@ -96,6 +96,17 @@ export default function PdfViewer({ fileUrl }: { fileUrl: string }) {
     <div className="flex h-full flex-col bg-[var(--color-surface)]">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-2 font-mono text-sm text-[var(--color-text-muted)]">
         <div className="flex items-center gap-2">
+          {/* First/Last only earn their space on a multi-page document. */}
+          {numPages > 1 && (
+            <button
+              onClick={() => setPageNumber(1)}
+              disabled={pageNumber <= 1}
+              title="First page"
+              className="rounded border border-[var(--color-border)] px-2 py-0.5 disabled:opacity-40"
+            >
+              « First
+            </button>
+          )}
           <button
             onClick={() => setPageNumber((p) => Math.max(1, p - 1))}
             disabled={pageNumber <= 1}
@@ -113,6 +124,16 @@ export default function PdfViewer({ fileUrl }: { fileUrl: string }) {
           >
             Next ›
           </button>
+          {numPages > 1 && (
+            <button
+              onClick={() => setPageNumber(numPages)}
+              disabled={pageNumber >= numPages}
+              title="Last page"
+              className="rounded border border-[var(--color-border)] px-2 py-0.5 disabled:opacity-40"
+            >
+              Last »
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button

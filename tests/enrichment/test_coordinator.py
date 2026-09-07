@@ -1,11 +1,9 @@
 from typing import TYPE_CHECKING
 
-import pytest
 from langgraph.graph.state import CompiledStateGraph
 
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.enrichment.coordinator import build_enrichment_coordinator
-from classiflow.enrichment.exceptions import EntityExtractionFailedError
 from classiflow.enrichment.nodes import EntityExtractorNode, MetadataEnricherNode, TextCleanerNode
 from classiflow.enrichment.prompts.entity_extraction import build_entity_extraction_chain
 from classiflow.events.broadcaster import EventBroadcaster
@@ -57,8 +55,10 @@ class TestEnrichmentCoordinatorHappyPath:
         assert result["metadata"].sha256 == "a" * 64
 
 
-class TestEnrichmentCoordinatorFailure:
-    async def test_entity_extraction_failure_propagates(self) -> None:
+class TestEnrichmentCoordinatorDegradedEntities:
+    async def test_enrichment_completes_with_empty_entities(self) -> None:
+        """Entity extraction is not essential: the rest of enrichment still produces a
+        record the classifier can work from."""
         graph = _build_graph("not json")
         initial: EnrichmentState = {
             "job_id": "enrich-coord-002",
@@ -68,5 +68,8 @@ class TestEnrichmentCoordinatorFailure:
             "sha256": "b" * 64,
             "stage2_extractor_used": "ocr",
         }
-        with pytest.raises(EntityExtractionFailedError):
-            await graph.ainvoke(initial)
+        result = await graph.ainvoke(initial)
+
+        assert result["entities"].doc_type_hint is None
+        assert "Artículo 1" in result["cleaned_text"]
+        assert result["metadata"].sha256 == "b" * 64

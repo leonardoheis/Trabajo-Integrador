@@ -76,6 +76,9 @@ class ClassificationRecordSchema(BaseSchema):
     judge_reasoning: str | None
     stored_path: str | None
     human_overridden: bool
+    original_label: str | None
+    expected_label: str | None
+    machine_review_route: str | None
 
     @classmethod
     def from_model(cls, record: ClassificationRecord) -> "ClassificationRecordSchema":
@@ -99,6 +102,9 @@ class ClassificationRecordSchema(BaseSchema):
             judge_reasoning=record.judge_reasoning,
             stored_path=record.stored_path,
             human_overridden=record.human_overridden,
+            original_label=record.original_label,
+            expected_label=record.expected_label,
+            machine_review_route=record.machine_review_route,
         )
 
 

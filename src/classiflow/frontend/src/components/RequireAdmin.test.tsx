@@ -12,7 +12,7 @@ import { useAuth } from "../auth/AuthContext";
 describe("RequireAdmin", () => {
   it("redirects non-admins to /", () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { email: "u@example.com", isAdmin: false },
+      user: { email: "u@example.com", isAdmin: false, picture: null },
       isAdmin: false,
       isLoading: false,
       login: vi.fn(),
@@ -36,7 +36,7 @@ describe("RequireAdmin", () => {
 
   it("renders the protected route for admins", () => {
     vi.mocked(useAuth).mockReturnValue({
-      user: { email: "a@example.com", isAdmin: true },
+      user: { email: "a@example.com", isAdmin: true, picture: null },
       isAdmin: true,
       isLoading: false,
       login: vi.fn(),

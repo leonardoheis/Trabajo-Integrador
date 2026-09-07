@@ -345,12 +345,25 @@ question ──► embed ──► similarity search ◄────────
     Enter/Shift+Enter to step through matches, which scroll into view as they become active.
   - **Review Queue page** — the `human_review`/`escalate` backlog with its per-document step
     timeline, split out from the Classification table.
+  - **Reopen a review decision** (admin only) — a reviewer who files a document under the wrong
+    label used to have no way back: the decision endpoint refuses a second decision, and the
+    document is already filed and indexed. `POST /classification/{job_id}/reopen` returns it to
+    the queue, gated on `allowed_users.is_admin` and requiring a written reason that lands in
+    the audit log. The label is deliberately *not* reverted — records predating
+    `original_label` have no machine prediction to revert to, so the operation would otherwise
+    behave differently depending on when the record was created.
+  - **PDF first/last page** — `« First` and `Last »` beside Prev/Next, shown only on
+    multi-page documents. Signature pages are usually last, and stepping there one page at a
+    time was the common case.
   - **Job control** — queued or failed jobs can be discarded from the Processing page
     (`DELETE /pipeline/jobs/{job_id}`); jobs mid-flight are refused.
   - **Page-scoped model warmup** — navigating to Processing or Classification calls
     `POST /pipeline/warmup` (releasing the chat GGUF), and opening Chat calls
     `POST /knowledge/chat/warmup` (releasing the pipeline's models first). Both no-op while a
     job is running.
+  - **Metrics page** (`/metrics`) — strict vs. safeguarded accuracy, per-category
+    precision/recall/F1, a confusion matrix, and the list of wrong labels that reached
+    storage without review. Served by `GET /classification/metrics`.
   - **Light/dark theme toggle** and a reworked collapsible sidebar with Google profile pictures.
 
 ## Build Status

@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -47,6 +48,7 @@ from classiflow.ingesta.nodes import (
 )
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.ingesta.prompts import build_content_chain
+from classiflow.model_lifecycle.residency import GpuResidency, ManagedModel, ModelRole
 from classiflow.services.audit.service import AuditService
 from classiflow.services.pipeline.service import PipelineService, is_pipeline_busy
 from classiflow.storage.document_storage import LocalDiskStorage
@@ -221,23 +223,25 @@ class TestPipelineServiceGpuMemory:
             under_test.coordinator, "ainvoke", AsyncMock(side_effect=RuntimeError("node exploded"))
         )
 
+        # Substituted at the residency seam, so the assertion still covers all five
+        # models without reaching into each one's module.
         calls: list[str] = []
-        monkeypatch.setattr(
-            "classiflow.services.pipeline.service.unload_slm", lambda: calls.append("slm")
+        evictors = {
+            "slm": ModelRole.PIPELINE,
+            "bert": ModelRole.PIPELINE,
+            "chat": ModelRole.CHAT,
+            "kb_embedder": ModelRole.PIPELINE,
+            "duplicate_control_embedder": ModelRole.PIPELINE,
+        }
+        residency = GpuResidency(
+            [
+                ManagedModel(name=name, role=role, evict=partial(calls.append, name))
+                for name, role in evictors.items()
+            ],
+            pipeline_is_busy=lambda: False,
         )
         monkeypatch.setattr(
-            "classiflow.services.pipeline.service.unload_bert", lambda: calls.append("bert")
-        )
-        monkeypatch.setattr(
-            "classiflow.services.pipeline.service.unload_chat_llm", lambda: calls.append("chat")
-        )
-        monkeypatch.setattr(
-            "classiflow.services.pipeline.service.unload_kb_embedder",
-            lambda: calls.append("kb_embedder"),
-        )
-        monkeypatch.setattr(
-            "classiflow.services.pipeline.service.unload_duplicate_control_embedder",
-            lambda: calls.append("duplicate_control_embedder"),
+            "classiflow.services.pipeline.service.build_default_residency", lambda: residency
         )
 
         background_tasks = BackgroundTasks()

@@ -1,4 +1,7 @@
 from datetime import datetime
+from typing import Annotated
+
+from pydantic import StringConstraints
 
 from classiflow.api.schemas import BaseSchema
 from classiflow.database.models import ClassificationRecord
@@ -41,3 +44,15 @@ class ReviewQueueItem(BaseSchema):
 class ClassificationDecisionRequest(BaseSchema):
     label: str
     notes: str | None = None
+
+
+class ClassificationReopenRequest(BaseSchema):
+    """Why a decided classification is being returned to the review queue.
+
+    The reason is mandatory: a reopen overrides someone else's judgement, and the audit
+    log is the only record of why.
+    """
+
+    # Trimmed before validation, so "   " fails min_length rather than passing as a
+    # non-empty string that means nothing.
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]

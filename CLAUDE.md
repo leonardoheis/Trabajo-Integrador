@@ -66,12 +66,20 @@ Sources (inputs)
 /
 ├── .claude/                        Claude Code project settings
 ├── documents/                      Reference documents and architecture diagrams
+├── docs/
+│   ├── accuracy-metrics.md         Classification accuracy snapshot + metric guide
+│   ├── chat-architecture.md        RAG pipeline, memory, model lifecycle
+│   ├── architecture-reviews/       Dated architecture review reports (HTML)
+│   └── superpowers/                Specs and implementation plans
 ├── src/
 │   └── classiflow/                 Main Python package
 ├── pyproject.toml                  Dependencies and tool configuration (managed by uv)
 ├── uv.lock                         Locked dependency graph
 └── .pre-commit-config.yaml         Pre-commit hooks (ruff, mypy, gitleaks, uv-lock)
 ```
+
+Generated reports (architecture reviews, accuracy runs) go in `docs/`, not the OS temp
+directory — they are project artefacts and belong in version control.
 
 ## Environment setup
 
@@ -186,6 +194,17 @@ Apply this structure to every new LangGraph agent added to the project.
 
 - Package source lives in `src/classiflow/`.
 - All comments, docstrings, and commit messages are in English.
+- **Keep comments minimal.** A comment explains *why* in one or two lines, never a paragraph.
+  Do not narrate what a change does or recount the bug that motivated it — that belongs in the
+  commit message, not the code.
+- **Names carry the explanation; comments are the fallback.** Follow Clean Code (Robert C.
+  Martin): intention-revealing names, no single-letter or abbreviated identifiers outside a
+  tight loop index, functions that do one thing at one level of abstraction, no redundant
+  comment restating what a well-named symbol already says. A comment is warranted only for
+  the *why* a name cannot carry — a non-obvious constraint, a rejected alternative, an
+  external quirk. If a comment explains *what* the code does, rename until it doesn't.
+  References: [Clean Code summary](https://gist.github.com/cedrickchee/55ecfbaac643bf0c24da6874bf4feb08) ·
+  [cheat sheet](https://cheatography.com/costemaxime/cheat-sheets/summary-of-clean-code-by-robert-c-martin/)
 - Line length: 100. Quote style: double. (Configured in `[tool.ruff]`.)
 - Type annotations required on all functions in `src/` (mypy strict).
 - **Never use `from __future__ import annotations`** — quote forward references explicitly
@@ -226,6 +245,44 @@ Rules:
 - Use `try/except SpecificInfraError` (never bare `except` or `except Exception`).
 - Full rationale: `.claude/learnings.md`
 
+### Database engine support
+
+`get_engine()` never learns about a new database. To support one, add
+`database/dialects/<engine>.py` with a class satisfying `DialectTuning` (`matches`,
+`connect_args`, `on_connect`), import it in `registry.py`, and add it to `TUNINGS`
+**before** `DefaultTuning` — that one matches every URL, so anything after it is dead.
+
+Only engine-construction knobs belong in a tuning. Repositories, models and
+`get_session()` are dialect-agnostic and must stay that way: no `PRAGMA`, no raw `text()`
+SQL, and no engine-specific column types outside `database/dialects/`.
+
+### GPU model residency
+
+Never call an `unload_*` function directly. `model_lifecycle/residency.py` owns which
+models are resident and when it is safe to evict them; callers state intent
+(`reserve_for_chat`, `reserve_for_pipeline`, `reserve_for_judge`, `release_all`,
+`release_for_owner`) and the module resolves that to guarded evictions.
+
+The guard and the eviction must stay under one lock — checking first and evicting after
+leaves a window in which a generation can start, and freeing a model mid-generation hangs
+llama.cpp. `InFlightCounter` (`model_lifecycle/counter.py`) backs both the chat-generation
+and pipeline-job guards.
+
+### Immutable classification history
+
+Three fields on `ClassificationRecord` are written once and never rewritten:
+
+| Field | Meaning |
+|---|---|
+| `original_label` | The machine's prediction, preserved when a human overrides `label` |
+| `machine_review_route` | The route the confidence gate chose, before any human resolved it |
+| `expected_label` | Corpus ground truth derived from the filename |
+
+`review_route` and `label` are mutable workflow state. Reading them to answer a historical
+question ("did the safety net catch this?") is a bug — that is what `machine_review_route`
+is for. Anything that re-runs `RoutingNode` over an existing record must pass these through
+unchanged.
+
 ### `__init__.py` content
 
 `__init__.py` files may only contain `__version__`, re-exports, and `__all__`.
@@ -262,7 +319,8 @@ across PRs #25–#30). There is no active per-stage integration branch anymore �
 is a short-lived feature branch cut directly from `main` (e.g. `feat/chat-vram-isolation`,
 `feat/archive-daylight-theme`, `feat/inspectable-pipeline-steps`,
 `feat/chat-streaming-and-autoscroll`, `feat/chat-markdown-and-memory`,
-`feat/classification-search-and-sort`), PR'd back into `main` once done. Same authorization rule applies: implement on the branch, verify,
+`feat/classification-search-and-sort`, `docs/accuracy-measurement-plan`), PR'd back into
+`main` once done. Same authorization rule applies: implement on the branch, verify,
 present the summary, wait for explicit "authorize"/"yes"/"go ahead" before pushing or
 opening the PR.
 

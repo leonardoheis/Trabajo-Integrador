@@ -1,7 +1,12 @@
 from collections.abc import AsyncIterator
 
 from classiflow.database.repositories.conversation import InMemoryConversationRepository
-from classiflow.knowledge.memory.service import RAW_WINDOW_SIZE, MemoryService
+from classiflow.knowledge.memory.service import MemoryService
+from classiflow.settings import Settings
+
+RAW_WINDOW_SIZE = Settings.RAW_WINDOW_SIZE
+SUMMARY_BATCH_SIZE = Settings.SUMMARY_BATCH_SIZE
+_EXPECTED_FOLDS_AFTER_TWO_BATCHES = 2
 
 _USER = "memory-user@classiflow.dev"
 
@@ -68,28 +73,55 @@ class TestMemoryServiceRecordTurn:
         assert llm.calls == []
         assert await repo.get_summary(_USER) is None
 
-    async def test_summarizes_the_aging_out_turn_once_the_window_overflows(self) -> None:
+    async def test_does_not_summarize_until_a_full_batch_has_aged_out(self) -> None:
+        # Folding on every aged-out turn costs a full 8B generation per question.
+        repo = InMemoryConversationRepository()
+        llm = _StubChatLlm()
+        service = MemoryService(repo=repo, chat_llm=llm)
+
+        for i in range(RAW_WINDOW_SIZE + SUMMARY_BATCH_SIZE - 1):
+            await service.record_turn(_USER, f"q{i}", f"a{i}")
+
+        assert llm.calls == []
+
+    async def test_summarizes_the_whole_batch_in_one_call(self) -> None:
         repo = InMemoryConversationRepository()
         llm = _StubChatLlm(response="new summary")
         service = MemoryService(repo=repo, chat_llm=llm)
-        for i in range(RAW_WINDOW_SIZE):
+
+        for i in range(RAW_WINDOW_SIZE + SUMMARY_BATCH_SIZE):
             await service.record_turn(_USER, f"q{i}", f"a{i}")
-        await service.record_turn(_USER, "q-overflow", "a-overflow")
 
         assert len(llm.calls) == 1
         _system, user_prompt = llm.calls[0]
-        assert "q0" in user_prompt  # the oldest turn is the one that ages out
+        # Every turn in the batch reaches the prompt, oldest first.
+        for i in range(SUMMARY_BATCH_SIZE):
+            assert f"q{i}" in user_prompt
         assert await repo.get_summary(_USER) == "new summary"
 
-    async def test_a_summarization_failure_does_not_lose_the_saved_turn(self) -> None:
+    async def test_folds_a_second_batch_without_repeating_the_first(self) -> None:
+        repo = InMemoryConversationRepository()
+        llm = _StubChatLlm()
+        service = MemoryService(repo=repo, chat_llm=llm)
+
+        for i in range(RAW_WINDOW_SIZE + 2 * SUMMARY_BATCH_SIZE):
+            await service.record_turn(_USER, f"q{i}", f"a{i}")
+
+        assert len(llm.calls) == _EXPECTED_FOLDS_AFTER_TWO_BATCHES
+        _system, second_prompt = llm.calls[1]
+        assert f"q{SUMMARY_BATCH_SIZE}" in second_prompt
+        assert "q0" not in second_prompt  # already folded in by the first batch
+
+    async def test_a_summarization_failure_does_not_lose_the_saved_turns(self) -> None:
         repo = InMemoryConversationRepository()
         service = MemoryService(repo=repo, chat_llm=_FailingChatLlm())
-        for i in range(RAW_WINDOW_SIZE):
+        total = RAW_WINDOW_SIZE + SUMMARY_BATCH_SIZE
+
+        for i in range(total):
             await service.record_turn(_USER, f"q{i}", f"a{i}")
-        await service.record_turn(_USER, "q-overflow", "a-overflow")
 
         turns = await repo.all_turns(_USER)
-        assert len(turns) == RAW_WINDOW_SIZE + 1
+        assert len(turns) == total
         assert await repo.get_summary(_USER) is None
 
 

@@ -6,11 +6,13 @@ import { groupByPhase, type Phase } from "./timelinePhases";
 const STATUS_DOT: Record<string, string> = {
   passed: "bg-[var(--color-success)]",
   failed: "bg-[var(--color-danger)]",
+  degraded: "bg-[var(--color-status-review)]",
   started: "bg-[var(--color-accent)]",
   processing: "bg-[var(--color-accent)]",
 };
 
-const TERMINAL_STATUSES = new Set(["passed", "failed"]);
+const TERMINAL_STATUSES = new Set(["passed", "failed", "degraded"]);
+const SUCCEEDED_STATUSES = new Set(["passed", "degraded"]);
 
 function formatNodeName(node: string): string {
   return node
@@ -88,9 +90,11 @@ function PhaseGroup({ phase, expanded }: { phase: Phase; expanded: boolean }) {
   const live = isPhaseLive(phase);
   const dotClass = live
     ? "animate-pulse bg-[var(--color-accent)]"
-    : phase.entries.every((e) => e.status === "passed")
-      ? "bg-[var(--color-success)]"
-      : "bg-[var(--color-danger)]";
+    : phase.entries.some((e) => e.status === "failed")
+      ? "bg-[var(--color-danger)]"
+      : phase.entries.every((e) => SUCCEEDED_STATUSES.has(e.status))
+        ? "bg-[var(--color-success)]"
+        : "bg-[var(--color-danger)]";
 
   // Condensed mode only auto-expands the phase currently in progress; a phase that's
   // already terminal collapses to its summary line unless the user clicks it open, so a

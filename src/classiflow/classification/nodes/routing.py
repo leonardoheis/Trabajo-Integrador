@@ -95,4 +95,16 @@ class RoutingNode(BaseNode):
         record.judge_reasoning = routing_input.judge_reasoning
         record.stored_path = stored_path
         record.human_overridden = routing_input.human_overridden
+        record.original_label = routing_input.original_label
+        # Only ever set, never cleared: the second call to this node (from the
+        # human-decision endpoint) doesn't carry the corpus label, and an unconditional
+        # assign would erase what the first call stored.
+        if routing_input.expected_label is not None:
+            record.expected_label = routing_input.expected_label
+        # Write-once history: the first (machine) pass records its route; the
+        # human-decision pass must not overwrite it with the resolved route.
+        if record.machine_review_route is None:
+            record.machine_review_route = (
+                routing_input.machine_review_route or routing_input.review_route
+            )
         await self.classification_repo.save(record)

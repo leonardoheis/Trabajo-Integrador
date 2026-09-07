@@ -29,6 +29,10 @@ class SqlClassificationRecordRepository:
         )
         return list(result.scalars().all())
 
+    async def list_all(self) -> list[ClassificationRecord]:
+        result = await self._session.execute(select(ClassificationRecord))
+        return list(result.scalars().all())
+
 
 class InMemoryClassificationRecordRepository:
     def __init__(self) -> None:
@@ -47,3 +51,6 @@ class InMemoryClassificationRecordRepository:
 
     async def list_needing_human_review(self) -> list[ClassificationRecord]:
         return [r for r in self._records.values() if r.review_route == ReviewRoute.HUMAN_REVIEW]
+
+    async def list_all(self) -> list[ClassificationRecord]:
+        return list(self._records.values())

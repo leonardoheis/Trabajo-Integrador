@@ -192,8 +192,17 @@ class ClassificationRecord(Base):
     judge_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Set by RoutingNode once the file has been moved to its final location (Decision 8).
     stored_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # review_route above is mutated to "accept" on review, which would erase whether the
+    # safety net caught the miss. NULL means unknown, not "not escalated".
+    machine_review_route: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # Set by the human-decision endpoint (Decision 9).
     human_overridden: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # The machine's prediction, preserved when a human overrides `label` -- that makes
+    # each correction a labelled example.
+    original_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Corpus ground truth (see classification/ground_truth.py). NULL means unknown, which
+    # excludes the record from accuracy denominators.
+    expected_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )

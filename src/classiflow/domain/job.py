@@ -9,6 +9,7 @@ class JobStatus(str, Enum):
     PROCESSING = "processing"
     PASSED = "passed"
     FAILED = "failed"
+    DEGRADED = "degraded"
     REJECTED = "rejected"
     REVIEW = "review"
     DONE = "done"

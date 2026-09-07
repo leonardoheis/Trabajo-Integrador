@@ -4,10 +4,10 @@ import json
 from langchain_core.language_models import BaseLLM
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable, RunnableLambda
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from classiflow.domain.base import BaseEntity
-from classiflow.llm_json import JSON_OBJECT_RE, strip_trailing_commas
+from classiflow.llm_json import JSON_OBJECT_RE, escape_interior_quotes, strip_trailing_commas
 
 
 class EntityExtractionInput(BaseEntity):
@@ -44,12 +44,24 @@ class EntityExtractionOutput(BaseEntity):
     signatories: list[str] = Field(default_factory=list)
     article_count: int | None = None
 
+    @field_validator("number", mode="before")
+    @classmethod
+    def _coerce_number_to_string(cls, value: object) -> object:
+        # The prompt asks for the number "as it appears", so the field is a string --
+        # but a plain numeric act number comes back as a JSON int about as often.
+        return str(value) if isinstance(value, int) else value
+
 
 def _extract(text: str) -> EntityExtractionOutput:
     for m in JSON_OBJECT_RE.finditer(text):
+        cleaned = strip_trailing_commas(m.group())
         with contextlib.suppress(json.JSONDecodeError, ValueError):
-            cleaned = strip_trailing_commas(m.group())
             return EntityExtractionOutput.model_validate(json.loads(cleaned))
+        # Retried only after a straight parse fails: escaping is a repair heuristic, so
+        # it must never alter output that was already valid.
+        with contextlib.suppress(json.JSONDecodeError, ValueError):
+            repaired = json.loads(escape_interior_quotes(cleaned))
+            return EntityExtractionOutput.model_validate(repaired)
     msg = f"No valid JSON object found in LLM output: {text!r}"
     raise ValueError(msg)
 

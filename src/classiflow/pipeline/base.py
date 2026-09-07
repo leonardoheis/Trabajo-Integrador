@@ -85,8 +85,22 @@ class BaseNode:
         passed: bool,
         detail: AuditDetail,
     ) -> None:
-        duration_ms = int((time.monotonic() - start) * 1000)
         status = JobStatus.PASSED if passed else JobStatus.FAILED
+        await self._emit_status(ctx, start, status=status, detail=detail)
+
+    async def _emit_degraded(self, ctx: JobContext, start: float, *, detail: AuditDetail) -> None:
+        """Record a non-essential step that produced nothing but did not stop the job."""
+        await self._emit_status(ctx, start, status=JobStatus.DEGRADED, detail=detail)
+
+    async def _emit_status(
+        self,
+        ctx: JobContext,
+        start: float,
+        *,
+        status: JobStatus,
+        detail: AuditDetail,
+    ) -> None:
+        duration_ms = int((time.monotonic() - start) * 1000)
         await self.broadcaster.emit(NodeEvent(job_id=ctx.job_id, node=self.name, status=status))
         await self.audit.record(
             ctx.job_id, self.name, status.value, duration_ms=duration_ms, detail=detail

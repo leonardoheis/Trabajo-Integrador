@@ -9,6 +9,7 @@ from classiflow.api.error_handlers.auth import (
 )
 from classiflow.api.error_handlers.classification import (
     handle_classification_not_accepted_error,
+    handle_classification_not_decided_error,
     handle_classification_not_in_review_error,
     handle_classification_record_not_found_error,
 )
@@ -24,6 +25,7 @@ from classiflow.api.error_handlers.pipeline import (
 )
 from classiflow.classification.exceptions import (
     ClassificationNotAcceptedError,
+    ClassificationNotDecidedError,
     ClassificationNotInReviewError,
     ClassificationRecordNotFoundError,
 )
@@ -44,6 +46,7 @@ EXCEPTION_HANDLERS: dict[type[Exception], ExceptionHandler] = {
     JobNotFoundError: handle_job_not_found_error,
     JobNotInReviewError: handle_job_not_in_review_error,
     ClassificationRecordNotFoundError: handle_classification_record_not_found_error,
+    ClassificationNotDecidedError: handle_classification_not_decided_error,
     ClassificationNotInReviewError: handle_classification_not_in_review_error,
     ClassificationNotAcceptedError: handle_classification_not_accepted_error,
     KnowledgeError: handle_knowledge_error,

@@ -37,6 +37,9 @@ class _Settings(BaseSettings):
     )
 
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/classiflow.db")
+    # Ceiling on how long a blocked SQLite writer waits, not an expected latency: under
+    # normal load writers acquire the lock in milliseconds.
+    SQLITE_BUSY_TIMEOUT_SECONDS: int = int(os.getenv("SQLITE_BUSY_TIMEOUT_SECONDS", "30"))
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your_secret_key")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     NODE2_MODEL_PATH: str = _DEFAULT_MODEL
@@ -93,6 +96,14 @@ class _Settings(BaseSettings):
     # Retrieval passages plus the question do not fit in the 2048 the validation nodes
     # use, so the chat model gets its own context size.
     CHAT_MODEL_N_CTX: int = int(os.getenv("CHAT_MODEL_N_CTX", "3072"))
+
+    # Conversation turns kept verbatim in the prompt. Bounded by CHAT_MODEL_N_CTX: this
+    # many exchanges plus retrieved passages plus the question must fit.
+    RAW_WINDOW_SIZE: int = int(os.getenv("RAW_WINDOW_SIZE", "6"))
+    # Aged-out turns are folded into the summary in batches. Each fold is a full 8B
+    # generation that serializes against the user's next chat, so folding one turn at a
+    # time spends ~10x the GPU for a marginally fresher summary.
+    SUMMARY_BATCH_SIZE: int = int(os.getenv("SUMMARY_BATCH_SIZE", "10"))
 
     GOOGLE_CLIENT_ID: str = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET: str = os.getenv("GOOGLE_CLIENT_SECRET", "")

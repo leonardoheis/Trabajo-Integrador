@@ -8,7 +8,7 @@ interface AuthContextValue {
   isAdmin: boolean;
   isLoading: boolean;
   login: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -35,8 +35,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(currentUser);
   }
 
-  function logout(): void {
-    logoutRequest().catch(() => {});
+  async function logout(): Promise<void> {
+    // Awaited before clearToken(): /auth/logout is auth-gated.
+    try {
+      await logoutRequest();
+    } catch (error) {
+      // Not rethrown -- local sign-out must work even if the server is unreachable.
+      console.error("Sign-out request failed; models may still be loaded", error);
+    }
     clearToken();
     setUser(null);
   }

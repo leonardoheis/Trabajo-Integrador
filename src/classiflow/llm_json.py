@@ -15,3 +15,21 @@ _TRAILING_COMMA_RE = re.compile(r",(\s*[}\]])")
 
 def strip_trailing_commas(text: str) -> str:
     return _TRAILING_COMMA_RE.sub(r"\1", text)
+
+
+# A quote that opens or closes a JSON string is always adjacent to structure -- a colon,
+# comma, brace or bracket, modulo whitespace. One that is not came from the source
+# document (OCR noise routinely carries stray quotes) and the model copied it into a
+# value without escaping it, which json.loads rejects.
+_INTERIOR_QUOTE_RE = re.compile(r'(?<![:,\[{\s])"(?![:,\]}\s])')
+
+
+def escape_interior_quotes(text: str) -> str:
+    """Escape quotes that sit inside a JSON string value rather than delimiting one.
+
+    Returns:
+        The text with interior quotes backslash-escaped, ready for a second parse attempt.
+    """
+    # A lambda, not a template string: re.sub reads backslashes in the replacement, so a
+    # literal "\\\"" template emits two backslashes and breaks the value it repairs.
+    return _INTERIOR_QUOTE_RE.sub(lambda _: '\\"', text)

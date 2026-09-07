@@ -82,16 +82,30 @@ class TestEntityExtractorRun:
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].event == "passed"
 
-    async def test_run_emits_failed_and_reraises_on_error(self) -> None:
-        broadcaster = EventBroadcaster()
+
+class TestEntityExtractorDegradesInsteadOfFailing:
+    """Entities are enrichment metadata: nothing in classification reads them, and the
+    knowledge indexer already treats every field as optional. A document the model cannot
+    describe is still a document worth classifying."""
+
+    async def test_run_returns_an_empty_result_rather_than_raising(self) -> None:
+        node = _node("not json")
+        result = await node.run(JobContext(job_id=_JOB_ID, filename="doc.pdf"), "Artículo 1º ...")
+        assert result.doc_type_hint is None
+        assert result.signatories == []
+
+    async def test_run_audits_the_degradation_and_its_reason(self) -> None:
         audit_repo = InMemoryAuditRepository()
         node = EntityExtractorNode(
             audit=AuditService(audit_repo),
-            broadcaster=broadcaster,
+            broadcaster=EventBroadcaster(),
             entity_chain=build_entity_extraction_chain(MockLlm(response="not json")),
         )
-        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
-        with pytest.raises(EntityExtractionFailedError):
-            await node.run(ctx, "Artículo 1º ...")
+        await node.run(JobContext(job_id=_JOB_ID, filename="doc.pdf"), "Artículo 1º ...")
         records = await audit_repo.list_for_job(_JOB_ID)
-        assert records[0].event == "failed"
+        assert records[0].event == "degraded"
+        assert "No valid JSON object" in str(records[0].detail)
+
+    def test_extract_still_raises_so_callers_can_distinguish_the_cases(self) -> None:
+        with pytest.raises(EntityExtractionFailedError, match="No valid JSON object"):
+            _node("not json").extract("Artículo 1º ...")
