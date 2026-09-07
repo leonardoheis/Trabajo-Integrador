@@ -103,6 +103,7 @@ class _ServiceUnderTest:
     job_repo: InMemoryJobRepository
     enriched_record_repo: InMemoryEnrichedRecordRepository
     broadcaster: EventBroadcaster
+    audit_repo: InMemoryAuditRepository
 
 
 def _build_service(
@@ -111,7 +112,8 @@ def _build_service(
     *,
     coordinator_override: "CompiledStateGraph | None" = None,  # type: ignore[type-arg]
 ) -> _ServiceUnderTest:
-    audit = AuditService(InMemoryAuditRepository())
+    audit_repo = InMemoryAuditRepository()
+    audit = AuditService(audit_repo)
     broadcaster = EventBroadcaster()
 
     n1 = FileReceptionNode(
@@ -198,6 +200,7 @@ def _build_service(
         job_repo=job_repo,
         enriched_record_repo=enriched_record_repo,
         broadcaster=broadcaster,
+        audit_repo=audit_repo,
     )
 
 
@@ -221,8 +224,11 @@ class TestPipelineServiceEnrichmentHappyPath:
         assert record.metadata_["source"] == "manual_upload"
 
 
-class TestPipelineServiceEnrichmentFailurePath:
-    async def test_enrichment_failure_marks_job_for_review(self, tmp_path: Path) -> None:
+class TestPipelineServiceUnparseableEntities:
+    """Entity extraction is not essential, so a document whose entities cannot be parsed
+    still reaches classification instead of stopping at review."""
+
+    async def test_job_completes_with_empty_entities(self, tmp_path: Path) -> None:
         under_test = _build_service("not json at all", tmp_path)
         background_tasks = BackgroundTasks()
         job_id = await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
@@ -231,13 +237,24 @@ class TestPipelineServiceEnrichmentFailurePath:
 
         job = await under_test.job_repo.find_by_job_id(job_id)
         assert job is not None
-        assert job.status == "review"
-        assert job.review_action_needed == "enrichment_failed"
-        assert job.failed_at_node == "enrichment"
-        assert "Enrichment failed after retries" in (job.rejection_reason or "")
+        assert job.status != "review"
+        assert job.failed_at_node is None
 
         record = await under_test.enriched_record_repo.find_by_job_id(job_id)
-        assert record is None
+        assert record is not None
+        assert record.entities["doc_type_hint"] is None
+
+    async def test_the_degradation_is_audited(self, tmp_path: Path) -> None:
+        under_test = _build_service("not json at all", tmp_path)
+        background_tasks = BackgroundTasks()
+        job_id = await under_test.service.start(background_tasks, "ordenanza.pdf", _MINIMAL_PDF)
+        for task in background_tasks.tasks:
+            await task()
+
+        records = await under_test.audit_repo.list_for_job(job_id)
+        degraded = [r for r in records if r.event == "degraded"]
+        assert len(degraded) == 1
+        assert degraded[0].node == "enrichment_entity_extractor"
 
 
 class TestPipelineServiceStaging:

@@ -38,3 +38,40 @@ class TestBuildEntityExtractionChain:
         output = chain.invoke(EntityExtractionInput(cleaned_text="..."))
         assert output.doc_type_hint is None
         assert output.signatories == []
+
+
+# The literal output that failed on decreto_837_2026.pdf: OCR noise put unescaped quotes
+# inside a string value, which is malformed JSON rather than a regex-matching problem.
+_UNESCAPED_QUOTES_RESPONSE = (
+    '{"doc_type_hint": "decreto", "number": 3, "year": null, '
+    '"issuing_body": "Municipalidad de Rosario", '
+    '"signatories": ["LEDAD RODRIGUEZ", "110-""i""\',v-t,E ROSARIO Intendente"], '
+    '"article_count": 3}'
+)
+
+
+class TestUnescapedQuotesInStringValues:
+    def test_recovers_the_surrounding_fields(self) -> None:
+        chain = build_entity_extraction_chain(MockLlm(response=_UNESCAPED_QUOTES_RESPONSE))
+        output = chain.invoke(EntityExtractionInput(cleaned_text="..."))
+        assert output.doc_type_hint == "decreto"
+        assert output.issuing_body == "Municipalidad de Rosario"
+        assert output.article_count == _EXPECTED_ARTICLE_COUNT
+
+    def test_recovers_the_signatories_around_the_noise(self) -> None:
+        chain = build_entity_extraction_chain(MockLlm(response=_UNESCAPED_QUOTES_RESPONSE))
+        output = chain.invoke(EntityExtractionInput(cleaned_text="..."))
+        assert output.signatories[0] == "LEDAD RODRIGUEZ"
+
+    def test_leaves_a_valid_response_untouched(self) -> None:
+        """The repair is a fallback: it must never rewrite output that already parsed."""
+        chain = build_entity_extraction_chain(MockLlm(response=_VALID_RESPONSE))
+        output = chain.invoke(EntityExtractionInput(cleaned_text="..."))
+        assert output.signatories == ["Hermes Binner"]
+
+
+class TestNumericActNumber:
+    def test_coerces_an_integer_number_to_a_string(self) -> None:
+        chain = build_entity_extraction_chain(MockLlm(response='{"number": 3}'))
+        output = chain.invoke(EntityExtractionInput(cleaned_text="..."))
+        assert output.number == "3"

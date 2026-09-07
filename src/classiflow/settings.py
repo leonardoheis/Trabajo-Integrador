@@ -37,6 +37,9 @@ class _Settings(BaseSettings):
     )
 
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/classiflow.db")
+    # Ceiling on how long a blocked SQLite writer waits, not an expected latency: under
+    # normal load writers acquire the lock in milliseconds.
+    SQLITE_BUSY_TIMEOUT_SECONDS: int = int(os.getenv("SQLITE_BUSY_TIMEOUT_SECONDS", "30"))
     JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your_secret_key")
     JWT_EXPIRE_MINUTES: int = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
     NODE2_MODEL_PATH: str = _DEFAULT_MODEL

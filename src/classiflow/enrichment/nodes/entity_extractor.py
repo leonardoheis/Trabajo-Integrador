@@ -46,13 +46,12 @@ class EntityExtractorNode(BaseNode):
         try:
             result = await asyncio.to_thread(self.extract, cleaned_text)
         except EntityExtractionFailedError as exc:
-            await self._emit_and_audit(
+            await self._emit_degraded(
                 ctx,
                 start,
-                passed=False,
                 detail=AuditDetail.model_validate({"filename": ctx.filename, "error": str(exc)}),
             )
-            raise
+            return EntityExtractionResult()
         await self._emit_and_audit(
             ctx,
             start,

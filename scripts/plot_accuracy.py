@@ -8,14 +8,13 @@ import collections
 import sqlite3
 from pathlib import Path
 
-import matplotlib
+import matplotlib as mpl
 
-matplotlib.use("Agg")
+mpl.use("Agg")
 import matplotlib.pyplot as plt
 
-_PROJECT_ROOT = Path(__file__).parents[1]
-_DATABASE = _PROJECT_ROOT / "data" / "classiflow.db"
-_OUTPUT = _PROJECT_ROOT / "docs" / "accuracy-charts.png"
+_DATABASE = Path("data") / "classiflow.db"
+_OUTPUT = Path("docs") / "accuracy-charts.png"
 
 _HUMAN_REVIEW = "human_review"
 _SHORT_NAMES = {
@@ -26,7 +25,11 @@ _SHORT_NAMES = {
 
 
 def _scored_pairs(connection: sqlite3.Connection) -> list[tuple[str, str, bool]]:
-    """Truth, prediction and whether the safety net caught it, per scoreable record."""
+    """Score every record the same way MetricsService does.
+
+    Returns:
+        One (truth, prediction, was_escalated) triple per scoreable record.
+    """
     rows = connection.execute("""
         SELECT label, original_label, expected_label, machine_review_route, human_overridden
         FROM classification_records
@@ -127,9 +130,6 @@ def main() -> None:
 
     figure.tight_layout()
     figure.savefig(_OUTPUT, dpi=150)
-    print(f"strict {correct}/{total} = {strict_pct:.1f}%")
-    print(f"safeguarded {safeguarded}/{total} = {safeguarded_pct:.1f}%")
-    print(f"written to {_OUTPUT}")
 
 
 if __name__ == "__main__":
