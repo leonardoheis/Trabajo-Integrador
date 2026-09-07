@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from functools import lru_cache
 
 from sqlalchemy import event
@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import ConnectionPoolEntry
 
+from classiflow.database.dialects import DialectTuning, resolve_tuning
 from classiflow.settings import Settings
 
 
@@ -19,35 +20,30 @@ class Base(DeclarativeBase):
     pass
 
 
-def _is_sqlite(url: str) -> bool:
-    return url.startswith("sqlite")
+_ConnectListener = Callable[[DBAPIConnection, ConnectionPoolEntry], None]
 
 
-def _tune_sqlite_connection(
-    dbapi_connection: DBAPIConnection, _record: ConnectionPoolEntry
-) -> None:
-    cursor = dbapi_connection.cursor()
-    try:
-        # busy_timeout first: switching journal mode itself needs an exclusive lock, so
-        # without it this very pragma raises "database is locked" under the concurrency
-        # WAL exists to relieve. connect_args' timeout does not cover pragmas run here.
-        cursor.execute(f"PRAGMA busy_timeout={Settings.SQLITE_BUSY_TIMEOUT_SECONDS * 1000}")
-        cursor.execute("PRAGMA journal_mode=WAL")
-    finally:
-        cursor.close()
+def _connect_listener(tuning: DialectTuning) -> _ConnectListener:
+    """Adapt a tuning to SQLAlchemy's connect event, which passes the pool record too.
+
+    Returns:
+        A listener that forwards each new connection to the tuning and drops the record.
+    """
+
+    def listen(dbapi_connection: DBAPIConnection, _record: ConnectionPoolEntry) -> None:
+        tuning.on_connect(dbapi_connection)
+
+    return listen
 
 
 @lru_cache(maxsize=1)
 def get_engine() -> AsyncEngine:
     url = Settings.DATABASE_URL
-    # SQLite defaults busy_timeout to 0: a writer that finds the file locked raises
-    # instead of waiting. Bulk ingest writes jobs while background jobs write steps.
-    connect_args = {"timeout": Settings.SQLITE_BUSY_TIMEOUT_SECONDS} if _is_sqlite(url) else {}
-    engine = create_async_engine(url, echo=False, connect_args=connect_args)
-    if _is_sqlite(url):
-        # WAL lets the once-per-second job polling read while a write is in flight,
-        # rather than each waiting out the other.
-        event.listen(engine.sync_engine, "connect", _tune_sqlite_connection)
+    # Which engine this is, and what it needs, lives in database/dialects/ -- adding one
+    # adds a file there and never edits this function.
+    tuning = resolve_tuning(url)
+    engine = create_async_engine(url, echo=False, connect_args=tuning.connect_args())
+    event.listen(engine.sync_engine, "connect", _connect_listener(tuning))
     return engine
 
 

@@ -35,7 +35,26 @@ dialect-specific column types or query builders; SQLAlchemy already abstracts th
 
 ## Design
 
-One module, `database/dialects.py`, holding a Protocol and a registry.
+A `database/dialects/` package, one file per engine:
+
+```
+database/
+├── base.py            engine construction, session factory, get_session
+└── dialects/
+    ├── __init__.py    re-exports DialectTuning, resolve_tuning
+    ├── protocol.py    DialectTuning
+    ├── registry.py    _TUNINGS, resolve_tuning, DefaultTuning
+    ├── sqlite.py      SqliteTuning
+    └── postgres.py    (a future engine lands here — not in this spec)
+```
+
+The tree is the documentation: which engines are specialized is visible from the file
+list, and adding one means adding a file rather than growing a module. This mirrors how
+`enrichment/nodes/` and `classification/nodes/` are already organized — one file per node
+rather than one module holding all of them, which CLAUDE.md records as a deliberate
+choice for this project's size.
+
+The package holds a Protocol and a registry.
 
 ```python
 @runtime_checkable
@@ -63,11 +82,25 @@ def get_engine() -> AsyncEngine:
     return engine
 ```
 
-`resolve_tuning` walks a module-level tuple and returns the first match, falling back to
+`resolve_tuning` walks `registry.py`'s tuple and returns the first match, falling back to
 `DefaultTuning` — empty `connect_args`, no-op `on_connect` — so an unregistered URL
 behaves exactly as an unguarded engine does today. **A missing dialect is not an error:**
 SQLAlchemy already supports every engine it ships; tuning is an optional refinement, so
 failing closed here would break working databases to enforce a registry nobody needs.
+
+### What Open/Closed does and does not buy here
+
+`get_engine` becomes genuinely closed: adding an engine never touches it, and the
+`if _is_sqlite(...)` chain that would otherwise grow disappears.
+
+`registry.py` stays open — a new engine appends one entry to `_TUNINGS`. That is
+deliberate. Self-registration through `__init_subclass__` or entry points would remove
+the edit, but it makes import order decide whether a dialect exists: forget the import and
+tuning silently vanishes, with no error. An explicit tuple is greppable, ordered
+(`DefaultTuning` must stay last), and reviewable in a diff.
+
+The distinction that matters is that OCP protects *logic*, not lists. Appending to a
+declarative tuple changes no behaviour; editing a conditional does.
 
 ### Why a Protocol and not an ABC
 
@@ -117,6 +150,17 @@ so the extra families would each have exactly one member.
 **Push tuning into `Settings`.** Rejected: settings is a value object read by many
 modules; putting `event.listen` behaviour there would give configuration a runtime side
 effect and couple it to SQLAlchemy.
+
+**A single flat `dialects.py`.** Two classes and a registry fit in one ~50-line module,
+and four files to hold that is more structure than content. Rejected because the flat
+file hides what varies: nothing in the directory listing says SQLite is specialized, so a
+reader has to open the module to find out, and the second engine turns it into a grab
+bag. The package makes the extension point visible at the cost of three small files.
+
+**Self-registering dialects** (`__init_subclass__`, entry points, or auto-import of every
+module in the package). Rejected: all three make import order decide whether a dialect is
+active, and a forgotten import disables tuning silently rather than loudly. See the
+Open/Closed note above.
 
 ## Open question
 

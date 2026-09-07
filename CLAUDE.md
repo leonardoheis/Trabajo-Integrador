@@ -245,6 +245,17 @@ Rules:
 - Use `try/except SpecificInfraError` (never bare `except` or `except Exception`).
 - Full rationale: `.claude/learnings.md`
 
+### Database engine support
+
+`get_engine()` never learns about a new database. To support one, add
+`database/dialects/<engine>.py` with a class satisfying `DialectTuning` (`matches`,
+`connect_args`, `on_connect`), import it in `registry.py`, and add it to `TUNINGS`
+**before** `DefaultTuning` — that one matches every URL, so anything after it is dead.
+
+Only engine-construction knobs belong in a tuning. Repositories, models and
+`get_session()` are dialect-agnostic and must stay that way: no `PRAGMA`, no raw `text()`
+SQL, and no engine-specific column types outside `database/dialects/`.
+
 ### GPU model residency
 
 Never call an `unload_*` function directly. `model_lifecycle/residency.py` owns which
