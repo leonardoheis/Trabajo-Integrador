@@ -99,6 +99,8 @@ def _reroute(
         smell_review_suggested=record.smell_review_suggested,
         foreign_municipality=record.foreign_municipality,
         judged_by_llm=record.judged_by_llm,
+        judge_final_label=record.judge_final_label,
+        judge_reasoning=record.judge_reasoning,
         human_overridden=human_overridden,
         original_label=(
             record.original_label or record.label if capture_prediction else record.original_label

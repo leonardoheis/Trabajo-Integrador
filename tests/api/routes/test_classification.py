@@ -437,6 +437,34 @@ class TestClassificationDecisionEndpoint:
         assert record.label == "decretos"  # the human's choice
         assert record.original_label == "ordenanzas"  # what the model actually said
 
+    async def test_override_preserves_the_judge_verdict(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        # The judge's verdict is why a flagged document was routed the way it was. A
+        # human decision resolves the route; it does not un-run the judge.
+        await _seed_human_review_job(
+            test_container,
+            "judge-survives-001",
+            "doc.pdf",
+            judged_by_llm=True,
+            judge_final_label="resoluciones",
+            judge_reasoning="the second opinion's evidence is stronger",
+        )
+
+        client.post(
+            "/classification/judge-survives-001/decision",
+            json={"label": "decretos"},
+            headers=auth_headers,
+        )
+
+        record = await test_container.classification_record_repo().find_by_job_id(
+            "judge-survives-001"
+        )
+        assert record is not None
+        assert record.judged_by_llm is True
+        assert record.judge_final_label == "resoluciones"
+        assert record.judge_reasoning == "the second opinion's evidence is stronger"
+
     async def test_override_preserves_the_original_machine_route(
         self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
     ) -> None:
