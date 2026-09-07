@@ -70,6 +70,9 @@ class LlmJudgeNode(BaseNode):
             detail=AuditDetail.model_validate({
                 "filename": ctx.filename,
                 "accept": result.accept,
+                # A rejection names a category that lives nowhere else: `accept` alone
+                # only reconstructs the label when the judge agreed with the classifier.
+                "final_label": result.final_label,
                 "reasoning": result.reasoning,
             }),
         )

@@ -109,6 +109,20 @@ class TestLlmJudgeRun:
         records = await audit_repo.list_for_job(_JOB_ID)
         assert records[0].event == "passed"
 
+    async def test_run_audits_the_verdict_it_reached(self) -> None:
+        # The audit log is the recovery source of last resort: a record's judge fields can
+        # be lost, and a verdict of "reject" cannot be reconstructed from anything else.
+        audit_repo = InMemoryAuditRepository()
+        node = LlmJudgeNode(
+            audit=AuditService(audit_repo),
+            broadcaster=EventBroadcaster(),
+            judge_chain=build_judge_chain(MockLlm(response=_VALID_RESPONSE)),
+        )
+        await node.run(JobContext(job_id=_JOB_ID, filename="doc.pdf"), _JUDGE_INPUT)
+        detail = (await audit_repo.list_for_job(_JOB_ID))[0].detail
+        assert detail is not None
+        assert detail["final_label"] == "resoluciones_concejo_municipal"
+
     async def test_run_emits_failed_and_reraises_on_error(self) -> None:
         broadcaster = EventBroadcaster()
         audit_repo = InMemoryAuditRepository()
