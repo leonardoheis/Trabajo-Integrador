@@ -83,8 +83,9 @@ export default function ClassificationPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(PAGE_SIZE_OPTIONS[1]);
-  const [sortField, setSortField] = useState<SortField | undefined>(undefined);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  // Newest first: the documents just ingested are the ones a reviewer is looking for.
+  const [sortField, setSortField] = useState<SortField | undefined>("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [syncResult, setSyncResult] = useState<SynchronizeKbResult | null>(null);

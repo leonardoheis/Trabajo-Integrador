@@ -133,20 +133,30 @@ class TestReopenClassificationEndpoint:
     differently depending on when the record was created.
     """
 
-    async def _decided_job(self, test_container: TestContainer, job_id: str) -> None:
+    async def _decided_job(
+        self,
+        test_container: TestContainer,
+        job_id: str,
+        client: TestClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        """Decide through the endpoint, so the fixture exercises the real write path."""
         await _seed_human_review_job(test_container, job_id, "convenio.pdf")
         record = await test_container.classification_record_repo().find_by_job_id(job_id)
         assert record is not None
-        record.review_route = "accept"
-        record.label = "ordenanzas"
-        record.human_overridden = True
-        record.original_label = "convenios"
+        record.label = "convenios"
         await test_container.classification_record_repo().save(record)
+        response = client.post(
+            f"/classification/{job_id}/decision",
+            json={"label": "ordenanzas"},
+            headers=auth_headers,
+        )
+        assert response.status_code == HTTPStatus.OK
 
     async def test_a_non_admin_cannot_reopen(
         self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
     ) -> None:
-        await self._decided_job(test_container, "reopen-forbidden")
+        await self._decided_job(test_container, "reopen-forbidden", client, auth_headers)
 
         response = client.post(
             "/classification/reopen-forbidden/reopen",
@@ -167,7 +177,7 @@ class TestReopenClassificationEndpoint:
         admin_auth_headers: dict[str, str],
         test_container: TestContainer,
     ) -> None:
-        await self._decided_job(test_container, "reopen-ok")
+        await self._decided_job(test_container, "reopen-ok", client, admin_auth_headers)
 
         response = client.post(
             "/classification/reopen-ok/reopen",
@@ -187,7 +197,7 @@ class TestReopenClassificationEndpoint:
         admin_auth_headers: dict[str, str],
         test_container: TestContainer,
     ) -> None:
-        await self._decided_job(test_container, "reopen-history")
+        await self._decided_job(test_container, "reopen-history", client, admin_auth_headers)
 
         client.post(
             "/classification/reopen-history/reopen",
@@ -222,7 +232,7 @@ class TestReopenClassificationEndpoint:
         admin_auth_headers: dict[str, str],
         test_container: TestContainer,
     ) -> None:
-        await self._decided_job(test_container, "reopen-blank")
+        await self._decided_job(test_container, "reopen-blank", client, admin_auth_headers)
 
         response = client.post(
             "/classification/reopen-blank/reopen",
@@ -266,7 +276,7 @@ class TestReopenClassificationEndpoint:
         admin_auth_headers: dict[str, str],
         test_container: TestContainer,
     ) -> None:
-        await self._decided_job(test_container, "reopen-redecide")
+        await self._decided_job(test_container, "reopen-redecide", client, auth_headers)
 
         client.post(
             "/classification/reopen-redecide/reopen",
@@ -510,3 +520,123 @@ class TestClassificationDecisionEndpoint:
         assert record is not None
         assert record.label == "decretos"
         assert record.original_label == "ordenanzas"
+
+
+# Distinct values so an omitted field shows as a change, not a shared default.
+_MARKED_FIELDS: dict[str, object] = {
+    "enriched_id": 7,
+    "confidence": 0.42,
+    "all_scores": {"ordenanzas": 0.42, "decretos": 0.31},
+    "second_opinion_label": "decretos_concejo_municipal",
+    "second_opinion_confidence": 0.77,
+    "classifier_disagreement": True,
+    # Full OodMetrics shape: the human paths leave this column alone, so whatever is
+    # seeded is what must come back.
+    "ood_metrics": {
+        "mahalanobis_p_value": 0.5,
+        "mahalanobis_p_value_theoretical": 0.5,
+        "cosine_z": 1.5,
+        "knn_distance": 2.5,
+        "tfidf_cosine_z": None,
+        "in_distribution": True,
+        "mahalanobis_calibration_status": "calibrated",
+        "cosine_calibration_status": "calibrated",
+        "knn_distance_calibration_status": "calibrated",
+        "tfidf_calibration_status": None,
+        "smells": [],
+    },
+    "svm_scores": {"ordenanzas": 0.66},
+    "svm_agrees_with_prediction": False,
+    "smells": ["foreign_municipality", "low_confidence"],
+    "risk_score": 3,
+    "smell_review_suggested": True,
+    "foreign_municipality": "Santa Fe",
+    "judged_by_llm": True,
+    "judge_final_label": "resoluciones",
+    "judge_reasoning": "the second opinion carries the stronger evidence",
+    "expected_label": "ordenanzas",
+    "machine_review_route": "human_review",
+}
+
+
+async def _seed_fully_marked_record(
+    test_container: TestContainer, job_id: str, *, review_route: str, **overrides: object
+) -> None:
+    await test_container.job_repo().create(
+        Job(job_id=job_id, filename="marked.pdf", status="accepted")
+    )
+    fields: dict[str, object] = {
+        "job_id": job_id,
+        "label": "ordenanzas",
+        "review_route": review_route,
+        "human_overridden": False,
+        "original_label": None,
+        "stored_path": None,
+        **_MARKED_FIELDS,
+        **overrides,
+    }
+    await test_container.classification_record_repo().save(ClassificationRecord(**fields))
+    storage = test_container.document_storage()
+    await storage.save_staged(job_id, "marked.pdf", b"%PDF-1.4 fake bytes")
+    await storage.move_to_final(job_id, "marked.pdf", f"review/{review_route}")
+
+
+class TestHumanPathsPreserveEveryUnownedField:
+    """The endpoints restate 19 fields they have no opinion about, and every field has a
+    default -- so omitting one writes NULL silently. Naming them all makes that loud."""
+
+    async def test_a_decision_changes_only_what_it_owns(
+        self, client: TestClient, auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        await _seed_fully_marked_record(
+            test_container, "characterize-decide", review_route="human_review"
+        )
+
+        response = client.post(
+            "/classification/characterize-decide/decision",
+            json={"label": "decretos"},
+            headers=auth_headers,
+        )
+        assert response.status_code == HTTPStatus.OK
+
+        record = await test_container.classification_record_repo().find_by_job_id(
+            "characterize-decide"
+        )
+        assert record is not None
+        assert record.label == "decretos"
+        assert record.review_route == "accept"
+        assert record.human_overridden is True
+        assert record.original_label == "ordenanzas"
+        assert record.stored_path is not None
+        for field, value in _MARKED_FIELDS.items():
+            assert getattr(record, field) == value, f"{field} was not preserved"
+
+    async def test_a_reopen_changes_only_what_it_owns(
+        self, client: TestClient, admin_auth_headers: dict[str, str], test_container: TestContainer
+    ) -> None:
+        await _seed_fully_marked_record(
+            test_container,
+            "characterize-reopen",
+            review_route="accept",
+            human_overridden=True,
+            original_label="decretos",
+        )
+
+        response = client.post(
+            "/classification/characterize-reopen/reopen",
+            json={"reason": "filed under the wrong category"},
+            headers=admin_auth_headers,
+        )
+        assert response.status_code == HTTPStatus.OK
+
+        record = await test_container.classification_record_repo().find_by_job_id(
+            "characterize-reopen"
+        )
+        assert record is not None
+        assert record.review_route == "human_review"
+        # Not reverted by design, and never recaptured from the reviewer's answer.
+        assert record.label == "ordenanzas"
+        assert record.original_label == "decretos"
+        assert record.human_overridden is True
+        for field, value in _MARKED_FIELDS.items():
+            assert getattr(record, field) == value, f"{field} was not preserved"

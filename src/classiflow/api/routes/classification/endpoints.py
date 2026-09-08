@@ -16,8 +16,6 @@ from classiflow.api.routes.classification.schemas import (
     ClassificationReopenRequest,
     ReviewQueueItem,
 )
-from classiflow.classification.bert.ood_scorer import OodMetrics
-from classiflow.classification.domain.results import RoutingInput
 from classiflow.classification.domain.review_route import ReviewRoute
 from classiflow.classification.exceptions import (
     ClassificationNotDecidedError,
@@ -25,7 +23,6 @@ from classiflow.classification.exceptions import (
     ClassificationRecordNotFoundError,
 )
 from classiflow.classification.nodes.routing import RoutingNode
-from classiflow.database.models import ClassificationRecord
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
 from classiflow.domain.repositories.job import IJobRepository
@@ -58,56 +55,6 @@ async def accuracy_metrics(
     job_repo: Annotated[IJobRepository, Depends(get_job_repo)],
 ) -> AccuracyReport:
     return await MetricsService(classification_repo, job_repo).accuracy_report()
-
-
-def _reroute(
-    record: ClassificationRecord,
-    *,
-    filename: str,
-    label: str,
-    review_route: str,
-    human_overridden: bool,
-    capture_prediction: bool,
-) -> RoutingInput:
-    """Re-run routing over an existing record, changing only its route and label.
-
-    `capture_prediction` is for a first human decision, where `record.label` still holds
-    what the machine said. A reopen must not set it: the current label is the previous
-    reviewer's answer, and storing it as the machine's prediction would fabricate history.
-
-    Returns:
-        A RoutingInput carrying the record's signals unchanged, so RoutingNode's
-        write-once guards leave original_label and machine_review_route intact.
-    """
-    ood_metrics = record.ood_metrics
-    return RoutingInput(
-        job_id=record.job_id,
-        filename=filename,
-        enriched_id=record.enriched_id,
-        label=label,
-        confidence=record.confidence,
-        all_scores=record.all_scores,
-        second_opinion_label=record.second_opinion_label,
-        second_opinion_confidence=record.second_opinion_confidence,
-        classifier_disagreement=record.classifier_disagreement,
-        ood_metrics=OodMetrics.model_validate(ood_metrics) if ood_metrics is not None else None,
-        svm_scores=record.svm_scores,
-        svm_agrees_with_prediction=record.svm_agrees_with_prediction,
-        review_route=review_route,
-        smells=record.smells,
-        risk_score=record.risk_score,
-        smell_review_suggested=record.smell_review_suggested,
-        foreign_municipality=record.foreign_municipality,
-        judged_by_llm=record.judged_by_llm,
-        judge_final_label=record.judge_final_label,
-        judge_reasoning=record.judge_reasoning,
-        human_overridden=human_overridden,
-        original_label=(
-            record.original_label or record.label if capture_prediction else record.original_label
-        ),
-        expected_label=record.expected_label,
-        machine_review_route=record.machine_review_route,
-    )
 
 
 @router.post("/{job_id}/decision")
@@ -146,16 +93,15 @@ async def submit_classification_decision(
         }),
     )
 
-    routing_input = _reroute(
-        record,
-        filename=job.filename,
-        label=body.label,
-        review_route=ReviewRoute.ACCEPT,
-        human_overridden=True,
-        capture_prediction=True,
-    )
     ctx = JobContext(job_id=job_id, filename=job.filename)
-    await routing.run(ctx, routing_input)
+    await routing.apply_human_decision(
+        ctx,
+        job_id,
+        label=body.label,
+        # First decision only: record.label still holds the machine's prediction, and the
+        # `or` keeps it once captured so a re-decision cannot overwrite it.
+        original_label=record.original_label or record.label,
+    )
 
 
 @router.post("/{job_id}/reopen", dependencies=[Depends(require_admin)])
@@ -204,13 +150,5 @@ async def reopen_classification(
         }),
     )
 
-    routing_input = _reroute(
-        record,
-        filename=job.filename,
-        label=record.label or "",
-        review_route=ReviewRoute.HUMAN_REVIEW,
-        human_overridden=record.human_overridden,
-        capture_prediction=False,
-    )
     ctx = JobContext(job_id=job_id, filename=job.filename)
-    await routing.run(ctx, routing_input)
+    await routing.reopen_for_review(ctx, job_id)

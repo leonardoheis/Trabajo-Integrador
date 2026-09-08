@@ -1,4 +1,7 @@
+import pytest
+
 from classiflow.classification.domain.results import RoutingInput
+from classiflow.classification.exceptions import ClassificationRecordNotFoundError
 from classiflow.classification.nodes.routing import RoutingNode
 from classiflow.database.repositories.audit import InMemoryAuditRepository
 from classiflow.database.repositories.classification_record import (
@@ -159,3 +162,100 @@ class TestRoutingNodeRun:
         record = await repo.find_by_job_id(_JOB_ID)
         assert record is not None
         assert record.expected_label == "ordenanzas"
+
+
+class TestApplyHumanDecision:
+    async def test_files_under_the_reviewers_label_and_marks_the_override(self) -> None:
+        storage = _FakeStorage()
+        repo = InMemoryClassificationRecordRepository()
+        node = RoutingNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            storage=storage,
+            classification_repo=repo,
+        )
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        await node.run(ctx, _routing_input(review_route="human_review", label="ordenanzas"))
+
+        await node.apply_human_decision(ctx, _JOB_ID, label="decretos", original_label="ordenanzas")
+
+        record = await repo.find_by_job_id(_JOB_ID)
+        assert record is not None
+        assert record.label == "decretos"
+        assert record.review_route == "accept"
+        assert record.human_overridden is True
+        assert record.original_label == "ordenanzas"
+        assert storage.moved[-1][2] == "classified/decretos"
+
+    async def test_leaves_the_machine_route_alone(self) -> None:
+        repo = InMemoryClassificationRecordRepository()
+        node = RoutingNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            storage=_FakeStorage(),
+            classification_repo=repo,
+        )
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        await node.run(ctx, _routing_input(review_route="human_review"))
+
+        await node.apply_human_decision(ctx, _JOB_ID, label="decretos", original_label=None)
+
+        record = await repo.find_by_job_id(_JOB_ID)
+        assert record is not None
+        assert record.machine_review_route == "human_review"
+
+    async def test_raises_when_no_record_exists(self) -> None:
+        node = RoutingNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            storage=_FakeStorage(),
+            classification_repo=InMemoryClassificationRecordRepository(),
+        )
+        ctx = JobContext(job_id="no-such-job", filename="doc.pdf")
+        with pytest.raises(ClassificationRecordNotFoundError):
+            await node.apply_human_decision(
+                ctx, "no-such-job", label="decretos", original_label=None
+            )
+
+
+class TestReopenForReview:
+    async def test_returns_the_document_to_the_review_queue(self) -> None:
+        storage = _FakeStorage()
+        repo = InMemoryClassificationRecordRepository()
+        node = RoutingNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            storage=storage,
+            classification_repo=repo,
+        )
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        await node.run(ctx, _routing_input(review_route="human_review"))
+        await node.apply_human_decision(ctx, _JOB_ID, label="decretos", original_label="ordenanzas")
+
+        await node.reopen_for_review(ctx, _JOB_ID)
+
+        record = await repo.find_by_job_id(_JOB_ID)
+        assert record is not None
+        assert record.review_route == "human_review"
+        assert storage.moved[-1][2] == "review/human_review"
+
+    async def test_cannot_fabricate_the_machine_prediction(self) -> None:
+        """The bug this operation exists to make unrepresentable: a reopen has no
+        original_label parameter, so the reviewer's answer can never become it."""
+        repo = InMemoryClassificationRecordRepository()
+        node = RoutingNode(
+            audit=AuditService(InMemoryAuditRepository()),
+            broadcaster=EventBroadcaster(),
+            storage=_FakeStorage(),
+            classification_repo=repo,
+        )
+        ctx = JobContext(job_id=_JOB_ID, filename="doc.pdf")
+        await node.run(ctx, _routing_input(review_route="human_review"))
+        await node.apply_human_decision(ctx, _JOB_ID, label="decretos", original_label=None)
+
+        await node.reopen_for_review(ctx, _JOB_ID)
+
+        record = await repo.find_by_job_id(_JOB_ID)
+        assert record is not None
+        assert record.original_label is None
+        assert record.label == "decretos"
