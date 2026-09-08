@@ -22,6 +22,7 @@ jobs:
         with:
           version: "0.8.9"
           enable-cache: true
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
@@ -74,6 +75,7 @@ jobs:
         with:
           version: "0.8.9"
           enable-cache: true
+          python-version: "3.10"
 
       # Installs ~5.9GB, of which torch+cu128 is 4.2GB (measured locally), because
       # uv.lock pins the CUDA index for every non-darwin platform. The suite never opens
