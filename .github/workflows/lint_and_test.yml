@@ -101,7 +101,7 @@ jobs:
       # Skipped cleanly on a fork or before the secret exists, rather than failing the
       # job: the coverage gate below is the check that must always run.
       - name: SonarQube scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        uses: SonarSource/sonarqube-scan-action@v6
         if: ${{ !cancelled() && env.SONAR_TOKEN != '' }}
         with:
           args: >
