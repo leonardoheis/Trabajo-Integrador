@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from http import HTTPStatus
 
 import pytest
@@ -253,3 +254,38 @@ class TestDocumentFileEndpoint:
 
         assert response.status_code == HTTPStatus.OK
         assert response.content == b"%PDF-1.4 fake bytes"
+
+
+class TestCreatedAtSorting:
+    """The classification page defaults to this order, so it is a contract, not a nicety."""
+
+    async def test_sorts_by_created_at_descending(
+        self,
+        client: TestClient,
+        auth_headers: dict[str, str],
+        test_container: TestContainer,
+    ) -> None:
+        await _seed_classified_job(
+            test_container, "job-date-old", "older.pdf", label="sort_test_dates"
+        )
+        await _seed_classified_job(
+            test_container, "job-date-new", "newer.pdf", label="sort_test_dates"
+        )
+        # Explicit timestamps: the column defaults to now(), so rows seeded back to back
+        # can share one and the assertion would pass on insertion order alone.
+        repo = test_container.job_repo()
+        for job_id, created in (
+            ("job-date-old", datetime(2026, 1, 1, tzinfo=timezone.utc)),
+            ("job-date-new", datetime(2026, 6, 1, tzinfo=timezone.utc)),
+        ):
+            job = await repo.find_by_job_id(job_id)
+            assert job is not None
+            job.created_at = created
+
+        response = client.get(
+            "/jobs?search=sort_test_dates&sort=createdAt&sortDir=desc", headers=auth_headers
+        )
+
+        assert response.status_code == HTTPStatus.OK
+        filenames = [i["filename"] for i in response.json()["items"]]
+        assert filenames == ["newer.pdf", "older.pdf"]
