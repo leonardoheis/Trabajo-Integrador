@@ -172,18 +172,37 @@ not perform the release.**
 
 **Files:** add `.github/workflows/publish.yml`
 
-- [ ] Trigger on `workflow_run` completion of "Lint and Test" against `main`, plus
+- [x] Trigger on `workflow_run` completion of "Lint and Test" against `main`, plus
   `workflow_dispatch`. Guard the job with
   `if: ${{ github.event.workflow_run.conclusion == 'success' }}`.
-- [ ] Permissions: `contents: write` for the tag and release; `id-token: write`.
-- [ ] Steps, following CFO_Copilot's `publish.yml`: `uv build` → read the version with
+- [x] Permissions: `contents: write` for the tag and release; `id-token: write`.
+- [x] Steps, following CFO_Copilot's `publish.yml`: `uv build` → read the version with
   `semantic-release -v version --print` → create and push the tag → extract that version's
   section with `changelog-parser` → `ncipollo/release-action@v1` with `artifacts: dist/*`.
-- [ ] **Omit the deploy job entirely.** There is nowhere to deploy to.
-- [ ] The frontend build is verified in CI but not published — the release artefact is the
+- [x] **Omit the deploy job entirely.** There is nowhere to deploy to.
+- [x] The frontend build is verified in CI but not published — the release artefact is the
   Python package.
 
 Test with `workflow_dispatch` before trusting the automatic trigger.
+
+**Done 2026-09-08.** Two additions the plan did not specify, both found by testing rather
+than reasoning:
+
+**An already-released guard.** `semantic-release version --print` returns the *current*
+version when no release is due -- verified: it prints `0.4.0` and says "already been
+released". Without a guard the tag step would fail on a duplicate. The workflow now checks
+`git rev-parse` and skips the build, tag and release steps cleanly. Tested both branches:
+`v0.4.0` -> already=true, `v0.5.0` -> already=false.
+
+**`workflow_dispatch` in the job guard.** A manual run has no `workflow_run` context, so
+`github.event.workflow_run.conclusion == 'success'` alone would never fire -- making the
+workflow untestable by the very mechanism the plan asks to test it with.
+
+`uv build` verified locally: produces `classiflow-0.4.0-py3-none-any.whl` and the sdist,
+version matching the tag. `changelog-parser` verified against the hand-written CHANGELOG:
+all four versions parse, `versions[0]` is the newest.
+
+Node 22, not the default -- `changelog-parser@4` requires `>=22.12.0`.
 
 **Suggested commit boundary:** release workflow producing a tagged GitHub release.
 
