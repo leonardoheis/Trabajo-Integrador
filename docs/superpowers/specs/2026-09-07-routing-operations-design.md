@@ -138,6 +138,13 @@ would leave the 19 restated fields untouched — the actual defect.
 **Deleting `RoutingInput` outright.** Its fields are all genuinely new for the machine
 pass. Removing it would replace one struct with 24 parameters.
 
+## Verified
+
+The bug class is provably gone. A 25th field added to `ClassificationRecord` and
+`RoutingInput`, seeded on a record, then decided through the endpoint: the operations
+preserve it, and the pre-refactor shape (hand-built `RoutingInput` passed to `run()`)
+writes `None` over it. Recorded in the plan's Task 4.
+
 ## Open question
 
 **Does the audit record move into the operations?** The endpoints write their audit entry

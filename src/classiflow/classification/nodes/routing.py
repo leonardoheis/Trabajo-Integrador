@@ -1,5 +1,6 @@
 from classiflow.classification.domain.results import RoutingInput, RoutingResult
 from classiflow.classification.domain.review_route import ReviewRoute
+from classiflow.classification.exceptions import ClassificationRecordNotFoundError
 from classiflow.database.models import ClassificationRecord
 from classiflow.database.repositories.audit import AuditDetail
 from classiflow.domain.repositories.classification_record import IClassificationRecordRepository
@@ -51,6 +52,61 @@ class RoutingNode(BaseNode):
                 "smells": routing_input.smells,
                 "risk_score": routing_input.risk_score,
                 "smell_review_suggested": routing_input.smell_review_suggested,
+                "stored_path": stored_path,
+            }),
+        )
+        return RoutingResult(stored_path=stored_path)
+
+    async def apply_human_decision(
+        self, ctx: JobContext, job_id: str, *, label: str, original_label: str | None
+    ) -> RoutingResult:
+        """File a reviewed document under the label the reviewer chose.
+
+        Returns:
+            The path the document was filed to.
+        """
+        record = await self._load(job_id)
+        record.label = label
+        record.review_route = ReviewRoute.ACCEPT
+        record.human_overridden = True
+        record.original_label = original_label
+        return await self._file_and_save(ctx, record, f"classified/{label}")
+
+    async def reopen_for_review(self, ctx: JobContext, job_id: str) -> RoutingResult:
+        """Return a decided document to the review queue, keeping its current label.
+
+        `original_label` is deliberately not a parameter: the current label belongs to
+        the previous reviewer, and storing it as the machine's prediction would fabricate
+        history.
+
+        Returns:
+            The path the document was filed to.
+        """
+        record = await self._load(job_id)
+        record.review_route = ReviewRoute.HUMAN_REVIEW
+        return await self._file_and_save(ctx, record, _HUMAN_REVIEW_SUBDIRECTORY)
+
+    async def _load(self, job_id: str) -> ClassificationRecord:
+        record = await self.classification_repo.find_by_job_id(job_id)
+        if record is None:
+            raise ClassificationRecordNotFoundError(job_id=job_id)
+        return record
+
+    async def _file_and_save(
+        self, ctx: JobContext, record: ClassificationRecord, subdirectory: str
+    ) -> RoutingResult:
+        start = await self._emit_started(ctx)
+        stored_path = await self.storage.move_to_final(record.job_id, ctx.filename, subdirectory)
+        record.stored_path = stored_path
+        await self.classification_repo.save(record)
+        await self._emit_and_audit(
+            ctx,
+            start,
+            passed=True,
+            detail=AuditDetail.model_validate({
+                "filename": ctx.filename,
+                "label": record.label,
+                "review_route": record.review_route,
                 "stored_path": stored_path,
             }),
         )
