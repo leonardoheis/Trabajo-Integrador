@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-09-08)
+
+### Bug Fixes
+
+- **ci**: Pin Python 3.10 so torch and torchvision resolve compatibly
+  ([`a17eb15`](https://github.com/leonardoheis/Trabajo-Integrador/commit/a17eb15fad3890f273aee2bf482584dcf34b22ce))
+
+- **ci**: Write the version before building the release
+  ([`8576acf`](https://github.com/leonardoheis/Trabajo-Integrador/commit/8576acf35b87ae0800771542f415cac6612edf8d))
+
+### Features
+
+- Add implementation plans for CI, SonarQube, and routing operations
+  ([`ecf7589`](https://github.com/leonardoheis/Trabajo-Integrador/commit/ecf7589e7a3a5a8b0d2a7d58a8df79c17c35008c))
+
+
 <!--
 Sections below v0.5.0 were written by hand: the tags were backfilled onto the merge
 commits of PRs #30-#34 after the fact, so no release ever ran to generate them.

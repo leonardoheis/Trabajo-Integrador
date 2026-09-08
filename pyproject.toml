@@ -1,6 +1,6 @@
 [project]
 name = "classiflow"
-version = "0.4.0"
+version = "0.5.0"
 description = "classiflow allows to classify documents using agent-based approaches."
 requires-python = ">=3.10"
 dependencies = [
@@ -475,6 +475,7 @@ exclude_also = [
     # Protocol method bodies -- a bare `...` is a declaration, not runnable code.
     '\.\.\.$',
 ]
+
 
 
 [build-system]
