@@ -1,6 +1,6 @@
 [project]
 name = "classiflow"
-version = "0.1.0"
+version = "0.4.0"
 description = "classiflow allows to classify documents using agent-based approaches."
 requires-python = ">=3.10"
 dependencies = [
@@ -88,9 +88,6 @@ torch = [
   { index = "pytorch-cu128", marker = "sys_platform != 'darwin'" },
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/classiflow"]
@@ -99,6 +96,7 @@ exclude = ["src/classiflow/frontend"]
 #########################
 # RUFF
 #########################
+
 
 [tool.ruff]
 line-length = 100
@@ -181,6 +179,7 @@ line-ending = "auto"
 # MyPy
 #########################
 
+
 [tool.mypy]
 strict = true
 follow_imports = "normal"
@@ -213,6 +212,7 @@ ignore_missing_imports = true
 #########################
 # Codespell
 #########################
+
 
 [tool.codespell]
 skip = "src/classiflow/playground"
@@ -377,8 +377,6 @@ enable = [
 # Semantic Release
 #########################
 
-[tool.semantic_release.branches.main]
-match = "*"
 
 [tool.semantic_release]
 commit_message = "chore(release): bump version and update changelog"
@@ -388,6 +386,10 @@ version_toml = [
     "pyproject.toml:project.version:nf",
 ]
 allow_zero_version = true
+
+[tool.semantic_release.branches.main]
+match = "*"
+
 
 [tool.semantic_release.changelog]
 exclude_commit_patterns = ["chore*", "Merge*"]
@@ -401,6 +403,7 @@ patch_tags = ["fix"]
 # Pytest
 #########################
 
+
 [tool.pytest.ini_options]
 addopts = [
     "-r=A",
@@ -410,6 +413,7 @@ addopts = [
 testpaths = ["tests"]
 pythonpath = ["."]
 anyio_mode = "auto"
+
 
 [tool.poe.tasks]
 lint = { shell = "ruff check . && ruff format --check ." }
@@ -423,6 +427,9 @@ check = ["lint", "typecheck", "coverage", "precommit-reloaded"]
 # dependency_injector's Cython module reports a .pyx source path coverage cannot read --
 # it is absent from coverage.xml, so only this terminal report needs the flag.
 check-coverage = "coverage report -i --fail-under=90"
+# --no-tag/--no-commit: this only computes the next version and rewrites the changelog,
+# so CI can diff the result. The tag and the release belong to publish.yml.
+version-bump = "uv run semantic-release -v version --no-tag --no-commit --skip-build --changelog"
 serve = "python -m classiflow"
 accuracy = "python -m classiflow.scripts.accuracy"
 serve-api = { shell = "uvicorn classiflow.api.app:create_app --factory --port 8000" }
@@ -434,6 +441,7 @@ precommit-update = "uv run pre-commit run --hook-stage manual pre-commit-update"
 #########################
 # Coverage
 #########################
+
 
 [tool.coverage.run]
 branch = true
@@ -463,3 +471,8 @@ exclude_also = [
     # Protocol method bodies -- a bare `...` is a declaration, not runnable code.
     '\.\.\.$',
 ]
+
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

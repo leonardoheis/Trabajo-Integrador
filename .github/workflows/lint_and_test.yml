@@ -59,6 +59,10 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    # Job level, not step level: an `if:` expression can read env from the job, never
+    # from the step it guards.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
       # Full history: SonarQube needs it for blame data (see Task 3).
       - uses: actions/checkout@v4
@@ -91,6 +95,23 @@ jobs:
           name: Pytest
           path: tests/reports/pytest-report.xml
           reporter: java-junit
+
+      # Skipped cleanly on a fork or before the secret exists, rather than failing the
+      # job: the coverage gate below is the check that must always run.
+      - name: SonarQube scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        if: ${{ !cancelled() && env.SONAR_TOKEN != '' }}
+        with:
+          args: >
+            -Dsonar.organization=leonardoheis
+            -Dsonar.projectKey=leonardoheis_Classiflow
+            -Dsonar.sources=src
+            -Dsonar.tests=tests
+            -Dsonar.python.version=3.10
+            -Dsonar.exclusions=src/classiflow/frontend/**,src/classiflow/playground/**
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.python.xunit.reportPath=tests/reports/pytest-report.xml
+            -Dsonar.coverage.exclusions=**/__main__.py,src/classiflow/settings.py,scripts/plot_accuracy.py
 
       - name: Check coverage
         run: uv run --frozen --no-sync poe check-coverage

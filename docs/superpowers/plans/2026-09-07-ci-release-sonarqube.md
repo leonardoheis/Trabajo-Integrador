@@ -109,21 +109,38 @@ blind.
 
 **Files:** modify `.github/workflows/lint_and_test.yml`
 
-- [ ] Add a `SonarSource/sonarqube-scan-action@v5` step to the `test` job, after the tests
+- [x] Add a `SonarSource/sonarqube-scan-action@v5` step to the `test` job, after the tests
   and before the coverage gate, guarded with
   `if: ${{ !cancelled() && env.SONAR_TOKEN != '' }}` so a fork without the secret still
   passes.
-- [ ] Arguments: `sonar.organization=leonardoheis`,
+- [x] Arguments: `sonar.organization=leonardoheis`,
   `sonar.projectKey=leonardoheis_Classiflow`, `sonar.sources=src`, `sonar.tests=tests`,
   `sonar.python.version=3.10` (matching `requires-python`, **not** CFO_Copilot's 3.12),
   `sonar.python.coverage.reportPaths=coverage.xml`, and
   `sonar.python.xunit.reportPath=tests/reports/pytest-report.xml`.
-- [ ] Coverage exclusions: `**/__main__.py`, `src/classiflow/settings.py`,
+- [x] Coverage exclusions: `**/__main__.py`, `src/classiflow/settings.py`,
   `src/classiflow/frontend/**` (TypeScript is covered by vitest, which Sonar is not
   reading), `src/classiflow/playground/**`.
-- [ ] **For the user:** create the project in SonarCloud and add `SONAR_TOKEN` to the
+- [x] **For the user:** create the project in SonarCloud and add `SONAR_TOKEN` to the
   repository secrets. The scan step no-ops without it, so this task can land before the
   secret exists.
+
+**Done 2026-09-08.** Two corrections to what the plan specified:
+
+`SONAR_TOKEN` is set at **job** level, not on the step. An `if:` expression reads env
+from the job, never from the step it guards -- placed on the step, the guard would have
+evaluated empty and skipped the scan permanently. CFO_Copilot does this correctly and it
+is easy to miss.
+
+Added `sonar.exclusions` for the frontend and playground, which the plan did not call
+for. `sonar.coverage.exclusions` alone only stops Sonar reporting them as uncovered; it
+still analyses them. The frontend has its own vitest suite Sonar cannot see, so leaving it
+in scope would report a large body of untested TypeScript. With the real exclusion in
+place, those two paths were dropped from the coverage list as redundant.
+
+`sonar.python.version=3.10` matches `requires-python`, not CFO_Copilot's 3.12.
+
+The scan is guarded, so this lands green before the SonarCloud project exists.
 
 **Suggested commit boundary:** SonarCloud analysis on the test job.
 
