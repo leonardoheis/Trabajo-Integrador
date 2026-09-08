@@ -210,12 +210,23 @@ Node 22, not the default -- `changelog-parser@4` requires `>=22.12.0`.
 
 **Files:** modify `README.md`, `CLAUDE.md`
 
-- [ ] README: a short CI/release section — what runs on a PR, where the coverage floor
+- [x] README: a short CI/release section — what runs on a PR, where the coverage floor
   lives, how a release is cut, and **why there is no deployment** (GPU requirement), so the
   absence reads as a decision rather than an oversight.
-- [ ] CLAUDE.md: note that commit messages drive the version, and that only `feat`, `fix`
+- [x] CLAUDE.md: note that commit messages drive the version, and that only `feat`, `fix`
   and `chore` are in `allowed_tags` — `docs:` and `refactor:` commits do not bump anything.
-- [ ] Add the SonarCloud badge to the README once the first scan has run.
+- [ ] **Not done, deliberately:** the SonarCloud badge waits for the first scan. Adding it
+  now puts a broken image on the README's first line -- the plan itself says "once the
+  first scan has run".
+
+**Done 2026-09-08.** README gained a **CI and releases** section under Build Status: the
+three jobs, the 90% floor and why it is not in `poe check`, how releases are cut from
+commit messages, and **why there is no deployment** -- stated as a decision with its
+rationale linked, so the absence does not read as an oversight.
+
+CLAUDE.md gained a table of which prefixes bump the version. `docs:` and `refactor:` are
+not in `allowed_tags`, which is easy to trip over: a commit can be real work and still not
+cut a release.
 
 **Suggested commit boundary:** document the CI and release process.
 
@@ -226,11 +237,14 @@ uv run poe check
 uv run poe check-coverage
 ```
 
-- [ ] All three CI jobs pass on this branch.
-- [ ] The Sonar scan appears in SonarCloud (or is cleanly skipped when the secret is
-  absent).
-- [ ] `publish.yml` runs green under `workflow_dispatch` and produces a tag plus a release
-  with `dist/*` attached.
+- [ ] All three CI jobs pass. **Cannot be checked before merge:** GitHub registers
+  workflows from the default branch, so `gh workflow run` cannot find them yet. Opening
+  the PR triggers `lint_and_test.yml` (`pull_request` targets `main`) -- that is the first
+  real run, and the first torch timing.
+- [ ] The Sonar scan appears in SonarCloud. `SONAR_TOKEN` is set, so it will run rather
+  than skip.
+- [ ] `publish.yml` under `workflow_dispatch`. **Also blocked until merge**, for the same
+  reason. The already-released guard is the mitigation: a bad run stops before tagging.
 - [ ] `git status` is clean — no changelog or version bump committed by accident from
   Task 4's verification.
 

@@ -301,6 +301,23 @@ Full rationale: `.claude/learnings.md`
 **Commits, pushes, pull requests, and any other git operations that affect the remote are always initiated by the human with an explicit order.**
 Claude prepares and verifies changes but **never** runs `git commit`, `git push`, `git pull`, or `gh pr create` unless the user explicitly says so in that message.
 
+### Commit messages set the version
+
+`publish.yml` derives releases from them, so the prefix is not cosmetic:
+
+| Prefix | Effect |
+|---|---|
+| `feat:` | minor bump |
+| `fix:` | patch bump |
+| `chore:` | appears in the changelog, no bump |
+| anything else (`docs:`, `refactor:`, `test:`, `ci:`) | no bump, not in the changelog |
+
+Only `feat`, `fix` and `chore` are in `allowed_tags` (`[tool.semantic_release.commit_parser_options]`).
+A `feat:` merged to `main` cuts a release; a `docs:` one does not.
+
+Versions are backfilled from `v0.1.0` to `v0.4.0` onto the merge commits of PRs #30–#34,
+so the next release computes forward from real history rather than starting over.
+
 ### PR authorization protocol
 
 Before opening a PR, Claude must:
