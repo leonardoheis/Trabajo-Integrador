@@ -1,9 +1,11 @@
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
+import pytest
 from langchain_core.runnables import Runnable
 from langgraph.graph.state import CompiledStateGraph
 
@@ -24,6 +26,7 @@ from classiflow.ingesta.nodes import (
 from classiflow.ingesta.nodes.node4_duplicate_control import EmbeddingStore
 from classiflow.ingesta.prompts import LegitimacyDecisionOutput, build_content_chain
 from classiflow.services.audit.service import AuditService
+from classiflow.settings import Settings
 
 if TYPE_CHECKING:
     from classiflow.ingesta.domain import JobState
@@ -121,6 +124,14 @@ class TestCoordinatorHappyPath:
         assert result["content_validation"].passed
         assert result["duplicate_control"].passed
 
+    # Node 3 drops its injected chain after one use (the VRAM pattern in settings.py),
+    # so the second document builds a fresh one from the real GGUF -- which is gitignored
+    # and absent in CI. Skipped rather than mocked: the dependency is real, and hiding it
+    # behind a mock would claim coverage this run did not have.
+    @pytest.mark.skipif(
+        not Path(Settings.node3_model_path).exists(),
+        reason="needs the real GGUF at Settings.node3_model_path",
+    )
     async def test_second_identical_pdf_is_rejected_as_duplicate(self) -> None:
         graph = _build_graph(
             lambda *_: _SPANISH_EXTRACTION,

@@ -373,6 +373,36 @@ table above. Full per-task detail: [`tasks/todo.md`](tasks/todo.md) (Stage 1) ·
 [`tasks/todo_stage2.md`](tasks/todo_stage2.md) · [`tasks/todo_stage3.md`](tasks/todo_stage3.md) ·
 [`tasks/todo_stage4.md`](tasks/todo_stage4.md).
 
+## CI and releases
+
+`.github/workflows/lint_and_test.yml` runs on every push and pull request to `main`, in
+three jobs split by install cost — a style error surfaces in under a minute rather than
+behind a multi-gigabyte torch download:
+
+| Job | Runs |
+|---|---|
+| `lint` | `poe lint`, `poe typecheck` |
+| `frontend` | `npm test`, `npm run build` |
+| `test` | `poe coverage`, SonarCloud scan, `poe check-coverage` |
+
+**Coverage floor is 90%** (`poe check-coverage`), currently at 96%. It is deliberately not
+part of `poe check`: a local build should not fail on a threshold, and `poe coverage`
+already prints the number. `[tool.coverage.run]` omits what the suite cannot reach — the
+alembic migrations (each has its own end-to-end test), process entry points, and the
+matplotlib chart script.
+
+**Releases are cut from commit messages.** `.github/workflows/publish.yml` runs after a
+successful CI run on `main`: it computes the next version with python-semantic-release,
+tags it, extracts that version's `CHANGELOG.md` section, and attaches the built wheel and
+sdist to a GitHub release. Only `feat:`, `fix:` and `chore:` affect the version —
+`docs:` and `refactor:` commits are recorded but do not bump it.
+
+**There is no deployment**, and that is a decision rather than an omission. Classiflow
+needs a GPU for llama.cpp, BETO and the embedder; no free tier provides one, and a GPU
+instance is a recurring cost the project has chosen not to carry. A GitHub release
+publishes the distribution so anyone with their own hardware can install it. Rationale:
+[`docs/superpowers/specs/2026-09-07-ci-release-sonarqube-design.md`](docs/superpowers/specs/2026-09-07-ci-release-sonarqube-design.md).
+
 ## Key Technical Decisions
 
 - **SQLAlchemy 2.0 async** (`Mapped[]` annotations, `async_sessionmaker`, `aiosqlite` for local dev)

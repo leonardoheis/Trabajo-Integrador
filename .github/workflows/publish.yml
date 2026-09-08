@@ -1,0 +1,93 @@
+name: Publish
+
+# Tags the release and attaches the built distribution to a GitHub release. There is no
+# deploy job: Classiflow needs a GPU for llama.cpp, BETO and the embedder, and no free
+# tier offers one -- see docs/superpowers/specs/2026-09-07-ci-release-sonarqube-design.md.
+on:
+  workflow_run:
+    workflows:
+      - Lint and Test
+    branches:
+      - main
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # workflow_dispatch has no workflow_run context, so the guard must allow it through.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+    steps:
+      # Full history and tags: semantic-release computes the next version from them.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.9"
+          enable-cache: true
+          python-version: "3.10"
+
+      - name: Install versioning dependencies
+        run: |
+          uv python install
+          uv sync --group versioning
+
+      - name: Determine the next version
+        id: version
+        run: |
+          version=$(uv run semantic-release version --print)
+          echo "PACKAGE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "Next version: $version"
+
+      # `--print` returns the current version when no release is due, so the tag would
+      # already exist. Stop here rather than fail on a duplicate tag.
+      - name: Stop if this version is already released
+        id: released
+        run: |
+          if git rev-parse "v${PACKAGE_VERSION}" >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "v${PACKAGE_VERSION} is already tagged -- nothing to release."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the distribution
+        if: steps.released.outputs.already == 'false'
+        run: uv build
+
+      - name: Tag the release
+        if: steps.released.outputs.already == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${PACKAGE_VERSION}" -m "v${PACKAGE_VERSION}"
+          git push origin "v${PACKAGE_VERSION}"
+
+      - uses: actions/setup-node@v4
+        if: steps.released.outputs.already == 'false'
+        with:
+          node-version: "22"
+
+      - name: Extract this version's changelog section
+        if: steps.released.outputs.already == 'false'
+        run: |
+          npm install -g changelog-parser
+          changelog-parser CHANGELOG.md | jq -r ".versions[0].body" > changelog_body.md
+
+      - name: Create the GitHub release
+        if: steps.released.outputs.already == 'false'
+        uses: ncipollo/release-action@v1
+        with:
+          tag: "v${{ env.PACKAGE_VERSION }}"
+          bodyFile: changelog_body.md
+          artifacts: "dist/*"
