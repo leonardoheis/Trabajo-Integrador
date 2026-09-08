@@ -418,6 +418,11 @@ typecheck = "mypy src"
 test = "pytest tests"
 coverage = { shell = "pytest tests -v --override-ini=addopts= --log-level=CRITICAL --cov=. --cov-branch --cov-report=xml --cov-report=html --cov-report=term-missing:skip-covered --junitxml=tests/reports/pytest-report.xml" }
 check = ["lint", "typecheck", "coverage", "precommit-reloaded"]
+# Not part of `check`: a local build should not fail on a threshold, and `coverage`
+# already prints the number. CI enforces it after running the suite. `-i` because
+# dependency_injector's Cython module reports a .pyx source path coverage cannot read --
+# it is absent from coverage.xml, so only this terminal report needs the flag.
+check-coverage = "coverage report -i --fail-under=90"
 serve = "python -m classiflow"
 accuracy = "python -m classiflow.scripts.accuracy"
 serve-api = { shell = "uvicorn classiflow.api.app:create_app --factory --port 8000" }
@@ -425,3 +430,36 @@ serve-ui = { shell = "npm run dev", cwd = "src/classiflow/frontend" }
 precommit = "uv run pre-commit run --all-files --verbose"
 precommit-reloaded = "uv run --all-groups pre-commit run --all-files"
 precommit-update = "uv run pre-commit run --hook-stage manual pre-commit-update"
+
+#########################
+# Coverage
+#########################
+
+[tool.coverage.run]
+branch = true
+# `source`, not a bare `--cov=.`: measuring by directory keeps installed packages out of
+# the report -- dependency_injector ships a .pyx that coverage cannot even parse.
+source = ["src", "tests"]
+# Each omission is unreachable from the suite, not merely untested.
+omit = [
+    # Alembic: downgrade() is never exercised, and each migration has its own end-to-end
+    # test (tests/test_migration_*.py).
+    "alembic/*",
+    # Process entry points -- they start a server or a subprocess.
+    "**/__main__.py",
+    "src/classiflow/frontend/runner.py",
+    # Needs matplotlib, deliberately not a project dependency (see its module docstring).
+    "scripts/plot_accuracy.py",
+    "src/classiflow/playground/*",
+    "src/classiflow/settings.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    # Protocol method bodies -- a bare `...` is a declaration, not runnable code.
+    '\.\.\.$',
+]

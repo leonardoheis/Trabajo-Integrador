@@ -1,0 +1,96 @@
+name: Lint and Test
+
+# Three jobs, split by install cost: ruff needs no ML stack, so a style error surfaces in
+# under a minute instead of behind a multi-gigabyte torch download.
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.9"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv python install
+          uv sync
+
+      - name: Lint
+        run: uv run --frozen --no-sync poe lint
+
+      - name: Typecheck
+        run: uv run --frozen --no-sync poe typecheck
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/classiflow/frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: src/classiflow/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Full history: SonarQube needs it for blame data (see Task 3).
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.9"
+          enable-cache: true
+
+      # Installs ~5.9GB, of which torch+cu128 is 4.2GB (measured locally), because
+      # uv.lock pins the CUDA index for every non-darwin platform. The suite never opens
+      # a GPU. It fits the runner's ~14GB, and the uv cache makes repeat runs cheap, so
+      # this ships as-is to get a real timing; if the cold run is painful the fix is to
+      # make the CUDA index conditional in pyproject.toml so CI resolves CPU wheels.
+      - name: Install dependencies
+        run: |
+          uv python install
+          uv sync
+
+      - name: Run tests with coverage
+        run: uv run --frozen --no-sync poe coverage
+
+      - name: Publish test report
+        uses: dorny/test-reporter@v2
+        if: ${{ !cancelled() }}
+        with:
+          name: Pytest
+          path: tests/reports/pytest-report.xml
+          reporter: java-junit
+
+      - name: Check coverage
+        run: uv run --frozen --no-sync poe check-coverage
